@@ -41,6 +41,7 @@ Watch for places where the docs conflict or the plan can't run as written. Known
 
 - **Dependency installs are denied.** `.claude/settings.json` denies `pnpm add` and `cargo add`. Write dependencies into `package.json` / `Cargo.toml` by hand at exact, current versions (`npm view <pkg> version`), then install.
 - **V1 migration is write-once.** `migrations/V1__initial_schema.sql` exists and edits to it are denied in `.claude/settings.json`. Schema changes go in new migrations (see `sqlite-migration`). Don't route around a deny rule with shell redirection.
+- **New workspace packages** copy the setup of an existing one (e.g. `packages/storage`): an `exports` entry with the `@ankylock/source` condition, `tsconfig.json` + `tsconfig.build.json` (`customConditions: []`), and `vitest.config.ts` setting the same condition. Without the Vitest config, tests import the dependency's possibly stale `dist/` build and fail with "is not a function".
 - **Placeholders.** `apps/relay` is still a stub crate (`fn main() {}`) until Task 7. `apps/desktop/src-tauri/icons/icon.png` is a generated placeholder and `tauri.conf.json` is minimal; Task 11 replaces both.
 
 When you hit a conflict not listed here, prefer SPEC.md over TASKS.md for behavior and AGENTS.md for guardrails, and mention the conflict in the report. Never resolve one by weakening a guardrail (`any`, LWW, plaintext, editing an existing migration, main-thread crypto).

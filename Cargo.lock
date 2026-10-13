@@ -45,8 +45,10 @@ dependencies = [
 name = "ankylock-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "rusqlite",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "thiserror 2.0.21",

@@ -4,6 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use tauri::State;
 
+use super::categories::require_category;
 use super::{now_ms, reject_system_category};
 use crate::db::pool::DbPool;
 use crate::error::{AppError, AppResult};
@@ -117,6 +118,9 @@ pub fn create_folder(
         }
         None => {
             reject_system_category(category_id)?;
+            if let Some(category_id) = category_id {
+                require_category(&tx, category_id)?;
+            }
             category_id.map(str::to_owned)
         }
     };
@@ -314,6 +318,7 @@ mod tests {
         let mut conn = test_conn();
         assert_eq!(code(move_folder(&mut conn, "ghost", None, T)), "ERR_NOT_FOUND");
         assert_eq!(code(create(&mut conn, "child", Some("ghost"))), "ERR_NOT_FOUND");
+        assert_eq!(code(create_folder(&mut conn, "f", None, Some("ghost"), "Zg==", T)), "ERR_NOT_FOUND");
     }
 
     #[test]

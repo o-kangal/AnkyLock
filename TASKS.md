@@ -101,6 +101,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ---
 
 ### Task 5: Storage Adapter Abstraction & Web OPFS / IndexedDB Driver
+- **Status:** ✅ Completed (2026-10-13)
 - **Type:** Backend/Service
 - **Read-Only Context Files:** `packages/core/src/types/entities.ts`
 - **Target Files (Create/Modify):**

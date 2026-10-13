@@ -2,6 +2,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use super::categories::require_category;
 use super::folders::require_writable_folder;
 use super::{now_ms, reject_system_category};
 use crate::db::pool::DbPool;
@@ -20,14 +21,17 @@ pub struct Note {
     pub updated_at: i64,
 }
 
-/// Encrypted note body; every field is ciphertext or opaque Yjs bytes.
+/// Encrypted note body; every field is ciphertext or opaque Yjs bytes. Byte fields cross IPC as base64.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NoteContent {
     pub note_id: String,
     pub title_ciphertext: String,
+    #[serde(with = "crate::b64")]
     pub content_ciphertext: Vec<u8>,
+    #[serde(with = "crate::b64")]
     pub yjs_state_vector: Vec<u8>,
+    #[serde(with = "crate::b64")]
     pub yjs_updates: Vec<u8>,
     pub updated_at: i64,
 }
@@ -113,6 +117,9 @@ pub fn move_note(
     require_writable_note(&tx, id)?;
     if let Some(folder_id) = folder_id {
         require_writable_folder(&tx, folder_id)?;
+    }
+    if let Some(category_id) = category_id {
+        require_category(&tx, category_id)?;
     }
     update_and_fetch(
         tx,
@@ -374,6 +381,7 @@ mod tests {
         let mut conn = test_conn();
         create_note(&mut conn, "n1", T).unwrap();
         assert_eq!(code(move_note(&mut conn, "n1", Some("ghost"), None, T)), "ERR_NOT_FOUND");
+        assert_eq!(code(move_note(&mut conn, "n1", None, Some("ghost"), T)), "ERR_NOT_FOUND");
         create_folder(&mut conn, "f", None, None, "Zg==", T).unwrap();
         conn.execute("UPDATE folders SET deleted_at = ?1", [T]).unwrap();
         assert_eq!(code(move_note(&mut conn, "n1", Some("f"), None, T)), "ERR_READ_ONLY_TRASHED_ENTITY");
