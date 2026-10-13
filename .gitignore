@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+*.tsbuildinfo
+apps/desktop/src-tauri/gen/
+
+# Test & coverage
+coverage/
+
+# Local databases (may contain encrypted user data)
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors & OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code per-user settings
+.claude/settings.local.json

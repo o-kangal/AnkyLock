@@ -1,0 +1,30 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(pnpm *)",
+            "Bash(cargo check*)",
+            "Bash(cargo test*)",
+            "Bash(cargo clippy*)",
+            "Bash(git status)",
+            "Bash(git diff*)",
+            "Read(**)",
+            "Edit(apps/**)",
+            "Edit(packages/**)",
+            "Edit(tests/**)",
+            "Edit(migrations/V*.sql)",
+            "Edit(TASKS.md)",
+            "Edit(package.json)",
+            "Edit(pnpm-workspace.yaml)",
+            "Edit(tsconfig.base.json)",
+            "Edit(Cargo.toml)",
+            "Edit(.gitignore)",
+            "Edit(vitest.config.ts)"
+        ],
+        "deny": [
+            "Edit(AGENTS.md)",
+            "Bash(rm -rf *)",
+            "Bash(pnpm add *)",
+            "Bash(cargo add *)"
+        ]
+    }
+}
