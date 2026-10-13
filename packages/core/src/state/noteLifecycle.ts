@@ -20,7 +20,10 @@ export type NoteAction =
   | {
       readonly type: 'RESTORE';
       readonly now: EpochMs;
-      /** Whether the rows referenced by `folderId` / `categoryId` still exist (trashed counts as existing). */
+      /**
+       * Whether the note can go back into its folder (the folder exists and is not in Trash) and
+       * whether its category still exists; otherwise that pointer is reset (BR-LIFE-05).
+       */
       readonly folderExists: boolean;
       readonly categoryExists: boolean;
     }

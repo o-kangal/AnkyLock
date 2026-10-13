@@ -11,6 +11,7 @@ import {
   type Note,
   type NoteContent,
   type NoteId,
+  type PurgedEntities,
   type SyncOutboxEntry,
 } from '@ankylock/core';
 import { base64ToBytes, bytesToBase64 } from '@ankylock/crypto';
@@ -61,6 +62,11 @@ const isAppError = shape<{ code: ErrorCode; message: string }>({
 });
 
 const isWholeNumber = (v: unknown): v is number => Number.isInteger(v);
+
+const isPurgedEntities = shape<PurgedEntities>({
+  folders: (v) => Array.isArray(v) && v.every((x) => typeof x === 'string'),
+  notes: (v) => Array.isArray(v) && v.every((x) => typeof x === 'string'),
+});
 
 function toStorageError(error: unknown): StorageError {
   if (isAppError(error)) return new StorageError(error.code, error.message);
@@ -127,6 +133,30 @@ export class TauriSqliteAdapter implements IStorageEngine {
 
   renameFolder(id: FolderId, nameCiphertext: Ciphertext): Promise<Folder> {
     return this.#call('folder_rename', { id, nameCiphertext }, isFolder);
+  }
+
+  listTrashedFolders(): Promise<Folder[]> {
+    return this.#call('folder_list_trashed', {}, arrayOf(isFolder));
+  }
+
+  archiveFolder(id: FolderId): Promise<Folder> {
+    return this.#call('folder_set_archived', { id, archived: true }, isFolder);
+  }
+
+  unarchiveFolder(id: FolderId): Promise<Folder> {
+    return this.#call('folder_set_archived', { id, archived: false }, isFolder);
+  }
+
+  trashFolder(id: FolderId): Promise<Folder> {
+    return this.#call('folder_trash', { id }, isFolder);
+  }
+
+  restoreFolder(id: FolderId): Promise<Folder> {
+    return this.#call('folder_restore', { id }, isFolder);
+  }
+
+  purgeFolder(id: FolderId): Promise<PurgedEntities> {
+    return this.#call('folder_purge', { id }, isPurgedEntities);
   }
 
   createNote(id: NoteId): Promise<Note> {

@@ -35,6 +35,7 @@ export interface FolderView {
   categoryId: CategoryId | null;
   name: string;
   isArchived: boolean;
+  deletedAt: EpochMs | null;
 }
 
 export interface NoteView {
@@ -140,6 +141,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     categoryId: folder.categoryId,
     name: await names.decrypt(folder.nameCiphertext),
     isArchived: folder.isArchived,
+    deletedAt: folder.deletedAt,
   });
 
   const putNote = (note: Note): void => {
@@ -155,26 +157,52 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     );
   }
 
+  /** Loads categories, live and trashed folders and every note. Titles load lazily per row. */
+  async function loadAll(): Promise<void> {
+    const [categories, liveFolders, trashedFolders, trashed] = await Promise.all([
+      storage.listCategories(),
+      storage.listFolders(),
+      storage.listTrashedFolders(),
+      storage.listTrashedNotes(),
+    ]);
+    const perFolder = await Promise.all([null, ...liveFolders.map((f) => f.id)].map((id) => storage.listNotes(id)));
+    const categoryViews = await Promise.all(
+      categories.map(async (c) => ({ id: c.id, name: await names.decrypt(c.nameCiphertext), sortOrder: c.sortOrder })),
+    );
+    const folderViews = await Promise.all([...liveFolders, ...trashedFolders].map(folderView));
+    const notes: Record<NoteId, NoteView> = {};
+    for (const note of [...perFolder.flat(), ...trashed]) notes[note.id] = noteView(note, state.notes[note.id]?.title);
+    setState({ categories: categoryViews, folders: folderViews, notes });
+  }
+
+  /** Folder archive and trash cascade through whole subtrees, so state is reloaded afterwards. */
+  const cascade = (work: () => Promise<unknown>): Promise<Result<void>> =>
+    attempt(async () => {
+      await work();
+      await loadAll();
+    });
+
   return {
     state,
 
-    /** Loads categories, folders and live, archived and trashed notes. Titles load lazily per row. */
     load(): Promise<Result<void>> {
-      return attempt(async () => {
-        const [categories, folders, trashed] = await Promise.all([
-          storage.listCategories(),
-          storage.listFolders(),
-          storage.listTrashedNotes(),
-        ]);
-        const perFolder = await Promise.all([null, ...folders.map((f) => f.id)].map((id) => storage.listNotes(id)));
-        const categoryViews = await Promise.all(
-          categories.map(async (c) => ({ id: c.id, name: await names.decrypt(c.nameCiphertext), sortOrder: c.sortOrder })),
-        );
-        const folderViews = await Promise.all(folders.map(folderView));
-        const notes: Record<NoteId, NoteView> = {};
-        for (const note of [...perFolder.flat(), ...trashed]) notes[note.id] = noteView(note, state.notes[note.id]?.title);
-        setState({ categories: categoryViews, folders: folderViews, notes });
-      });
+      return attempt(loadAll);
+    },
+
+    archiveFolder(id: FolderId): Promise<Result<void>> {
+      return cascade(() => storage.archiveFolder(id));
+    },
+
+    unarchiveFolder(id: FolderId): Promise<Result<void>> {
+      return cascade(() => storage.unarchiveFolder(id));
+    },
+
+    trashFolder(id: FolderId): Promise<Result<void>> {
+      return cascade(() => storage.trashFolder(id));
+    },
+
+    restoreFolder(id: FolderId): Promise<Result<void>> {
+      return cascade(() => storage.restoreFolder(id));
     },
 
     /** Decrypts a note's title on demand (rows are virtualized, so only visible rows ask). */

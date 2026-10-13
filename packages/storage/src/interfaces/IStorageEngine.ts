@@ -8,6 +8,7 @@ import type {
   Note,
   NoteContent,
   NoteId,
+  PurgedEntities,
   SealedBytes,
   SyncEntityType,
   SyncOutboxEntry,
@@ -44,6 +45,18 @@ export interface IStorageEngine {
   createFolder(folder: NewFolder): Promise<Folder>;
   moveFolder(id: FolderId, newParentId: FolderId | null): Promise<Folder>;
   renameFolder(id: FolderId, nameCiphertext: Ciphertext): Promise<Folder>;
+  /** Trashed folders, most recently trashed first. */
+  listTrashedFolders(): Promise<Folder[]>;
+  /** BR-LIFE-01: cascades `isArchived` to every live descendant folder and note. */
+  archiveFolder(id: FolderId): Promise<Folder>;
+  /** Clears `isArchived` on the subtree; rejected while the parent is archived. */
+  unarchiveFolder(id: FolderId): Promise<Folder>;
+  /** BR-LIFE-02: stamps one `deletedAt` on the folder and every live descendant folder and note. */
+  trashFolder(id: FolderId): Promise<Folder>;
+  /** Restores the folder and what was trashed with it; a trashed or purged parent sends it to the root. */
+  restoreFolder(id: FolderId): Promise<Folder>;
+  /** Hard-deletes a trashed folder with its subtree and notes, writing a tombstone for each. */
+  purgeFolder(id: FolderId): Promise<PurgedEntities>;
 
   createNote(id: NoteId): Promise<Note>;
   getNote(id: NoteId): Promise<Note | null>;

@@ -238,7 +238,8 @@ pnpm --filter @ankylock/sync run test
 
 ---
 
-### Task 10b: Folder Trash Lifecycle (Soft-Delete, Restore & Purge)
+### Task 10b: Folder Trash & Archive Lifecycle (Soft-Delete, Restore, Purge & Cascading Archive)
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Backend/Service & Frontend/UI
 - **Read-Only Context Files:** `SPEC.md` (§2.3, §3), `packages/core/src/state/noteLifecycle.ts`, `packages/storage/src/interfaces/IStorageEngine.ts`, `packages/sync/src/workers/retentionWorker.ts`
 - **Target Files (Create/Modify):**
@@ -254,10 +255,10 @@ pnpm --filter @ankylock/sync run test
   - `apps/web/src/stores/workspaceStore.ts`
   - `apps/web/src/components/sidebar/treeRows.ts`
 - **Step-by-Step Instructions:**
-  1. Define folder trash rules as pure functions in `folderLifecycle.ts`: trashing a folder sets `deleted_at` on the folder and cascades the same timestamp to every live descendant subfolder and note, preserving `parent_id` / `category_id` (BR-LIFE-02). Restoring a folder clears `deleted_at` on the folder and only on descendants that carry the same timestamp, so items trashed separately stay in Trash. Restore falls back to the All Notes root when the former parent folder or category was purged (BR-LIFE-05).
-  2. Add `trashFolder`, `restoreFolder`, `purgeFolder` and `listTrashedFolders` to `IStorageEngine`; implement them atomically in both adapters and as Rust IPC commands (validation + cascade in one transaction). Purging a folder hard-deletes it with its trashed descendants and their contents and records a tombstone for every purged entity. Trashed folders stay read-only (`ERR_READ_ONLY_TRASHED_ENTITY`).
+  1. Define folder trash and archive rules as pure functions in `folderLifecycle.ts`. Archiving a folder sets `is_archived = 1` on the folder and recursively on every live descendant subfolder and note (BR-LIFE-01); unarchiving clears it on the folder and its descendants, which then reappear in their original hierarchy. Trash rules: trashing a folder sets `deleted_at` on the folder and cascades the same timestamp to every live descendant subfolder and note, preserving `parent_id` / `category_id` (BR-LIFE-02). Restoring a folder clears `deleted_at` on the folder and only on descendants that carry the same timestamp, so items trashed separately stay in Trash. Restore falls back to the All Notes root when the former parent folder or category was purged (BR-LIFE-05).
+  2. Add `archiveFolder`, `unarchiveFolder`, `trashFolder`, `restoreFolder`, `purgeFolder` and `listTrashedFolders` to `IStorageEngine`; implement them atomically in both adapters and as Rust IPC commands (validation + cascade in one transaction). Purging a folder hard-deletes it with its trashed descendants and their contents and records a tombstone for every purged entity. Trashed folders stay read-only (`ERR_READ_ONLY_TRASHED_ENTITY`).
   3. Extend the retention worker to purge expired trashed folders with the same BR-LIFE-04 predicate and emit TOMBSTONE packets for them; include them in the retention-change confirmation count.
-  4. Show trashed folders in the Trash view and add trash/restore actions to the workspace store; the contract test suite must cover cascade, partial restore, orphan fallback and purge for both adapters.
+  4. Show archived folders in the Archive view and trashed folders in the Trash view, and add archive/unarchive/trash/restore actions to the workspace store; the contract test suite must cover archive cascade, trash cascade, partial restore, orphan fallback and purge for both adapters.
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
@@ -350,7 +351,7 @@ Task 1 (Workspace & Config)
            │
            ├──► Task 10 (Retention Purge & Drive Backup)
            │       │
-           │       └──► Task 10b (Folder Trash Lifecycle)
+           │       └──► Task 10b (Folder Trash & Archive Lifecycle)
            │
            └──► Task 11 (Tauri Desktop App Wiring)
                    │

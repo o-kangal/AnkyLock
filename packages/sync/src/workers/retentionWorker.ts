@@ -3,6 +3,7 @@ import {
   planRetentionChange,
   validateRetentionDays,
   type EpochMs,
+  type FolderId,
   type NoteId,
   type RetentionChangePlan,
 } from '@ankylock/core';
@@ -10,33 +11,57 @@ import { StorageError, type IStorageEngine } from '@ankylock/storage';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export type PurgedEntity =
+  | { readonly entityType: 'note'; readonly id: NoteId }
+  | { readonly entityType: 'folder'; readonly id: FolderId };
+
 export interface RetentionDeps {
   readonly storage: IStorageEngine;
   readonly now?: () => EpochMs;
-  /** Called after each purge, e.g. to queue a TOMBSTONE packet so other devices purge too. */
-  readonly onPurged?: (noteId: NoteId) => Promise<void>;
-  /** Failures for single notes; the run continues with the rest. */
+  /** Called for every purged entity, e.g. to queue a TOMBSTONE packet so other devices purge too. */
+  readonly onPurged?: (entity: PurgedEntity) => Promise<void>;
+  /** Failures for single items; the run continues with the rest. */
   readonly onError?: (error: unknown) => void;
 }
 
 const clock = (deps: RetentionDeps): EpochMs => deps.now?.() ?? (Date.now() as EpochMs);
 
 /**
- * BR-LIFE-04: hard-deletes trashed notes whose retention has elapsed
- * (`deleted_at + retention_days · 86400000 < now`, never when retention is 0). Storage writes
- * the local tombstone in the same transaction as the delete.
+ * BR-LIFE-04: hard-deletes trashed folders and notes whose retention has elapsed
+ * (`deleted_at + retention_days · 86400000 < now`, never when retention is 0). Folders go first:
+ * purging one takes the notes and subfolders trashed with it. Storage writes the local
+ * tombstones in the same transaction as each delete.
  */
-export async function purgeExpiredNotes(deps: RetentionDeps): Promise<NoteId[]> {
+export async function purgeExpired(deps: RetentionDeps): Promise<PurgedEntity[]> {
   const days = await deps.storage.getTrashRetentionDays();
   if (days === 0) return [];
   const now = clock(deps);
-  const purged: NoteId[] = [];
+  const expired = (deletedAt: EpochMs | null): boolean => deletedAt !== null && isPurgeEligible(deletedAt, days, now);
+  const purged: PurgedEntity[] = [];
+  const report = async (entity: PurgedEntity): Promise<void> => {
+    purged.push(entity);
+    await deps.onPurged?.(entity);
+  };
+
+  const gone = new Set<FolderId>();
+  for (const folder of await deps.storage.listTrashedFolders()) {
+    if (gone.has(folder.id) || !expired(folder.deletedAt)) continue;
+    try {
+      const result = await deps.storage.purgeFolder(folder.id);
+      for (const id of result.folders) {
+        gone.add(id);
+        await report({ entityType: 'folder', id });
+      }
+      for (const id of result.notes) await report({ entityType: 'note', id });
+    } catch (error) {
+      deps.onError?.(error);
+    }
+  }
   for (const note of await deps.storage.listTrashedNotes()) {
-    if (note.deletedAt === null || !isPurgeEligible(note.deletedAt, days, now)) continue;
+    if (!expired(note.deletedAt)) continue;
     try {
       await deps.storage.purgeNote(note.id);
-      purged.push(note.id);
-      await deps.onPurged?.(note.id);
+      await report({ entityType: 'note', id: note.id });
     } catch (error) {
       deps.onError?.(error);
     }
@@ -44,7 +69,7 @@ export async function purgeExpiredNotes(deps: RetentionDeps): Promise<NoteId[]> 
   return purged;
 }
 
-export type RetentionChangeResult = RetentionChangePlan | { readonly kind: 'applied'; readonly purged: NoteId[] };
+export type RetentionChangeResult = RetentionChangePlan | { readonly kind: 'applied'; readonly purged: PurgedEntity[] };
 
 /**
  * Changes the retention setting (BR-LIFE-03). If the shorter value would purge items right away,
@@ -57,17 +82,21 @@ export async function changeTrashRetention(
 ): Promise<RetentionChangeResult> {
   const valid = validateRetentionDays(newDays);
   if (!valid.ok) throw new StorageError(valid.error.code, valid.error.message);
-  const [oldDays, trashed] = await Promise.all([deps.storage.getTrashRetentionDays(), deps.storage.listTrashedNotes()]);
-  const trashedAt = trashed.flatMap((n) => (n.deletedAt === null ? [] : [n.deletedAt]));
+  const [oldDays, notes, folders] = await Promise.all([
+    deps.storage.getTrashRetentionDays(),
+    deps.storage.listTrashedNotes(),
+    deps.storage.listTrashedFolders(),
+  ]);
+  const trashedAt = [...notes, ...folders].flatMap((item) => (item.deletedAt === null ? [] : [item.deletedAt]));
   const plan = planRetentionChange(oldDays, valid.value, trashedAt, clock(deps));
   if (plan.kind === 'confirm_required' && !options.confirmed) return plan;
   await deps.storage.setTrashRetentionDays(valid.value);
-  return { kind: 'applied', purged: await purgeExpiredNotes(deps) };
+  return { kind: 'applied', purged: await purgeExpired(deps) };
 }
 
 export interface RetentionWorker {
-  /** Runs a purge now unless one is already running; resolves with the purged ids. */
-  runNow(): Promise<NoteId[]>;
+  /** Runs a purge now unless one is already running; resolves with what was purged. */
+  runNow(): Promise<PurgedEntity[]>;
   stop(): void;
 }
 
@@ -76,10 +105,10 @@ export interface RetentionWorker {
  * (async IPC on desktop, IndexedDB on web), so it never blocks the UI thread.
  */
 export function startRetentionWorker(deps: RetentionDeps & { readonly intervalMs?: number }): RetentionWorker {
-  let running: Promise<NoteId[]> | null = null;
+  let running: Promise<PurgedEntity[]> | null = null;
 
-  const runNow = (): Promise<NoteId[]> => {
-    running ??= purgeExpiredNotes(deps)
+  const runNow = (): Promise<PurgedEntity[]> => {
+    running ??= purgeExpired(deps)
       .catch((error: unknown) => {
         deps.onError?.(error);
         return [];

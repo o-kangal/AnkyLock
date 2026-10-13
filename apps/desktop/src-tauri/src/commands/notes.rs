@@ -152,13 +152,20 @@ pub fn trash_note(conn: &mut Connection, id: &str, now: i64) -> AppResult<Note> 
 }
 
 /// RESTORE: clears `deleted_at`. If the former folder was purged, the `ON DELETE SET NULL`
-/// foreign key has already reset `folder_id`, placing the note at the All Notes root (BR-LIFE-05).
+/// foreign key has already reset `folder_id`; if it is still in Trash, the note can't live inside
+/// it, so it also moves to the All Notes root (BR-LIFE-05).
 pub fn restore_note(conn: &mut Connection, id: &str, now: i64) -> AppResult<Note> {
     let tx = conn.transaction()?;
     if require_note(&tx, id)?.deleted_at.is_none() {
         return Err(AppError::InvalidTransition(format!("Note {id} is not in Trash.")));
     }
-    update_and_fetch(tx, id, "deleted_at = NULL, is_ephemeral = 0, updated_at = ?2", params![id, now])
+    update_and_fetch(
+        tx,
+        id,
+        "deleted_at = NULL, is_ephemeral = 0, updated_at = ?2, \
+         folder_id = CASE WHEN folder_id IN (SELECT id FROM folders WHERE deleted_at IS NULL) THEN folder_id END",
+        params![id, now],
+    )
 }
 
 fn delete_with_tombstone(tx: Transaction<'_>, id: &str, now: i64) -> AppResult<()> {

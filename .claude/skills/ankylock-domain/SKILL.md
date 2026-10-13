@@ -86,7 +86,14 @@ Write the reducer as a pure function `(state, action) => Result`. No I/O and no 
 
 **Trash is read-only everywhere, not just in the editor.** Rename, move, archive and content edits on a trashed entity are all rejected. The editor shows exactly: `Notes in Trash are read-only. Restore the note to edit.`
 
-**Orphan restore (BR-LIFE-05).** On restore, if `folder_id` or `category_id` points to a row that no longer exists, set that pointer to `NULL`. The item lands at the root of All Notes. A parent that still exists but is itself trashed counts as present. Keep the pointer so restoring the parent later brings the tree back together.
+**Orphan restore (BR-LIFE-05).** On restore, if `folder_id` / `parent_id` points to a folder that was purged **or is itself still in Trash**, set it to `NULL`, and if `category_id` points to a purged category, set that to `NULL`. The item lands at the root of All Notes. A trashed parent is treated like a missing one because the tree renders from live roots, so a live item under a trashed folder would be invisible. (Changed in Task 10b; earlier versions kept the pointer.)
+
+## Folder archive and trash (Task 10b)
+
+- **Archive (BR-LIFE-01):** cascades `is_archived = 1` to every live descendant folder and note. Unarchive clears it on the whole subtree and is rejected while the parent folder is still archived.
+- **Trash (BR-LIFE-02):** stamps **one** `deleted_at` on the folder and every live descendant folder and note, keeping their pointers. Restore clears `deleted_at` only on items carrying that same timestamp, so things trashed separately stay in Trash.
+- **Purge:** deletes the folder, its subtree and the notes inside, with a tombstone per entity. Any live leftover under a trashed folder is first moved to the root, so SQLite's `ON DELETE CASCADE` on `folders.parent_id` can never take a live folder with it.
+- Pure checks live in `packages/core/src/state/folderLifecycle.ts`; SQL subtree queries use a recursive CTE with `UNION`, which terminates on cyclic data.
 
 ## Retention and purge
 

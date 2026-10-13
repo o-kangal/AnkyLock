@@ -3,12 +3,19 @@ import type { CategoryId, EpochMs, FolderId, NoteId } from '@ankylock/core';
 import { buildTreeRows, type TreeRow } from '../src/components/sidebar/treeRows.js';
 import type { FolderView, NoteView, Selection, WorkspaceState } from '../src/index.js';
 
-const folder = (id: string, parentId: string | null, categoryId: string | null = null): FolderView => ({
+const folder = (
+  id: string,
+  parentId: string | null,
+  categoryId: string | null = null,
+  extra: Partial<FolderView> = {},
+): FolderView => ({
   id: id as FolderId,
   parentId: parentId as FolderId | null,
   categoryId: categoryId as CategoryId | null,
   name: id,
   isArchived: false,
+  deletedAt: null,
+  ...extra,
 });
 
 const note = (id: string, folderId: string | null, extra: Partial<NoteView> = {}): NoteView => ({
@@ -66,6 +73,24 @@ describe('buildTreeRows', () => {
   it('lists archived and trashed notes flat', () => {
     expect(ids(buildTreeRows(state({ kind: 'system', id: 'system_archive' }), new Set()))).toEqual(['N:archived']);
     expect(ids(buildTreeRows(state({ kind: 'system', id: 'system_trash' }), new Set()))).toEqual(['N:trashed']);
+  });
+
+  it('shows archived and trashed folders with their subtree only in Archive and Trash', () => {
+    const s = state(all);
+    s.folders = [
+      folder('live', null),
+      folder('old', null, null, { isArchived: true }),
+      folder('old-child', 'old', null, { isArchived: true }),
+      folder('bin', null, null, { deletedAt: 9 as EpochMs }),
+    ];
+    s.notes = { n: note('n', 'old-child', { isArchived: true }) } as WorkspaceState['notes'];
+    expect(ids(buildTreeRows(s, new Set()))).toEqual(['F:live']);
+
+    s.selection = { kind: 'system', id: 'system_archive' };
+    expect(ids(buildTreeRows(s, new Set(['old', 'old-child'] as FolderId[])))).toEqual(['F:old', 'F:old-child', 'N:n']);
+
+    s.selection = { kind: 'system', id: 'system_trash' };
+    expect(ids(buildTreeRows(s, new Set()))).toEqual(['F:bin']);
   });
 
   it('never loops on cyclic folder data', () => {

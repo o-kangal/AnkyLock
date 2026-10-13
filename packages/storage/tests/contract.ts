@@ -219,6 +219,89 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
       });
     });
 
+    describe('folder archive and trash lifecycle', () => {
+      /** work ─ a ─ b, with note `na` in `a` and `nb` in `b`. */
+      async function tree(): Promise<void> {
+        await engine.createCategory(cat('work'), name('d29yaw=='));
+        await engine.createFolder({ id: folder('a'), parentId: null, categoryId: cat('work'), nameCiphertext: name('YQ==') });
+        await engine.createFolder({ id: folder('b'), parentId: folder('a'), categoryId: null, nameCiphertext: name('Yg==') });
+        for (const [n, f] of [['na', 'a'], ['nb', 'b']] as const) {
+          await engine.createNote(note(n));
+          await engine.moveNote(note(n), folder(f), null);
+        }
+      }
+
+      const live = async (): Promise<string[]> => (await engine.listFolders()).map((f) => f.id).sort();
+
+      it('archives a folder subtree and unarchives it again (BR-LIFE-01)', async () => {
+        await tree();
+        expect((await engine.archiveFolder(folder('a'))).isArchived).toBe(true);
+        expect((await engine.listFolders()).every((f) => f.isArchived)).toBe(true);
+        expect((await engine.getNote(note('nb')))?.isArchived).toBe(true);
+        await expectCode(engine.unarchiveFolder(folder('b')), 'ERR_INVALID_TRANSITION');
+        await expectCode(engine.archiveFolder(folder('a')), 'ERR_INVALID_TRANSITION');
+
+        await engine.unarchiveFolder(folder('a'));
+        expect((await engine.listFolders()).some((f) => f.isArchived)).toBe(false);
+        expect((await engine.getNote(note('na')))?.isArchived).toBe(false);
+      });
+
+      it('trashes a folder subtree with one timestamp and keeps it read-only (BR-LIFE-02)', async () => {
+        await tree();
+        const trashed = await engine.trashFolder(folder('a'));
+        expect(await live()).toEqual([]);
+        const inTrash = await engine.listTrashedFolders();
+        expect(inTrash.map((f) => f.id).sort()).toEqual(['a', 'b']);
+        expect(inTrash.every((f) => f.deletedAt === trashed.deletedAt)).toBe(true);
+        expect((await engine.getNote(note('nb')))?.deletedAt).toBe(trashed.deletedAt);
+        expect(inTrash.find((f) => f.id === 'b')?.parentId).toBe('a');
+        await expectCode(engine.trashFolder(folder('a')), 'ERR_READ_ONLY_TRASHED_ENTITY');
+        await expectCode(engine.archiveFolder(folder('a')), 'ERR_READ_ONLY_TRASHED_ENTITY');
+        await expectCode(engine.renameFolder(folder('b'), name('eA==')), 'ERR_READ_ONLY_TRASHED_ENTITY');
+      });
+
+      it('restores only what was trashed together', async () => {
+        await tree();
+        await engine.trashNote(note('nb'));
+        await engine.trashFolder(folder('a'));
+        await engine.restoreFolder(folder('a'));
+        expect(await live()).toEqual(['a', 'b']);
+        expect((await engine.getNote(note('na')))?.deletedAt).toBeNull();
+        expect((await engine.getNote(note('nb')))?.deletedAt).not.toBeNull();
+        await expectCode(engine.restoreFolder(folder('a')), 'ERR_INVALID_TRANSITION');
+      });
+
+      it('restores to the root when the parent is still trashed or the category is gone (BR-LIFE-05)', async () => {
+        await tree();
+        await engine.trashFolder(folder('a'));
+        await engine.deleteCategory(cat('work'));
+        const b = await engine.restoreFolder(folder('b'));
+        expect(b).toMatchObject({ parentId: null, deletedAt: null, categoryId: null });
+        const a = await engine.restoreFolder(folder('a'));
+        expect(a).toMatchObject({ parentId: null, categoryId: null });
+      });
+
+      it('restores a note out of a trashed folder to the root', async () => {
+        await tree();
+        await engine.trashFolder(folder('a'));
+        expect(await engine.restoreNote(note('na'))).toMatchObject({ folderId: null, deletedAt: null });
+      });
+
+      it('purges a trashed subtree with its notes and contents', async () => {
+        await tree();
+        await engine.saveNoteContent(content('nb', Date.now() + 10_000));
+        await expectCode(engine.purgeFolder(folder('a')), 'ERR_INVALID_TRANSITION');
+        await engine.trashFolder(folder('a'));
+        const purged = await engine.purgeFolder(folder('a'));
+        expect([...purged.folders].sort()).toEqual(['a', 'b']);
+        expect([...purged.notes].sort()).toEqual(['na', 'nb']);
+        expect(await engine.listTrashedFolders()).toEqual([]);
+        expect(await engine.getNote(note('nb'))).toBeNull();
+        expect(await engine.getNoteContent(note('nb'))).toBeNull();
+        await expectCode(engine.purgeFolder(folder('a')), 'ERR_NOT_FOUND');
+      });
+    });
+
     describe('settings', () => {
       it('defaults trash retention to 28 days and stores valid values (BR-LIFE-03)', async () => {
         expect(await engine.getTrashRetentionDays()).toBe(28);

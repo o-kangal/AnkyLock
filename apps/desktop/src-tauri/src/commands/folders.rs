@@ -169,6 +169,163 @@ pub fn rename_folder(conn: &mut Connection, id: &str, name_ciphertext: &str, now
     Ok(folder)
 }
 
+/// Every folder id in the subtree rooted at `?1`, the root included. `UNION` (not `UNION ALL`)
+/// deduplicates rows, so the recursion terminates even on cyclic data.
+const SUBTREE: &str =
+    "WITH RECURSIVE sub(id) AS (SELECT ?1 UNION SELECT f.id FROM folders f JOIN sub ON f.parent_id = sub.id)";
+
+/// Everything a folder purge removed, mirroring `PurgedEntities` in `packages/core`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
+pub struct PurgedEntities {
+    pub folders: Vec<String>,
+    pub notes: Vec<String>,
+}
+
+fn require_folder(conn: &Connection, id: &str) -> AppResult<Folder> {
+    find_folder(conn, id)?.ok_or(AppError::NotFound("Folder"))
+}
+
+fn column_ids(conn: &Connection, sql: &str, id: &str) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(sql)?;
+    let ids = stmt.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(ids)
+}
+
+pub fn list_trashed_folders(conn: &Connection) -> AppResult<Vec<Folder>> {
+    let sql = format!("SELECT {FOLDER_COLUMNS} FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC");
+    let mut stmt = conn.prepare(&sql)?;
+    let folders = stmt.query_map([], map_folder)?.collect::<Result<_, _>>()?;
+    Ok(folders)
+}
+
+/// BR-LIFE-01: archiving cascades `is_archived` to every live descendant folder and note;
+/// unarchiving clears it, but not under a still-archived parent.
+pub fn set_folder_archived(conn: &mut Connection, id: &str, archived: bool, now: i64) -> AppResult<Folder> {
+    let tx = conn.transaction()?;
+    let folder = require_folder(&tx, id)?;
+    if folder.deleted_at.is_some() {
+        return Err(AppError::ReadOnlyTrashedEntity);
+    }
+    if folder.is_archived == archived {
+        let state = if archived { "already archived" } else { "not archived" };
+        return Err(AppError::InvalidTransition(format!("Folder {id} is {state}.")));
+    }
+    if !archived {
+        if let Some(parent) = folder.parent_id.as_deref().map(|p| find_folder(&tx, p)).transpose()?.flatten() {
+            if parent.is_archived {
+                return Err(AppError::InvalidTransition("Unarchive the parent folder first.".into()));
+            }
+        }
+    }
+    tx.execute(
+        &format!("{SUBTREE} UPDATE folders SET is_archived = ?2, updated_at = ?3 WHERE id IN sub AND deleted_at IS NULL"),
+        params![id, archived, now],
+    )?;
+    tx.execute(
+        &format!("{SUBTREE} UPDATE notes SET is_archived = ?2, updated_at = ?3 WHERE folder_id IN sub AND deleted_at IS NULL"),
+        params![id, archived, now],
+    )?;
+    let folder = require_folder(&tx, id)?;
+    tx.commit()?;
+    Ok(folder)
+}
+
+/// BR-LIFE-02: stamps one `deleted_at` on the folder and every live descendant folder and note,
+/// keeping their pointers for restore.
+pub fn trash_folder(conn: &mut Connection, id: &str, now: i64) -> AppResult<Folder> {
+    let tx = conn.transaction()?;
+    require_writable_folder(&tx, id)?;
+    tx.execute(
+        &format!("{SUBTREE} UPDATE folders SET deleted_at = ?2, updated_at = ?2 WHERE id IN sub AND deleted_at IS NULL"),
+        params![id, now],
+    )?;
+    tx.execute(
+        &format!("{SUBTREE} UPDATE notes SET deleted_at = ?2, updated_at = ?2 WHERE folder_id IN sub AND deleted_at IS NULL"),
+        params![id, now],
+    )?;
+    let folder = require_folder(&tx, id)?;
+    tx.commit()?;
+    Ok(folder)
+}
+
+/// Restores the folder and only the descendants trashed together with it (same `deleted_at`).
+/// BR-LIFE-05: a purged or trashed parent sends the folder to the root; a purged category is dropped.
+pub fn restore_folder(conn: &mut Connection, id: &str, now: i64) -> AppResult<Folder> {
+    let tx = conn.transaction()?;
+    let folder = require_folder(&tx, id)?;
+    let Some(trashed_at) = folder.deleted_at else {
+        return Err(AppError::InvalidTransition(format!("Folder {id} is not in Trash.")));
+    };
+    let parent_is_live = match folder.parent_id.as_deref() {
+        Some(parent) => find_folder(&tx, parent)?.is_some_and(|p| p.deleted_at.is_none()),
+        None => false,
+    };
+    let category_exists = match folder.category_id.as_deref() {
+        Some(category) => {
+            tx.query_row("SELECT COUNT(*) FROM categories WHERE id = ?1", [category], |r| r.get::<_, i64>(0))? > 0
+        }
+        None => false,
+    };
+    tx.execute(
+        &format!("{SUBTREE} UPDATE folders SET deleted_at = NULL, updated_at = ?3 WHERE id IN sub AND deleted_at = ?2"),
+        params![id, trashed_at, now],
+    )?;
+    tx.execute(
+        &format!("{SUBTREE} UPDATE notes SET deleted_at = NULL, updated_at = ?3 WHERE folder_id IN sub AND deleted_at = ?2"),
+        params![id, trashed_at, now],
+    )?;
+    tx.execute(
+        "UPDATE folders SET parent_id = ?2, category_id = ?3 WHERE id = ?1",
+        params![
+            id,
+            folder.parent_id.filter(|_| parent_is_live),
+            folder.category_id.filter(|_| category_exists)
+        ],
+    )?;
+    let folder = require_folder(&tx, id)?;
+    tx.commit()?;
+    Ok(folder)
+}
+
+/// Hard-deletes a trashed folder with its subtree and the notes inside, writing a tombstone for
+/// every purged entity. Live items found under trashed folders are first moved to the root so
+/// `ON DELETE CASCADE` can never take them along.
+pub fn purge_folder(conn: &mut Connection, id: &str, now: i64) -> AppResult<PurgedEntities> {
+    let tx = conn.transaction()?;
+    if require_folder(&tx, id)?.deleted_at.is_none() {
+        return Err(AppError::InvalidTransition(format!("Only folders in Trash can be purged ({id}).")));
+    }
+    tx.execute(
+        &format!(
+            "{SUBTREE} UPDATE folders SET parent_id = NULL WHERE id IN sub AND deleted_at IS NULL \
+             AND parent_id IN (SELECT id FROM folders WHERE deleted_at IS NOT NULL)"
+        ),
+        [id],
+    )?;
+    tx.execute(
+        &format!(
+            "{SUBTREE} UPDATE notes SET folder_id = NULL WHERE folder_id IN sub AND deleted_at IS NULL \
+             AND folder_id IN (SELECT id FROM folders WHERE deleted_at IS NOT NULL)"
+        ),
+        [id],
+    )?;
+    let purged = PurgedEntities {
+        folders: column_ids(&tx, &format!("{SUBTREE} SELECT id FROM sub"), id)?,
+        notes: column_ids(&tx, &format!("{SUBTREE} SELECT id FROM notes WHERE folder_id IN sub"), id)?,
+    };
+    for (table, entity_type, ids) in [("notes", "note", &purged.notes), ("folders", "folder", &purged.folders)] {
+        for entity in ids {
+            tx.execute(&format!("DELETE FROM {table} WHERE id = ?1"), [entity])?;
+            tx.execute(
+                "INSERT OR REPLACE INTO sync_tombstones (entity_id, entity_type, purged_at) VALUES (?1, ?2, ?3)",
+                params![entity, entity_type, now],
+            )?;
+        }
+    }
+    tx.commit()?;
+    Ok(purged)
+}
+
 #[tauri::command(async)]
 pub fn folder_list(db: State<'_, DbPool>) -> AppResult<Vec<Folder>> {
     list_folders(&db.conn())
@@ -200,6 +357,31 @@ pub fn folder_move(db: State<'_, DbPool>, id: String, new_parent_id: Option<Stri
 #[tauri::command(async)]
 pub fn folder_rename(db: State<'_, DbPool>, id: String, name_ciphertext: String) -> AppResult<Folder> {
     rename_folder(&mut db.conn(), &id, &name_ciphertext, now_ms())
+}
+
+#[tauri::command(async)]
+pub fn folder_list_trashed(db: State<'_, DbPool>) -> AppResult<Vec<Folder>> {
+    list_trashed_folders(&db.conn())
+}
+
+#[tauri::command(async)]
+pub fn folder_set_archived(db: State<'_, DbPool>, id: String, archived: bool) -> AppResult<Folder> {
+    set_folder_archived(&mut db.conn(), &id, archived, now_ms())
+}
+
+#[tauri::command(async)]
+pub fn folder_trash(db: State<'_, DbPool>, id: String) -> AppResult<Folder> {
+    trash_folder(&mut db.conn(), &id, now_ms())
+}
+
+#[tauri::command(async)]
+pub fn folder_restore(db: State<'_, DbPool>, id: String) -> AppResult<Folder> {
+    restore_folder(&mut db.conn(), &id, now_ms())
+}
+
+#[tauri::command(async)]
+pub fn folder_purge(db: State<'_, DbPool>, id: String) -> AppResult<PurgedEntities> {
+    purge_folder(&mut db.conn(), &id, now_ms())
 }
 
 #[cfg(test)]
@@ -328,5 +510,120 @@ mod tests {
         let renamed = rename_folder(&mut conn, "f", "bmV3", T + 5).unwrap();
         assert_eq!(renamed.name_ciphertext, "bmV3");
         assert_eq!(renamed.updated_at, T + 5);
+    }
+
+    mod lifecycle {
+        use super::*;
+        use crate::commands::notes::{create_note, find_note, move_note, restore_note, trash_note};
+
+        /// cat ─ a ─ b, with note `na` in `a` and `nb` in `b`.
+        fn tree(conn: &mut Connection) {
+            create_folder(conn, "a", None, Some("cat"), "YQ==", T).unwrap();
+            create_folder(conn, "b", Some("a"), None, "Yg==", T).unwrap();
+            for (note, folder) in [("na", "a"), ("nb", "b")] {
+                create_note(conn, note, T).unwrap();
+                move_note(conn, note, Some(folder), None, T).unwrap();
+            }
+        }
+
+        fn folder(conn: &Connection, id: &str) -> Folder {
+            find_folder(conn, id).unwrap().unwrap()
+        }
+
+        #[test]
+        fn archive_cascades_and_unarchive_reverses_it() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            set_folder_archived(&mut conn, "a", true, T + 1).unwrap();
+            assert!(folder(&conn, "b").is_archived);
+            assert!(find_note(&conn, "nb").unwrap().unwrap().is_archived);
+            assert_eq!(code(set_folder_archived(&mut conn, "b", false, T)), "ERR_INVALID_TRANSITION");
+            assert_eq!(code(set_folder_archived(&mut conn, "a", true, T)), "ERR_INVALID_TRANSITION");
+
+            set_folder_archived(&mut conn, "a", false, T + 2).unwrap();
+            assert!(!folder(&conn, "b").is_archived);
+            assert!(!find_note(&conn, "na").unwrap().unwrap().is_archived);
+        }
+
+        #[test]
+        fn trash_cascades_one_timestamp_and_makes_the_subtree_read_only() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            trash_folder(&mut conn, "a", T + 5).unwrap();
+            assert_eq!(folder(&conn, "b").deleted_at, Some(T + 5));
+            assert_eq!(find_note(&conn, "nb").unwrap().unwrap().deleted_at, Some(T + 5));
+            assert_eq!(folder(&conn, "b").parent_id.as_deref(), Some("a"));
+            assert_eq!(code(trash_folder(&mut conn, "a", T)), "ERR_READ_ONLY_TRASHED_ENTITY");
+            assert_eq!(code(set_folder_archived(&mut conn, "a", true, T)), "ERR_READ_ONLY_TRASHED_ENTITY");
+            assert_eq!(list_trashed_folders(&conn).unwrap().len(), 2);
+        }
+
+        #[test]
+        fn restore_brings_back_only_what_was_trashed_together() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            trash_note(&mut conn, "nb", T + 1).unwrap();
+            trash_folder(&mut conn, "a", T + 2).unwrap();
+            restore_folder(&mut conn, "a", T + 3).unwrap();
+            assert_eq!(folder(&conn, "b").deleted_at, None);
+            assert_eq!(find_note(&conn, "na").unwrap().unwrap().deleted_at, None);
+            assert_eq!(find_note(&conn, "nb").unwrap().unwrap().deleted_at, Some(T + 1), "trashed separately");
+            assert_eq!(code(restore_folder(&mut conn, "a", T)), "ERR_INVALID_TRANSITION");
+        }
+
+        #[test]
+        fn restore_moves_to_root_when_the_parent_is_still_trashed() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            trash_folder(&mut conn, "a", T + 1).unwrap();
+            let restored = restore_folder(&mut conn, "b", T + 2).unwrap();
+            assert_eq!((restored.parent_id, restored.deleted_at), (None, None));
+            assert_eq!(find_note(&conn, "nb").unwrap().unwrap().deleted_at, None);
+        }
+
+        #[test]
+        fn restore_drops_a_purged_category() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            trash_folder(&mut conn, "a", T).unwrap();
+            conn.execute("DELETE FROM categories WHERE id = 'cat'", []).unwrap();
+            assert_eq!(restore_folder(&mut conn, "a", T).unwrap().category_id, None);
+        }
+
+        #[test]
+        fn restoring_a_note_into_a_trashed_folder_moves_it_to_the_root() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            trash_folder(&mut conn, "a", T).unwrap();
+            let note = restore_note(&mut conn, "na", T + 1).unwrap();
+            assert_eq!((note.folder_id, note.deleted_at), (None, None));
+        }
+
+        #[test]
+        fn purge_removes_the_subtree_and_writes_tombstones() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            assert_eq!(code(purge_folder(&mut conn, "a", T)), "ERR_INVALID_TRANSITION");
+            trash_folder(&mut conn, "a", T).unwrap();
+            let purged = purge_folder(&mut conn, "a", T + 9).unwrap();
+            assert_eq!(purged.folders.len(), 2);
+            assert_eq!(purged.notes.len(), 2);
+            assert!(find_folder(&conn, "b").unwrap().is_none());
+            assert!(find_note(&conn, "nb").unwrap().is_none());
+            let tombstones: i64 = conn.query_row("SELECT COUNT(*) FROM sync_tombstones", [], |r| r.get(0)).unwrap();
+            assert_eq!(tombstones, 4);
+        }
+
+        #[test]
+        fn purge_never_takes_live_items_along() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            trash_folder(&mut conn, "a", T).unwrap();
+            // Simulate a live leftover under the trashed tree (e.g. merged from another device).
+            conn.execute("UPDATE notes SET deleted_at = NULL WHERE id = 'nb'", []).unwrap();
+            let purged = purge_folder(&mut conn, "a", T).unwrap();
+            assert!(!purged.notes.contains(&"nb".to_string()));
+            assert_eq!(find_note(&conn, "nb").unwrap().unwrap().folder_id, None);
+        }
     }
 }

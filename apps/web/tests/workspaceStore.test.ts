@@ -121,6 +121,33 @@ describe('hierarchy actions', () => {
   });
 });
 
+describe('folder archive and trash (Task 10b)', () => {
+  it('archives, trashes and restores folder subtrees and reloads state', async () => {
+    const { store } = setup();
+    await store.createFolder('Projects', null, null);
+    await store.createFolder('Old', 'id-1' as FolderId, null);
+    await store.createTab();
+    await store.moveNote('id-3' as NoteId, 'id-2' as FolderId, null);
+
+    expectOk(await store.archiveFolder('id-1' as FolderId));
+    expect(store.state.folders.every((f) => f.isArchived)).toBe(true);
+    expect(store.state.notes['id-3' as NoteId]?.isArchived).toBe(true);
+    expectOk(await store.unarchiveFolder('id-1' as FolderId));
+
+    expectOk(await store.trashFolder('id-1' as FolderId));
+    expect(store.state.folders.every((f) => f.deletedAt !== null)).toBe(true);
+    expect(store.state.notes['id-3' as NoteId]?.deletedAt).not.toBeNull();
+    expect(await store.trashFolder('id-1' as FolderId)).toMatchObject({
+      ok: false,
+      error: { code: 'ERR_READ_ONLY_TRASHED_ENTITY' },
+    });
+
+    expectOk(await store.restoreFolder('id-1' as FolderId));
+    expect(store.state.folders.every((f) => f.deletedAt === null)).toBe(true);
+    expect(store.state.notes['id-3' as NoteId]?.deletedAt).toBeNull();
+  });
+});
+
 describe('loading', () => {
   it('rebuilds state from storage and decrypts names and titles lazily', async () => {
     const { store, storage } = setup();

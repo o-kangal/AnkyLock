@@ -1,5 +1,10 @@
 import {
   DEFAULT_RETENTION_DAYS,
+  checkFolderArchive,
+  checkFolderPurge,
+  checkFolderTrash,
+  descendantFolderIds,
+  planFolderRestore,
   isSystemCategoryId,
   transitionNote,
   validateFolderCreate,
@@ -17,6 +22,7 @@ import {
   type NoteContent,
   type NoteId,
   type NoteTransition,
+  type PurgedEntities,
   type Result,
   type SyncOutboxEntry,
 } from '@ankylock/core';
@@ -152,6 +158,19 @@ class Tx {
     const category = await this.get(STORES.categories, id, isCategory);
     if (!category) throw notFound('Category');
     return category;
+  }
+
+  async requireFolder(id: FolderId): Promise<Folder> {
+    const folder = await this.get(STORES.folders, id, isFolder);
+    if (!folder) throw notFound('Folder');
+    return folder;
+  }
+
+  /** The folder and every folder below it, plus all folders and notes for in-memory filtering. */
+  async subtree(id: FolderId): Promise<{ ids: Set<FolderId>; folders: Folder[]; notes: Note[] }> {
+    const folders = await this.getAll(STORES.folders, isFolder);
+    const notes = await this.getAll(STORES.notes, isNote);
+    return { ids: new Set([id, ...descendantFolderIds(folders, id)]), folders, notes };
   }
 
   async requireWritableFolder(id: FolderId): Promise<Folder> {
@@ -345,6 +364,114 @@ export class WebIndexedDbAdapter implements IStorageEngine {
     });
   }
 
+  listTrashedFolders(): Promise<Folder[]> {
+    return this.#run([STORES.folders], 'readonly', async (tx) =>
+      (await tx.getAll(STORES.folders, isFolder))
+        .filter((f) => f.deletedAt !== null)
+        .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
+    );
+  }
+
+  archiveFolder(id: FolderId): Promise<Folder> {
+    return this.#setFolderArchived(id, true);
+  }
+
+  unarchiveFolder(id: FolderId): Promise<Folder> {
+    return this.#setFolderArchived(id, false);
+  }
+
+  #setFolderArchived(id: FolderId, archived: boolean): Promise<Folder> {
+    return this.#run([STORES.folders, STORES.notes], 'readwrite', async (tx) => {
+      const folder = await tx.requireFolder(id);
+      const parent = folder.parentId === null ? null : ((await tx.get(STORES.folders, folder.parentId, isFolder)) ?? null);
+      unwrap(checkFolderArchive(folder, archived, parent));
+      const now = this.#now();
+      const { ids, folders, notes } = await tx.subtree(id);
+      for (const f of folders) {
+        if (ids.has(f.id) && f.deletedAt === null) await tx.put(STORES.folders, { ...f, isArchived: archived, updatedAt: now });
+      }
+      for (const n of notes) {
+        if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === null) {
+          await tx.put(STORES.notes, { ...n, isArchived: archived, updatedAt: now });
+        }
+      }
+      return tx.requireFolder(id);
+    });
+  }
+
+  trashFolder(id: FolderId): Promise<Folder> {
+    return this.#run([STORES.folders, STORES.notes], 'readwrite', async (tx) => {
+      unwrap(checkFolderTrash(await tx.requireFolder(id)));
+      const now = this.#now();
+      const { ids, folders, notes } = await tx.subtree(id);
+      for (const f of folders) {
+        if (ids.has(f.id) && f.deletedAt === null) await tx.put(STORES.folders, { ...f, deletedAt: now, updatedAt: now });
+      }
+      for (const n of notes) {
+        if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === null) {
+          await tx.put(STORES.notes, { ...n, deletedAt: now, updatedAt: now });
+        }
+      }
+      return tx.requireFolder(id);
+    });
+  }
+
+  restoreFolder(id: FolderId): Promise<Folder> {
+    return this.#run([STORES.folders, STORES.notes, STORES.categories], 'readwrite', async (tx) => {
+      const folder = await tx.requireFolder(id);
+      const parent = folder.parentId === null ? undefined : await tx.get(STORES.folders, folder.parentId, isFolder);
+      const categoryExists =
+        folder.categoryId !== null && (await tx.get(STORES.categories, folder.categoryId, isCategory)) !== undefined;
+      const placement = unwrap(planFolderRestore(folder, parent !== undefined && parent.deletedAt === null, categoryExists));
+      const trashedAt = folder.deletedAt;
+      const now = this.#now();
+      const { ids, folders, notes } = await tx.subtree(id);
+      for (const f of folders) {
+        if (!ids.has(f.id) || f.deletedAt !== trashedAt) continue;
+        const restored: Folder = { ...f, deletedAt: null, updatedAt: now };
+        await tx.put(STORES.folders, f.id === id ? { ...restored, ...placement } : restored);
+      }
+      for (const n of notes) {
+        if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === trashedAt) {
+          await tx.put(STORES.notes, { ...n, deletedAt: null, updatedAt: now });
+        }
+      }
+      return tx.requireFolder(id);
+    });
+  }
+
+  purgeFolder(id: FolderId): Promise<PurgedEntities> {
+    return this.#run([STORES.folders, STORES.notes, STORES.noteContents, STORES.tombstones], 'readwrite', async (tx) => {
+      unwrap(checkFolderPurge(await tx.requireFolder(id)));
+      const before = await tx.subtree(id);
+      const trashed = new Set(before.folders.filter((f) => f.deletedAt !== null).map((f) => f.id));
+      // Live leftovers under trashed folders move to the root instead of being purged.
+      for (const f of before.folders) {
+        if (before.ids.has(f.id) && f.deletedAt === null && f.parentId !== null && trashed.has(f.parentId)) {
+          await tx.put(STORES.folders, { ...f, parentId: null });
+        }
+      }
+      for (const n of before.notes) {
+        if (n.folderId !== null && before.ids.has(n.folderId) && n.deletedAt === null && trashed.has(n.folderId)) {
+          await tx.put(STORES.notes, { ...n, folderId: null });
+        }
+      }
+      const { ids, notes } = await tx.subtree(id);
+      const purgedNotes = notes.filter((n) => n.folderId !== null && ids.has(n.folderId)).map((n) => n.id);
+      const now = this.#now();
+      for (const noteId of purgedNotes) {
+        await tx.delete(STORES.notes, noteId);
+        await tx.delete(STORES.noteContents, noteId);
+        await tx.tombstone(noteId, 'note', now);
+      }
+      for (const folderId of ids) {
+        await tx.delete(STORES.folders, folderId);
+        await tx.tombstone(folderId, 'folder', now);
+      }
+      return { folders: [...ids], notes: purgedNotes };
+    });
+  }
+
   // Notes
 
   createNote(id: NoteId): Promise<Note> {
@@ -399,8 +526,9 @@ export class WebIndexedDbAdapter implements IStorageEngine {
   restoreNote(id: NoteId): Promise<Note> {
     return this.#run([STORES.notes, STORES.folders, STORES.categories], 'readwrite', async (tx) => {
       const note = await tx.requireNote(id);
-      // A trashed parent still exists; only a purged one triggers the root fallback (BR-LIFE-05).
-      const folderExists = note.folderId === null || (await tx.get(STORES.folders, note.folderId, isFolder)) !== undefined;
+      // A purged or trashed folder can't hold a live note: fall back to the root (BR-LIFE-05).
+      const folder = note.folderId === null ? undefined : await tx.get(STORES.folders, note.folderId, isFolder);
+      const folderExists = note.folderId === null || (folder !== undefined && folder.deletedAt === null);
       const categoryExists =
         note.categoryId === null || (await tx.get(STORES.categories, note.categoryId, isCategory)) !== undefined;
       const transition = await this.#transition(tx, note, {

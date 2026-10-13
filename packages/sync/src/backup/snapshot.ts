@@ -32,13 +32,15 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
  * structure (counts, ids, timestamps) from Google Drive. The format is the same on web and desktop.
  */
 export async function exportSnapshot(storage: IStorageEngine, sealer: Sealer, now: EpochMs): Promise<SealedBytes> {
-  const [categories, folders, trashed, retentionDays] = await Promise.all([
+  const [categories, liveFolders, trashedFolders, trashed, retentionDays] = await Promise.all([
     storage.listCategories(),
     storage.listFolders(),
+    storage.listTrashedFolders(),
     storage.listTrashedNotes(),
     storage.getTrashRetentionDays(),
   ]);
-  const live = await Promise.all([null, ...folders.map((f) => f.id)].map((id) => storage.listNotes(id)));
+  const folders = [...liveFolders, ...trashedFolders];
+  const live = await Promise.all([null, ...liveFolders.map((f) => f.id)].map((id) => storage.listNotes(id)));
   const notes = [...live.flat(), ...trashed];
   const contents = (await Promise.all(notes.map((n) => storage.getNoteContent(n.id)))).flatMap((c) =>
     c === null

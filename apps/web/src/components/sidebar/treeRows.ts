@@ -1,5 +1,5 @@
 import type { FolderId } from '@ankylock/core';
-import type { FolderView, NoteView, Selection, WorkspaceState } from '../../stores/workspaceStore.js';
+import type { FolderView, NoteView, WorkspaceState } from '../../stores/workspaceStore.js';
 
 export type TreeRow =
   | { readonly kind: 'folder'; readonly folder: FolderView; readonly depth: number; readonly expanded: boolean }
@@ -8,49 +8,54 @@ export type TreeRow =
 const byName = (a: FolderView, b: FolderView): number => a.name.localeCompare(b.name, 'en-US');
 const byRecent = (a: NoteView, b: NoteView): number => b.updatedAt - a.updatedAt;
 
+type Item = Pick<FolderView, 'isArchived' | 'deletedAt'>;
+
+/** Which folders and notes a view shows: Trash shows trashed items, Archive archived ones, the rest live ones. */
+function visibilityFor(state: WorkspaceState): (item: Item) => boolean {
+  const { selection } = state;
+  if (selection.kind === 'system' && selection.id === 'system_trash') return (i) => i.deletedAt !== null;
+  if (selection.kind === 'system' && selection.id === 'system_archive') return (i) => i.deletedAt === null && i.isArchived;
+  return (i) => i.deletedAt === null && !i.isArchived;
+}
+
 /**
- * Flattens the visible part of the hierarchy into rows for the virtualized list.
- * - All Notes: every live, unarchived folder and note.
- * - A custom category: its root folders (subfolders follow their parent) and its loose notes.
+ * Flattens the visible part of the hierarchy into rows for the virtualized list. Roots are the
+ * visible folders whose parent is not visible in this view (so an archived or trashed folder
+ * shows with its subtree in Archive or Trash), followed by visible notes outside visible folders.
+ * - All Notes / Archive / Trash: everything visible in that view.
+ * - A custom category: its roots and loose notes only.
  * - A folder: that folder's subtree.
- * - Archive / Trash: a flat list of archived or trashed notes.
  */
 export function buildTreeRows(state: WorkspaceState, expanded: ReadonlySet<FolderId>): TreeRow[] {
-  const notes = Object.values(state.notes);
-  const selection: Selection = state.selection;
+  const visible = visibilityFor(state);
+  const folders = state.folders.filter(visible);
+  const notes = Object.values(state.notes).filter(visible);
+  const visibleIds = new Set(folders.map((f) => f.id));
 
-  if (selection.kind === 'system' && selection.id !== 'system_all') {
-    const inView =
-      selection.id === 'system_trash'
-        ? notes.filter((n) => n.deletedAt !== null)
-        : notes.filter((n) => n.isArchived && n.deletedAt === null);
-    return inView.sort(byRecent).map((note) => ({ kind: 'note', note, depth: 0 }));
-  }
-
-  const liveNotes = notes.filter((n) => n.deletedAt === null && !n.isArchived);
-  const folders = state.folders.filter((f) => !f.isArchived);
-  const children = new Map<FolderId | null, FolderView[]>();
+  const children = new Map<FolderId, FolderView[]>();
   for (const folder of folders) {
+    if (folder.parentId === null || !visibleIds.has(folder.parentId)) continue;
     const siblings = children.get(folder.parentId) ?? [];
     siblings.push(folder);
     children.set(folder.parentId, siblings);
   }
 
   const rows: TreeRow[] = [];
-  const visited = new Set<FolderId>();
+  const rendered = new Set<FolderId>();
   const addFolder = (folder: FolderView, depth: number): void => {
     // Guards against cyclic data so rendering can never loop.
-    if (visited.has(folder.id)) return;
-    visited.add(folder.id);
+    if (rendered.has(folder.id)) return;
+    rendered.add(folder.id);
     const isExpanded = expanded.has(folder.id);
     rows.push({ kind: 'folder', folder, depth, expanded: isExpanded });
     if (!isExpanded) return;
     for (const child of (children.get(folder.id) ?? []).sort(byName)) addFolder(child, depth + 1);
-    for (const note of liveNotes.filter((n) => n.folderId === folder.id).sort(byRecent)) {
+    for (const note of notes.filter((n) => n.folderId === folder.id).sort(byRecent)) {
       rows.push({ kind: 'note', note, depth: depth + 1 });
     }
   };
 
+  const { selection } = state;
   if (selection.kind === 'folder') {
     const root = folders.find((f) => f.id === selection.id);
     if (root) addFolder(root, 0);
@@ -58,9 +63,11 @@ export function buildTreeRows(state: WorkspaceState, expanded: ReadonlySet<Folde
   }
 
   const categoryId = selection.kind === 'category' ? selection.id : null;
-  const roots = (children.get(null) ?? []).filter((f) => categoryId === null || f.categoryId === categoryId);
+  const inCategory = (item: { categoryId: FolderView['categoryId'] }): boolean =>
+    categoryId === null || item.categoryId === categoryId;
+  const roots = folders.filter((f) => (f.parentId === null || !visibleIds.has(f.parentId)) && inCategory(f));
   for (const folder of roots.sort(byName)) addFolder(folder, 0);
-  const loose = liveNotes.filter((n) => n.folderId === null && (categoryId === null || n.categoryId === categoryId));
+  const loose = notes.filter((n) => (n.folderId === null || !visibleIds.has(n.folderId)) && inCategory(n));
   for (const note of loose.sort(byRecent)) rows.push({ kind: 'note', note, depth: 0 });
   return rows;
 }

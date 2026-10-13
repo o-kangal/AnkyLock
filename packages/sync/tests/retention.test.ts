@@ -1,15 +1,16 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MS_PER_DAY, type EpochMs, type NoteId } from '@ankylock/core';
+import { MS_PER_DAY, type Ciphertext, type EpochMs, type FolderId, type NoteId } from '@ankylock/core';
 import { createKeySealer } from '@ankylock/crypto';
 import { StorageError, WebIndexedDbAdapter, type IStorageEngine } from '@ankylock/storage';
 import {
   OutboxQueue,
   changeTrashRetention,
   createTombstonePacket,
-  purgeExpiredNotes,
+  purgeExpired,
   startRetentionWorker,
   type DeviceId,
+  type PurgedEntity,
 } from '../src/index.js';
 
 const T0 = 1_776_100_000_000;
@@ -27,20 +28,22 @@ function world() {
   };
 }
 
+const noteEntity = (id: string): PurgedEntity => ({ entityType: 'note', id: id as NoteId });
+
 async function trashedNote(storage: IStorageEngine, id: string): Promise<NoteId> {
   await storage.createNote(id as NoteId);
   await storage.trashNote(id as NoteId);
   return id as NoteId;
 }
 
-describe('purgeExpiredNotes (BR-LIFE-04)', () => {
+describe('purgeExpired (BR-LIFE-04)', () => {
   it('purges only after the retention window, to the millisecond', async () => {
     const { storage, now, advance } = world();
     await trashedNote(storage, 'old');
     advance(28 * MS_PER_DAY);
-    expect(await purgeExpiredNotes({ storage, now })).toEqual([]);
+    expect(await purgeExpired({ storage, now })).toEqual([]);
     advance(1);
-    expect(await purgeExpiredNotes({ storage, now })).toEqual(['old']);
+    expect(await purgeExpired({ storage, now })).toEqual([noteEntity('old')]);
     expect(await storage.getNote('old' as NoteId)).toBeNull();
   });
 
@@ -49,7 +52,7 @@ describe('purgeExpiredNotes (BR-LIFE-04)', () => {
     await storage.setTrashRetentionDays(0);
     await trashedNote(storage, 'kept');
     advance(10_000 * MS_PER_DAY);
-    expect(await purgeExpiredNotes({ storage, now })).toEqual([]);
+    expect(await purgeExpired({ storage, now })).toEqual([]);
     expect(await storage.getNote('kept' as NoteId)).not.toBeNull();
   });
 
@@ -57,7 +60,7 @@ describe('purgeExpiredNotes (BR-LIFE-04)', () => {
     const { storage, now, advance } = world();
     await storage.createNote('live' as NoteId);
     advance(400 * MS_PER_DAY);
-    expect(await purgeExpiredNotes({ storage, now })).toEqual([]);
+    expect(await purgeExpired({ storage, now })).toEqual([]);
   });
 
   it('queues an encrypted TOMBSTONE packet for each purge', async () => {
@@ -69,10 +72,11 @@ describe('purgeExpiredNotes (BR-LIFE-04)', () => {
     await trashedNote(storage, 'gone');
     advance(29 * MS_PER_DAY);
 
-    await purgeExpiredNotes({
+    await purgeExpired({
       storage,
       now,
-      onPurged: async (id) => queue.submit(await createTombstonePacket(sealer, deviceId, id, 'note', now())),
+      onPurged: async (entity) =>
+        queue.submit(await createTombstonePacket(sealer, deviceId, entity.id, entity.entityType, now())),
     });
 
     const [entry] = await storage.listOutbox(10);
@@ -95,8 +99,50 @@ describe('purgeExpiredNotes (BR-LIFE-04)', () => {
           : target[prop].bind(target),
     });
     const errors: unknown[] = [];
-    expect(await purgeExpiredNotes({ storage: flaky, now, onError: (e) => errors.push(e) })).toEqual(['b']);
+    expect(await purgeExpired({ storage: flaky, now, onError: (e: unknown) => errors.push(e) })).toEqual([noteEntity('b')]);
     expect(errors).toHaveLength(1);
+  });
+});
+
+describe('purgeExpired for folders (Task 10b)', () => {
+  async function trashedTree(storage: IStorageEngine): Promise<void> {
+    await storage.createFolder({ id: 'a' as FolderId, parentId: null, categoryId: null, nameCiphertext: 'YQ==' as Ciphertext });
+    await storage.createFolder({ id: 'b' as FolderId, parentId: 'a' as FolderId, categoryId: null, nameCiphertext: 'Yg==' as Ciphertext });
+    await storage.createNote('nb' as NoteId);
+    await storage.moveNote('nb' as NoteId, 'b' as FolderId, null);
+    await storage.trashFolder('a' as FolderId);
+  }
+
+  it('purges an expired folder tree once and reports every entity', async () => {
+    const { storage, now, advance } = world();
+    await trashedTree(storage);
+    advance(29 * MS_PER_DAY);
+    const purged = await purgeExpired({ storage, now });
+    expect(purged).toEqual([
+      { entityType: 'folder', id: 'a' },
+      { entityType: 'folder', id: 'b' },
+      { entityType: 'note', id: 'nb' },
+    ]);
+    expect(await storage.listTrashedFolders()).toEqual([]);
+    expect(await storage.getNote('nb' as NoteId)).toBeNull();
+  });
+
+  it('keeps folders inside the retention window', async () => {
+    const { storage, now, advance } = world();
+    await trashedTree(storage);
+    advance(27 * MS_PER_DAY);
+    expect(await purgeExpired({ storage, now })).toEqual([]);
+    expect(await storage.listTrashedFolders()).toHaveLength(2);
+  });
+
+  it('counts trashed folders when shortening retention needs confirmation', async () => {
+    const { storage, now, advance } = world();
+    await trashedTree(storage);
+    advance(10 * MS_PER_DAY);
+    expect(await changeTrashRetention({ storage, now }, 7, { confirmed: false })).toEqual({
+      kind: 'confirm_required',
+      affected: 3,
+    });
   });
 });
 
@@ -112,7 +158,7 @@ describe('changeTrashRetention (SPEC §6)', () => {
     expect(await storage.getNote('ten-days-old' as NoteId)).not.toBeNull();
 
     const second = await changeTrashRetention({ storage, now }, 7, { confirmed: true });
-    expect(second).toEqual({ kind: 'applied', purged: ['ten-days-old'] });
+    expect(second).toEqual({ kind: 'applied', purged: [noteEntity('ten-days-old')] });
     expect(await storage.getTrashRetentionDays()).toBe(7);
   });
 
@@ -141,8 +187,8 @@ describe('startRetentionWorker', () => {
     await trashedNote(storage, 'first');
     advance(29 * MS_PER_DAY);
 
-    const purged: NoteId[] = [];
-    const worker = startRetentionWorker({ storage, now, intervalMs: 1_000, onPurged: async (id) => void purged.push(id) });
+    const purged: string[] = [];
+    const worker = startRetentionWorker({ storage, now, intervalMs: 1_000, onPurged: async (e) => void purged.push(e.id) });
     await worker.runNow();
     expect(purged).toEqual(['first']);
 
