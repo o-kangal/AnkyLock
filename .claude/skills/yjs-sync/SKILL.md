@@ -57,6 +57,7 @@ If there's no Master Key yet (new device before passphrase or QR), keep receivin
 ## Relay (apps/relay, Rust Axum + Tokio)
 
 - Authenticate the socket at upgrade time (`auth.rs`: verify the token and extract `account_id`). Reject before upgrading. Never accept the account id as a client-supplied field.
+- **Auth as built (Task 7):** the client offers `Sec-WebSocket-Protocol: ankylock.v1, <Google ID token>`, and the relay echoes `ankylock.v1`. The token never goes in the URL, because URLs end up in logs. `GoogleAuthenticator` checks RS256 against Google's JWKS (cached 1 h; an unknown `kid` triggers at most one refetch per 60 s), the issuer, `aud = GOOGLE_CLIENT_ID` and expiry. `account_id = sub`. ID tokens expire after an hour, so `BlindWebSocketClient` calls `getToken()` on every reconnect. Tests use the `Authenticator` / `KeySource` traits with fixture keys in `apps/relay/tests/fixtures/`.
 - `hub.rs`: `HashMap<AccountId, broadcast::Sender<Bytes>>` behind a lock, or a `DashMap`. Remove the entry when the last subscriber leaves so memory doesn't grow with every account ever seen.
 - `ws.rs`: forward each binary frame unchanged to other sockets of the same `account_id`, and skip the sender. **Don't deserialize, inspect or log the frame body.** Log connection lifecycle and sizes at most. If routing ever needs a field, parse only the outer envelope keys and never `encrypted_envelope`.
 - Handle `broadcast::error::RecvError::Lagged` by closing that slow client so it reconnects and resyncs through state vectors, rather than silently skipping frames.

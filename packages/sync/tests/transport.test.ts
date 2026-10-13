@@ -139,7 +139,10 @@ describe('BlindWebSocketClient', () => {
     onmessage: ((event: MessageEvent) => void) | null = null;
     onerror: ((event: Event) => void) | null = null;
 
-    constructor(readonly url: string) {
+    constructor(
+      readonly url: string,
+      readonly protocols: string[],
+    ) {
       FakeSocket.instances.push(this);
     }
 
@@ -173,8 +176,9 @@ describe('BlindWebSocketClient', () => {
     return new BlindWebSocketClient({
       url: 'wss://relay.example/ws',
       onFrame,
+      getToken: () => `token-${FakeSocket.instances.length}`,
       onStatusChange: (s) => statuses.push(s),
-      createSocket: (url) => new FakeSocket(url),
+      createSocket: (url, protocols) => new FakeSocket(url, protocols),
       heartbeatIntervalMs: 1_000,
       heartbeatTimeoutMs: 500,
       backoffBaseMs: 100,
@@ -190,6 +194,16 @@ describe('BlindWebSocketClient', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('offers the relay subprotocol with a fresh token on every connect', () => {
+    const c = client();
+    c.connect();
+    expect(latest().protocols).toEqual(['ankylock.v1', 'token-0']);
+    latest().drop();
+    vi.advanceTimersByTime(1_000);
+    expect(latest().protocols).toEqual(['ankylock.v1', 'token-1']);
+    c.dispose();
   });
 
   it('sends only while open and delivers binary frames', () => {
@@ -225,7 +239,13 @@ describe('BlindWebSocketClient', () => {
   });
 
   it('applies jitter between 50 % and 100 % of the backoff ceiling', () => {
-    const low = new BlindWebSocketClient({ url: 'x', onFrame: () => undefined, random: () => 0, backoffBaseMs: 100 });
+    const low = new BlindWebSocketClient({
+      url: 'x',
+      getToken: () => 't',
+      onFrame: () => undefined,
+      random: () => 0,
+      backoffBaseMs: 100,
+    });
     expect(low.nextBackoffMs()).toBe(50);
   });
 

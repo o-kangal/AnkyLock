@@ -15,12 +15,20 @@ export interface SocketLike {
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed';
 
+/** First offered subprotocol; the relay echoes it back. The second offered value is the token. */
+export const RELAY_SUBPROTOCOL = 'ankylock.v1';
+
 export interface BlindWebSocketClientOptions {
   readonly url: string;
+  /**
+   * Returns a current Google ID token. Called on every (re)connect because ID tokens expire
+   * after an hour. Sent as a subprotocol: browsers can't set WebSocket headers and URLs get logged.
+   */
+  readonly getToken: () => string;
   /** Receives every binary frame from the relay (data). Text frames are control messages. */
   readonly onFrame: (frame: Bytes) => void;
   readonly onStatusChange?: (status: ConnectionStatus) => void;
-  readonly createSocket?: (url: string) => SocketLike;
+  readonly createSocket?: (url: string, protocols: string[]) => SocketLike;
   readonly heartbeatIntervalMs?: number;
   readonly heartbeatTimeoutMs?: number;
   readonly backoffBaseMs?: number;
@@ -53,7 +61,7 @@ export class BlindWebSocketClient implements PacketTransport {
 
   constructor(options: BlindWebSocketClientOptions) {
     this.#options = {
-      createSocket: (url) => new WebSocket(url),
+      createSocket: (url, protocols) => new WebSocket(url, protocols),
       heartbeatIntervalMs: 25_000,
       heartbeatTimeoutMs: 10_000,
       backoffBaseMs: 500,
@@ -69,7 +77,7 @@ export class BlindWebSocketClient implements PacketTransport {
 
   connect(): void {
     if (this.#disposed || this.#socket) return;
-    const socket = this.#options.createSocket(this.#options.url);
+    const socket = this.#options.createSocket(this.#options.url, [RELAY_SUBPROTOCOL, this.#options.getToken()]);
     socket.binaryType = 'arraybuffer';
     socket.onopen = () => {
       this.#attempt = 0;
