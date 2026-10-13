@@ -1,0 +1,35 @@
+{
+  "name": "@ankylock/editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@ankylock/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ankylock/core": "workspace:*",
+    "@ankylock/sync": "workspace:*",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.14",
+    "solid-js": "1.9.17",
+    "y-codemirror.next": "0.3.6",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.2",
+    "typescript": "5.9.3",
+    "vite-plugin-solid": "2.11.14",
+    "vitest": "5.0.4"
+  }
+}

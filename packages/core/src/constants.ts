@@ -19,3 +19,6 @@ export const MAX_FOLDER_DEPTH = 3;
 
 /** BR-NOTE-02: local edits are batched for this long before being encrypted and sent. */
 export const SYNC_DEBOUNCE_MS = 150;
+
+/** BR-NOTE-03: display titles fall back to this many leading characters of line 1. */
+export const TITLE_FALLBACK_LENGTH = 40;
