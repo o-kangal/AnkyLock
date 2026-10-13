@@ -22,6 +22,39 @@ describe('WebIndexedDbAdapter', () => {
     expect((await second.getNote('n' as NoteId))?.isEphemeral).toBe(true);
   });
 
+  it('upgrades a version 1 database without losing data', async () => {
+    const factory = new IDBFactory();
+    await new Promise<void>((resolve, reject) => {
+      const req = factory.open('ankylock', 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        db.createObjectStore('notes', { keyPath: 'id' }).put({
+          id: 'old',
+          folderId: null,
+          categoryId: null,
+          isEphemeral: true,
+          isArchived: false,
+          deletedAt: null,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        for (const name of ['categories', 'folders']) db.createObjectStore(name, { keyPath: 'id' });
+        db.createObjectStore('note_contents', { keyPath: 'noteId' });
+        db.createObjectStore('sync_outbox', { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore('sync_tombstones', { keyPath: 'entityId' });
+      };
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    const engine = new WebIndexedDbAdapter(factory, counterClock());
+    expect((await engine.getNote('old' as NoteId))?.isEphemeral).toBe(true);
+    expect(await engine.getTrashRetentionDays()).toBe(28);
+    expect(await engine.setTrashRetentionDays(14)).toBe(14);
+  });
+
   it('lists notes most recently updated first', async () => {
     const engine = new WebIndexedDbAdapter(new IDBFactory(), counterClock());
     await engine.createNote('a' as NoteId);
@@ -121,6 +154,14 @@ describe('TauriSqliteAdapter', () => {
     await expect(new TauriSqliteAdapter(unknownCode).getNote('n' as NoteId)).rejects.toMatchObject({ code: 'ERR_STORAGE' });
     const { invoke } = fakeInvoke({ id: 'n' });
     await expect(new TauriSqliteAdapter(invoke).createNote('n' as NoteId)).rejects.toMatchObject({ code: 'ERR_STORAGE' });
+  });
+
+  it('validates retention before calling the host', async () => {
+    const { invoke, calls } = fakeInvoke(7);
+    const adapter = new TauriSqliteAdapter(invoke);
+    expect(await adapter.setTrashRetentionDays(7)).toBe(7);
+    await expect(adapter.setTrashRetentionDays(-1)).rejects.toMatchObject({ code: 'ERR_INVALID_SETTING' });
+    expect(calls).toEqual([['settings_set_retention_days', { days: 7 }]]);
   });
 
   it('accepts null for missing notes and unit results', async () => {

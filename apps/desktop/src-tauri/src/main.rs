@@ -7,7 +7,7 @@ mod error;
 
 use tauri::Manager;
 
-use crate::commands::{categories, folders, notes, outbox};
+use crate::commands::{categories, folders, notes, outbox, settings};
 use crate::db::pool::DbPool;
 
 fn main() {
@@ -42,6 +42,8 @@ fn main() {
             outbox::outbox_enqueue,
             outbox::outbox_list,
             outbox::outbox_delete,
+            settings::settings_get_retention_days,
+            settings::settings_set_retention_days,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run AnkyLock");

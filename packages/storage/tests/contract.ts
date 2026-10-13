@@ -219,6 +219,21 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
       });
     });
 
+    describe('settings', () => {
+      it('defaults trash retention to 28 days and stores valid values (BR-LIFE-03)', async () => {
+        expect(await engine.getTrashRetentionDays()).toBe(28);
+        expect(await engine.setTrashRetentionDays(7)).toBe(7);
+        expect(await engine.getTrashRetentionDays()).toBe(7);
+        expect(await engine.setTrashRetentionDays(0)).toBe(0);
+        expect(await engine.getTrashRetentionDays()).toBe(0);
+      });
+
+      it('rejects invalid retention values', async () => {
+        for (const days of [-1, 1.5, 366]) await expectCode(engine.setTrashRetentionDays(days), 'ERR_INVALID_SETTING');
+        expect(await engine.getTrashRetentionDays()).toBe(28);
+      });
+    });
+
     describe('sync outbox', () => {
       it('drains in insertion order and keeps payload bytes intact', async () => {
         const first = await engine.enqueueOutbox({ entityId: note('n1'), entityType: 'note', encryptedPayload: sealed(0xde, 0xad) });

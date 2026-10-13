@@ -2,6 +2,7 @@ pub mod categories;
 pub mod folders;
 pub mod notes;
 pub mod outbox;
+pub mod settings;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

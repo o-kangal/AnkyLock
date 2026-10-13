@@ -1,6 +1,7 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import {
   ERROR_CODES,
+  validateRetentionDays,
   type Category,
   type CategoryId,
   type Ciphertext,
@@ -58,6 +59,8 @@ const isAppError = shape<{ code: ErrorCode; message: string }>({
   code: (v) => typeof v === 'string' && (ERROR_CODES as readonly string[]).includes(v),
   message: isString,
 });
+
+const isWholeNumber = (v: unknown): v is number => Number.isInteger(v);
 
 function toStorageError(error: unknown): StorageError {
   if (isAppError(error)) return new StorageError(error.code, error.message);
@@ -196,6 +199,17 @@ export class TauriSqliteAdapter implements IStorageEngine {
 
   async deleteOutbox(ids: readonly number[]): Promise<void> {
     await this.#call('outbox_delete', { ids: [...ids] }, isNull);
+  }
+
+  getTrashRetentionDays(): Promise<number> {
+    return this.#call('settings_get_retention_days', {}, isWholeNumber);
+  }
+
+  async setTrashRetentionDays(days: number): Promise<number> {
+    // Validate here too: the host takes a u32, so -1 or 1.5 would fail as an untyped IPC error.
+    const valid = validateRetentionDays(days);
+    if (!valid.ok) throw new StorageError(valid.error.code, valid.error.message);
+    return this.#call('settings_set_retention_days', { days: valid.value }, isWholeNumber);
   }
 }
 

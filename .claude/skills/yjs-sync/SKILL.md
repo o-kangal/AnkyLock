@@ -39,6 +39,10 @@ Folder, category and note metadata (moves, archive, trash) are not Yjs text. The
 
 If there's no Master Key yet (new device before passphrase or QR), keep receiving: write incoming encrypted packets to local storage as-is and apply them after unlock. Never drop them, and never block on them.
 
+## Cold backup (Task 10)
+
+`exportSnapshot` serializes every storage record into one JSON document (already-encrypted fields stay encrypted) and seals the whole document with the MEK. The outer seal hides structure (ids, counts, timestamps) from Drive. The format is portable between web and desktop. `createSnapshotScheduler` uploads it to `appDataFolder` daily and on network idle, together with the non-secret vault header (`serializeVaultHeader`) that a new device needs for passphrase recovery. Failures surface as a `BackupStatus` (`auth` / `quota` / `network` / `http` / `snapshot`) and never block local saves or sync. Drive tokens use only the `drive.appdata` scope and never touch key material.
+
 ## Frame envelope (SPEC §5.2)
 
 ```json

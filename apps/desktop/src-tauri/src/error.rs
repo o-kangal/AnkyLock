@@ -14,6 +14,8 @@ pub enum AppError {
     ReadOnlyTrashedEntity,
     #[error("{0}")]
     InvalidTransition(String),
+    #[error("{0}")]
+    InvalidSetting(String),
     #[error("{0} not found.")]
     NotFound(&'static str),
     #[error("Storage error: {0}")]
@@ -28,6 +30,7 @@ impl AppError {
             Self::SystemCategoryImmutable => "ERR_SYSTEM_CATEGORY_IMMUTABLE",
             Self::ReadOnlyTrashedEntity => "ERR_READ_ONLY_TRASHED_ENTITY",
             Self::InvalidTransition(_) => "ERR_INVALID_TRANSITION",
+            Self::InvalidSetting(_) => "ERR_INVALID_SETTING",
             Self::NotFound(_) => "ERR_NOT_FOUND",
             Self::Storage(_) => "ERR_STORAGE",
         }

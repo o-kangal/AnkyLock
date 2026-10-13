@@ -3,3 +3,7 @@ export * from './crdt/docManager.js';
 export * from './crdt/deltaPacker.js';
 export * from './queue/outboxQueue.js';
 export * from './client/blindWebSocketClient.js';
+export * from './workers/retentionWorker.js';
+export * from './backup/snapshot.js';
+export * from './backup/googleDriveClient.js';
+export * from './backup/snapshotScheduler.js';

@@ -1,5 +1,5 @@
 import type { Brand, Bytes, EpochMs, SealedBytes, SyncOutboxEntry } from '@ankylock/core';
-import { base64ToBytes, bytesToBase64 } from '@ankylock/crypto';
+import { base64ToBytes, bytesToBase64, type Sealer } from '@ankylock/crypto';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -89,5 +89,25 @@ export function decodeFrame(frame: Bytes): FrameDecodeResult {
       timestampMs: timestampMs as EpochMs,
       payload: payload as SealedBytes,
     },
+  };
+}
+
+/**
+ * TOMBSTONE packet telling peers to purge an entity (BR-LIFE-04). The entity kind travels inside
+ * the sealed payload, so the relay learns nothing beyond the id it already routes on.
+ */
+export async function createTombstonePacket(
+  sealer: Sealer,
+  deviceId: DeviceId,
+  entityId: SyncPacket['entityId'],
+  entityType: 'note' | 'folder' | 'category',
+  now: EpochMs,
+): Promise<SyncPacket> {
+  return {
+    packetType: 'TOMBSTONE',
+    entityId,
+    senderDeviceId: deviceId,
+    timestampMs: now,
+    payload: await sealer.seal(encoder.encode(JSON.stringify({ entityType }))),
   };
 }

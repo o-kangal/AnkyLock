@@ -103,6 +103,7 @@ TASKS.md Task 10 shortens this to `deleted_at + retention_days < now()`. That mi
 - `retention_days` is read from `app_settings.trash_retention_days`. Valid values are `0` (manual purge only, never auto-purge) or `1..=365`.
 - The purge runs at boot and every 24 h. It runs off the main thread: in a worker on web, in Rust on desktop.
 - Each purged entity gets a tombstone and a sync outbox entry (`entity_type = 'tombstone'`) so other devices purge it too.
+- **Where it lives (Task 10):** `validateRetentionDays` and `planRetentionChange` in core; `purgeExpiredNotes`, `changeTrashRetention` and `startRetentionWorker` in `packages/sync/src/workers/retentionWorker.ts`; the setting via `IStorageEngine.get/setTrashRetentionDays` (`ERR_INVALID_SETTING` on bad values). Folders have no trash flow yet, so only notes are purged.
 - **Shortening retention needs confirmation.** If the new value would immediately purge rows the old value kept, the settings change returns a "needs confirmation" result with the count. It doesn't purge until the user confirms. Model this as data (`{ kind: 'confirm_required', affected: number }`), not a UI-only check. Then the worker can't bypass it.
 
 ## Titles and size

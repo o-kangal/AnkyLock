@@ -6,6 +6,8 @@ import {
   base64ToBytes,
   bytesToBase64,
   createVaultKey,
+  parseVaultHeader,
+  serializeVaultHeader,
   decryptPayload,
   decryptText,
   deriveMasterKey,
@@ -205,5 +207,22 @@ describe('createVaultKey', () => {
   it('never stores the passphrase or key bytes in the header', async () => {
     const header = await createVaultKey().initialize('super secret passphrase');
     expect(JSON.stringify({ ...header, kdf: { ...header.kdf, salt: [...header.kdf.salt] } })).not.toContain('super secret');
+  });
+});
+
+describe('vault header serialization', () => {
+  it('round-trips and still unlocks the vault', async () => {
+    const header = await createVaultKey().initialize('passphrase');
+    const restored = parseVaultHeader(serializeVaultHeader(header));
+    expect(restored.kdf.salt).toEqual(header.kdf.salt);
+    const vault = createVaultKey();
+    await vault.unlock('passphrase', restored);
+    expect(vault.isUnlocked()).toBe(true);
+  });
+
+  it('rejects malformed headers', () => {
+    for (const json of ['nope', '{}', '{"version":2,"kdf":{},"keyCheck":"x"}']) {
+      expect(() => parseVaultHeader(json)).toThrow(CryptoError);
+    }
   });
 });

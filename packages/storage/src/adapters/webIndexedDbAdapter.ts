@@ -1,8 +1,10 @@
 import {
+  DEFAULT_RETENTION_DAYS,
   isSystemCategoryId,
   transitionNote,
   validateFolderCreate,
   validateFolderMove,
+  validateRetentionDays,
   type Category,
   type CategoryId,
   type Ciphertext,
@@ -22,7 +24,9 @@ import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry } from '../g
 import { StorageError, type IStorageEngine, type NewFolder, type NewOutboxEntry } from '../interfaces/IStorageEngine.js';
 
 const DB_NAME = 'ankylock';
-const DB_VERSION = 1;
+/** v1: entity stores. v2: app_settings. Upgrades run step by step from the stored version. */
+const DB_VERSION = 2;
+const RETENTION_KEY = 'trash_retention_days';
 
 const STORES = {
   categories: 'categories',
@@ -31,6 +35,7 @@ const STORES = {
   noteContents: 'note_contents',
   outbox: 'sync_outbox',
   tombstones: 'sync_tombstones',
+  settings: 'app_settings',
 } as const;
 
 type StoreName = (typeof STORES)[keyof typeof STORES];
@@ -62,6 +67,9 @@ const all =
   (value: unknown): value is T[] =>
     Array.isArray(value) && value.every(guard);
 
+const isSetting = (value: unknown): value is { key: string; value: number } =>
+  typeof value === 'object' && value !== null && typeof (value as { value?: unknown }).value === 'number';
+
 const anything = (_value: unknown): _value is unknown => true;
 const isKey = (value: unknown): value is number => typeof value === 'number';
 
@@ -77,14 +85,19 @@ const byUpdatedDesc = (a: Note, b: Note): number => b.updatedAt - a.updatedAt;
 function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = factory.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
-      db.createObjectStore(STORES.categories, { keyPath: 'id' });
-      db.createObjectStore(STORES.folders, { keyPath: 'id' });
-      db.createObjectStore(STORES.notes, { keyPath: 'id' });
-      db.createObjectStore(STORES.noteContents, { keyPath: 'noteId' });
-      db.createObjectStore(STORES.outbox, { keyPath: 'id', autoIncrement: true });
-      db.createObjectStore(STORES.tombstones, { keyPath: 'entityId' });
+      if (event.oldVersion < 1) {
+        db.createObjectStore(STORES.categories, { keyPath: 'id' });
+        db.createObjectStore(STORES.folders, { keyPath: 'id' });
+        db.createObjectStore(STORES.notes, { keyPath: 'id' });
+        db.createObjectStore(STORES.noteContents, { keyPath: 'noteId' });
+        db.createObjectStore(STORES.outbox, { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore(STORES.tombstones, { keyPath: 'entityId' });
+      }
+      if (event.oldVersion < 2) {
+        db.createObjectStore(STORES.settings, { keyPath: 'key' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(new StorageError('ERR_STORAGE', req.error?.message ?? 'Cannot open IndexedDB.'));
@@ -448,6 +461,24 @@ export class WebIndexedDbAdapter implements IStorageEngine {
   deleteOutbox(ids: readonly number[]): Promise<void> {
     return this.#run([STORES.outbox], 'readwrite', async (tx) => {
       for (const id of ids) await tx.delete(STORES.outbox, id);
+    });
+  }
+
+  // Settings
+
+  getTrashRetentionDays(): Promise<number> {
+    return this.#run([STORES.settings], 'readonly', async (tx) => {
+      const record = await tx.get(STORES.settings, RETENTION_KEY, isSetting);
+      const stored = record ? validateRetentionDays(record.value) : null;
+      return stored?.ok ? stored.value : DEFAULT_RETENTION_DAYS;
+    });
+  }
+
+  async setTrashRetentionDays(days: number): Promise<number> {
+    const valid = unwrap(validateRetentionDays(days));
+    return this.#run([STORES.settings], 'readwrite', async (tx) => {
+      await tx.put(STORES.settings, { key: RETENTION_KEY, value: valid });
+      return valid;
     });
   }
 }

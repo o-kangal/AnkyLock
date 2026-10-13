@@ -1,5 +1,5 @@
 import type { Ciphertext } from '@ankylock/core';
-import { decryptText, encryptText } from './cipher.js';
+import { base64ToBytes, bytesToBase64, decryptText, encryptText } from './cipher.js';
 import { CryptoError } from './errors.js';
 import { deriveMasterKey, generateKdfParams, type KdfParams } from './kdf.js';
 
@@ -58,4 +58,32 @@ export function createVaultKey(): VaultKey {
       return key;
     },
   };
+}
+
+/**
+ * JSON form of the vault header, uploaded next to Drive snapshots so a new device can derive the
+ * MEK from the passphrase. It holds no secret: a random salt, the iteration count and a key check.
+ */
+export function serializeVaultHeader(header: VaultHeader): string {
+  return JSON.stringify({
+    version: 1,
+    kdf: { algorithm: header.kdf.algorithm, salt: bytesToBase64(header.kdf.salt), iterations: header.kdf.iterations },
+    keyCheck: header.keyCheck,
+  });
+}
+
+export function parseVaultHeader(json: string): VaultHeader {
+  const malformed = (): CryptoError => new CryptoError('ERR_MALFORMED_PAYLOAD', 'Vault header is malformed.');
+  let value: unknown;
+  try {
+    value = JSON.parse(json);
+  } catch {
+    throw malformed();
+  }
+  if (typeof value !== 'object' || value === null) throw malformed();
+  const { version, kdf, keyCheck } = value as Record<string, unknown>;
+  if (version !== 1 || typeof keyCheck !== 'string' || typeof kdf !== 'object' || kdf === null) throw malformed();
+  const { algorithm, salt, iterations } = kdf as Record<string, unknown>;
+  if (algorithm !== 'PBKDF2-SHA256' || typeof salt !== 'string' || typeof iterations !== 'number') throw malformed();
+  return { kdf: { algorithm, salt: base64ToBytes(salt), iterations }, keyCheck: keyCheck as Ciphertext };
 }

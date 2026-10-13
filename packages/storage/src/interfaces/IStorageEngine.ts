@@ -64,6 +64,11 @@ export interface IStorageEngine {
   /** Oldest first, so the queue drains in insertion order. */
   listOutbox(limit: number): Promise<SyncOutboxEntry[]>;
   deleteOutbox(ids: readonly number[]): Promise<void>;
+
+  /** BR-LIFE-03: 0 (manual purge only) or 1..=365; defaults to 28. */
+  getTrashRetentionDays(): Promise<number>;
+  /** Stores the value; rejects invalid ones with ERR_INVALID_SETTING. Confirmation is the caller's job. */
+  setTrashRetentionDays(days: number): Promise<number>;
 }
 
 export class StorageError extends Error {

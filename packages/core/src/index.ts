@@ -7,3 +7,4 @@ export * from './state/noteLifecycle.js';
 export * from './state/hierarchy.js';
 export * from './state/title.js';
 export * from './state/categories.js';
+export * from './state/retention.js';
