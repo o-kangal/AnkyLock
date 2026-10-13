@@ -20,13 +20,15 @@ pub struct Folder {
     pub parent_id: Option<String>,
     pub name_ciphertext: String,
     pub is_archived: bool,
+    /// When this item was archived; unarchiving a folder restores only items with its timestamp.
+    pub archived_at: Option<i64>,
     pub deleted_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
 
 const FOLDER_COLUMNS: &str =
-    "id, category_id, parent_id, name_ciphertext, is_archived, deleted_at, created_at, updated_at";
+    "id, category_id, parent_id, name_ciphertext, is_archived, deleted_at, created_at, updated_at, archived_at";
 
 fn map_folder(row: &Row<'_>) -> rusqlite::Result<Folder> {
     Ok(Folder {
@@ -35,6 +37,7 @@ fn map_folder(row: &Row<'_>) -> rusqlite::Result<Folder> {
         parent_id: row.get(2)?,
         name_ciphertext: row.get(3)?,
         is_archived: row.get(4)?,
+        archived_at: row.get(8)?,
         deleted_at: row.get(5)?,
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
@@ -198,8 +201,9 @@ pub fn list_trashed_folders(conn: &Connection) -> AppResult<Vec<Folder>> {
     Ok(folders)
 }
 
-/// BR-LIFE-01: archiving cascades `is_archived` to every live descendant folder and note;
-/// unarchiving clears it, but not under a still-archived parent.
+/// BR-LIFE-01: archiving cascades `is_archived` (stamped with one `archived_at`) to every live,
+/// not yet archived descendant. Unarchiving clears only items carrying the folder's `archived_at`,
+/// so items archived on their own stay archived. Not allowed under a still-archived parent.
 pub fn set_folder_archived(conn: &mut Connection, id: &str, archived: bool, now: i64) -> AppResult<Folder> {
     let tx = conn.transaction()?;
     let folder = require_folder(&tx, id)?;
@@ -217,14 +221,27 @@ pub fn set_folder_archived(conn: &mut Connection, id: &str, archived: bool, now:
             }
         }
     }
-    tx.execute(
-        &format!("{SUBTREE} UPDATE folders SET is_archived = ?2, updated_at = ?3 WHERE id IN sub AND deleted_at IS NULL"),
-        params![id, archived, now],
-    )?;
-    tx.execute(
-        &format!("{SUBTREE} UPDATE notes SET is_archived = ?2, updated_at = ?3 WHERE folder_id IN sub AND deleted_at IS NULL"),
-        params![id, archived, now],
-    )?;
+    if archived {
+        for (table, key) in [("folders", "id"), ("notes", "folder_id")] {
+            tx.execute(
+                &format!(
+                    "{SUBTREE} UPDATE {table} SET is_archived = 1, archived_at = ?2, updated_at = ?2 \
+                     WHERE {key} IN sub AND deleted_at IS NULL AND is_archived = 0"
+                ),
+                params![id, now],
+            )?;
+        }
+    } else {
+        for (table, key) in [("folders", "id"), ("notes", "folder_id")] {
+            tx.execute(
+                &format!(
+                    "{SUBTREE} UPDATE {table} SET is_archived = 0, archived_at = NULL, updated_at = ?3 \
+                     WHERE {key} IN sub AND deleted_at IS NULL AND is_archived = 1 AND archived_at IS ?2"
+                ),
+                params![id, folder.archived_at, now],
+            )?;
+        }
+    }
     let folder = require_folder(&tx, id)?;
     tx.commit()?;
     Ok(folder)
@@ -542,6 +559,19 @@ mod tests {
 
             set_folder_archived(&mut conn, "a", false, T + 2).unwrap();
             assert!(!folder(&conn, "b").is_archived);
+            assert!(!find_note(&conn, "na").unwrap().unwrap().is_archived);
+        }
+
+        #[test]
+        fn unarchive_keeps_items_archived_on_their_own() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            crate::commands::notes::set_note_archived(&mut conn, "nb", true, T + 1).unwrap();
+            set_folder_archived(&mut conn, "a", true, T + 2).unwrap();
+            assert_eq!(find_note(&conn, "nb").unwrap().unwrap().archived_at, Some(T + 1));
+            set_folder_archived(&mut conn, "a", false, T + 3).unwrap();
+            assert!(!folder(&conn, "b").is_archived);
+            assert!(find_note(&conn, "nb").unwrap().unwrap().is_archived, "archived separately before");
             assert!(!find_note(&conn, "na").unwrap().unwrap().is_archived);
         }
 

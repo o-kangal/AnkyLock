@@ -1,10 +1,13 @@
 use rusqlite::Connection;
 
 /// Embedded migrations in version order. Append new files; never edit or reorder existing entries.
-const MIGRATIONS: &[(&str, &str)] = &[(
-    "V1__initial_schema",
-    include_str!("../../../../../migrations/V1__initial_schema.sql"),
-)];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("V1__initial_schema", include_str!("../../../../../migrations/V1__initial_schema.sql")),
+    (
+        "V20261013224803__add_archived_at",
+        include_str!("../../../../../migrations/V20261013224803__add_archived_at.sql"),
+    ),
+];
 
 /// Applies pending migrations; `PRAGMA user_version` counts how many have been applied.
 ///
@@ -76,7 +79,7 @@ mod tests {
         let version: String = conn
             .query_row("SELECT value FROM app_settings WHERE key = 'schema_version'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, "1");
+        assert_eq!(version, MIGRATIONS.len().to_string());
         let fk: bool = conn.pragma_query_value(None, "foreign_keys", |r| r.get(0)).unwrap();
         assert!(fk);
     }
@@ -120,5 +123,36 @@ mod tests {
         let (pre, body) = split_pragma_preamble("PRAGMA a = 1;\n-- note\nPRAGMA b = 2;\n\nCREATE TABLE t (x);\nPRAGMA c;");
         assert_eq!(pre, "PRAGMA a = 1;\n-- note\nPRAGMA b = 2;\n");
         assert_eq!(body, "CREATE TABLE t (x);\nPRAGMA c;");
+    }
+
+    #[test]
+    fn upgrades_v1_data_with_archived_at() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        run_up_to(&mut conn, 1).unwrap();
+        conn.execute_batch(
+            "INSERT INTO folders (id, name_ciphertext, is_archived, created_at, updated_at) VALUES ('old', 'x', 1, 1, 50);
+             INSERT INTO folders (id, name_ciphertext, created_at, updated_at) VALUES ('live', 'x', 1, 60);
+             INSERT INTO notes (id, folder_id, is_ephemeral, is_archived, created_at, updated_at) VALUES ('n', 'old', 0, 1, 1, 70);",
+        )
+        .unwrap();
+
+        run(&mut conn).unwrap();
+
+        let archived_at = |table: &str, id: &str| -> Option<i64> {
+            conn.query_row(&format!("SELECT archived_at FROM {table} WHERE id = ?1"), [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(archived_at("folders", "old"), Some(50));
+        assert_eq!(archived_at("folders", "live"), None);
+        assert_eq!(archived_at("notes", "n"), Some(70));
+        let version: String = conn
+            .query_row("SELECT value FROM app_settings WHERE key = 'schema_version'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, "2");
+        let integrity: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0)).unwrap();
+        assert_eq!(integrity, "ok");
+        let fk_violations: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).unwrap();
+        assert_eq!(fk_violations, 0);
     }
 }

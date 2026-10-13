@@ -20,6 +20,7 @@ function folder(id: string, extra: Partial<Folder> = {}): Folder {
     categoryId: 'cat' as CategoryId,
     nameCiphertext: 'x' as Folder['nameCiphertext'],
     isArchived: false,
+    archivedAt: null,
     deletedAt: null,
     createdAt: 1 as EpochMs,
     updatedAt: 1 as EpochMs,

@@ -68,6 +68,7 @@ export function transitionNote(note: Note | null, action: NoteAction): Result<No
         categoryId: null,
         isEphemeral: true,
         isArchived: false,
+        archivedAt: null,
         deletedAt: null,
         createdAt: action.now,
         updatedAt: action.now,
@@ -110,11 +111,11 @@ export function transitionNote(note: Note | null, action: NoteAction): Result<No
 
     case 'ARCHIVE':
       if (state !== 'ORGANIZED') return invalid();
-      return ok({ kind: 'saved', note: { ...note, isArchived: true, updatedAt: action.now } });
+      return ok({ kind: 'saved', note: { ...note, isArchived: true, archivedAt: action.now, updatedAt: action.now } });
 
     case 'UNARCHIVE':
       if (state !== 'ARCHIVED') return invalid();
-      return ok({ kind: 'saved', note: { ...note, isArchived: false, updatedAt: action.now } });
+      return ok({ kind: 'saved', note: { ...note, isArchived: false, archivedAt: null, updatedAt: action.now } });
 
     case 'DELETE':
       return ok({ kind: 'saved', note: { ...note, deletedAt: action.now, updatedAt: action.now } });

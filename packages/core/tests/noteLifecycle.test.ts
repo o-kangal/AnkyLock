@@ -27,6 +27,7 @@ const baseNote: Note = {
   categoryId: null,
   isEphemeral: true,
   isArchived: false,
+  archivedAt: null,
   deletedAt: null,
   createdAt: T0,
   updatedAt: T0,
@@ -34,7 +35,7 @@ const baseNote: Note = {
 
 const ephemeral = baseNote;
 const organized: Note = { ...baseNote, isEphemeral: false, folderId: FOLDER_ID, categoryId: CATEGORY_ID };
-const archived: Note = { ...organized, isArchived: true };
+const archived: Note = { ...organized, isArchived: true, archivedAt: T0 };
 const trashed: Note = { ...organized, deletedAt: T0 };
 
 function expectSaved(note: Note | null, action: NoteAction): Note {
@@ -112,9 +113,12 @@ describe('transitionNote: allowed transitions', () => {
   });
 
   it('ARCHIVE and UNARCHIVE round-trip', () => {
-    const a = expectSaved(organized, { type: 'ARCHIVE', now: T0 });
+    const a = expectSaved(organized, { type: 'ARCHIVE', now: ms(T0 + 3) });
     expect(deriveNoteState(a)).toBe('ARCHIVED');
-    expect(deriveNoteState(expectSaved(a, { type: 'UNARCHIVE', now: T0 }))).toBe('ORGANIZED');
+    expect(a.archivedAt).toBe(T0 + 3);
+    const u = expectSaved(a, { type: 'UNARCHIVE', now: T0 });
+    expect(deriveNoteState(u)).toBe('ORGANIZED');
+    expect(u.archivedAt).toBeNull();
   });
 
   it.each([

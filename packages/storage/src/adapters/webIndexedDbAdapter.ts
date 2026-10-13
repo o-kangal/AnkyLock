@@ -30,8 +30,11 @@ import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry } from '../g
 import { StorageError, type IStorageEngine, type NewFolder, type NewOutboxEntry } from '../interfaces/IStorageEngine.js';
 
 const DB_NAME = 'ankylock';
-/** v1: entity stores. v2: app_settings. Upgrades run step by step from the stored version. */
-const DB_VERSION = 2;
+/**
+ * v1: entity stores. v2: app_settings. v3: `archivedAt` on folders and notes (mirrors the SQL
+ * migration `V20261013224803__add_archived_at`). Upgrades run step by step from the stored version.
+ */
+const DB_VERSION = 3;
 const RETENTION_KEY = 'trash_retention_days';
 
 const STORES = {
@@ -88,6 +91,20 @@ const notFound = (entity: string): StorageError => new StorageError('ERR_NOT_FOU
 
 const byUpdatedDesc = (a: Note, b: Note): number => b.updatedAt - a.updatedAt;
 
+/** Archived records get their last update time as `archivedAt`, like the SQL migration. */
+function backfillArchivedAt(store: IDBObjectStore): void {
+  store.openCursor().onsuccess = (event) => {
+    const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+    if (!cursor) return;
+    const record: unknown = cursor.value;
+    if (typeof record === 'object' && record !== null && !('archivedAt' in record)) {
+      const { isArchived, updatedAt } = record as { isArchived?: unknown; updatedAt?: unknown };
+      cursor.update({ ...record, archivedAt: isArchived === true ? updatedAt : null });
+    }
+    cursor.continue();
+  };
+}
+
 function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = factory.open(DB_NAME, DB_VERSION);
@@ -103,6 +120,9 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
       }
       if (event.oldVersion < 2) {
         db.createObjectStore(STORES.settings, { keyPath: 'key' });
+      }
+      if (event.oldVersion >= 1 && event.oldVersion < 3 && req.transaction) {
+        for (const name of [STORES.folders, STORES.notes]) backfillArchivedAt(req.transaction.objectStore(name));
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -336,6 +356,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
         parentId,
         nameCiphertext,
         isArchived: false,
+        archivedAt: null,
         deletedAt: null,
         createdAt: now,
         updatedAt: now,
@@ -387,13 +408,16 @@ export class WebIndexedDbAdapter implements IStorageEngine {
       unwrap(checkFolderArchive(folder, archived, parent));
       const now = this.#now();
       const { ids, folders, notes } = await tx.subtree(id);
+      // Archive stamps one archivedAt on not-yet-archived items; unarchive clears only that stamp,
+      // so items archived on their own stay archived.
+      const affected = (item: { isArchived: boolean; archivedAt: EpochMs | null; deletedAt: EpochMs | null }): boolean =>
+        item.deletedAt === null && (archived ? !item.isArchived : item.isArchived && item.archivedAt === folder.archivedAt);
+      const change = { isArchived: archived, archivedAt: archived ? now : null, updatedAt: now };
       for (const f of folders) {
-        if (ids.has(f.id) && f.deletedAt === null) await tx.put(STORES.folders, { ...f, isArchived: archived, updatedAt: now });
+        if (ids.has(f.id) && affected(f)) await tx.put(STORES.folders, { ...f, ...change });
       }
       for (const n of notes) {
-        if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === null) {
-          await tx.put(STORES.notes, { ...n, isArchived: archived, updatedAt: now });
-        }
+        if (n.folderId !== null && ids.has(n.folderId) && affected(n)) await tx.put(STORES.notes, { ...n, ...change });
       }
       return tx.requireFolder(id);
     });

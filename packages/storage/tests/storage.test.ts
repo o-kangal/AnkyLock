@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import type { EpochMs, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
+import type { Ciphertext, EpochMs, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
 import { TauriSqliteAdapter, WebIndexedDbAdapter, type Invoke } from '../src/index.js';
 import { storageContract } from './contract.js';
 
@@ -55,6 +55,40 @@ describe('WebIndexedDbAdapter', () => {
     expect(await engine.setTrashRetentionDays(14)).toBe(14);
   });
 
+  it('backfills archivedAt when upgrading from version 2', async () => {
+    const factory = new IDBFactory();
+    await new Promise<void>((resolve, reject) => {
+      const req = factory.open('ankylock', 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        for (const name of ['categories', 'folders', 'notes']) db.createObjectStore(name, { keyPath: 'id' });
+        db.createObjectStore('note_contents', { keyPath: 'noteId' });
+        db.createObjectStore('sync_outbox', { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore('sync_tombstones', { keyPath: 'entityId' });
+        db.createObjectStore('app_settings', { keyPath: 'key' });
+        req.transaction?.objectStore('folders').put({
+          id: 'old',
+          categoryId: null,
+          parentId: null,
+          nameCiphertext: 'x',
+          isArchived: true,
+          deletedAt: null,
+          createdAt: 1,
+          updatedAt: 42,
+        });
+      };
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    const engine = new WebIndexedDbAdapter(factory, counterClock());
+    await engine.createFolder({ id: 'child' as FolderId, parentId: null, categoryId: null, nameCiphertext: 'eQ==' as Ciphertext });
+    const restored = await engine.unarchiveFolder('old' as FolderId);
+    expect(restored).toMatchObject({ isArchived: false, archivedAt: null });
+  });
+
   it('lists notes most recently updated first', async () => {
     const engine = new WebIndexedDbAdapter(new IDBFactory(), counterClock());
     await engine.createNote('a' as NoteId);
@@ -82,6 +116,7 @@ describe('TauriSqliteAdapter', () => {
     categoryId: null,
     isEphemeral: false,
     isArchived: false,
+    archivedAt: null,
     deletedAt: null,
     createdAt: 1,
     updatedAt: 2,

@@ -16,6 +16,7 @@ pub struct Note {
     pub category_id: Option<String>,
     pub is_ephemeral: bool,
     pub is_archived: bool,
+    pub archived_at: Option<i64>,
     pub deleted_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -36,7 +37,8 @@ pub struct NoteContent {
     pub updated_at: i64,
 }
 
-const NOTE_COLUMNS: &str = "id, folder_id, category_id, is_ephemeral, is_archived, deleted_at, created_at, updated_at";
+const NOTE_COLUMNS: &str =
+    "id, folder_id, category_id, is_ephemeral, is_archived, deleted_at, created_at, updated_at, archived_at";
 
 fn map_note(row: &Row<'_>) -> rusqlite::Result<Note> {
     Ok(Note {
@@ -45,6 +47,7 @@ fn map_note(row: &Row<'_>) -> rusqlite::Result<Note> {
         category_id: row.get(2)?,
         is_ephemeral: row.get(3)?,
         is_archived: row.get(4)?,
+        archived_at: row.get(8)?,
         deleted_at: row.get(5)?,
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
@@ -141,7 +144,12 @@ pub fn set_note_archived(conn: &mut Connection, id: &str, archived: bool, now: i
         let action = if archived { "ARCHIVE" } else { "UNARCHIVE" };
         return Err(AppError::InvalidTransition(format!("Cannot {action} note {id} in its current state.")));
     }
-    update_and_fetch(tx, id, "is_archived = ?2, updated_at = ?3", params![id, archived, now])
+    update_and_fetch(
+        tx,
+        id,
+        "is_archived = ?2, archived_at = CASE WHEN ?2 THEN ?3 END, updated_at = ?3",
+        params![id, archived, now],
+    )
 }
 
 /// DELETE: soft-deletes, preserving `folder_id` / `category_id` for restore (BR-LIFE-02).

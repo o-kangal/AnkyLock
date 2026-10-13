@@ -274,11 +274,13 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --manifest-path apps/des
   - `apps/desktop/src/App.tsx`
   - `apps/desktop/src-tauri/tauri.conf.json`
   - `apps/desktop/src-tauri/capabilities/default.json`
+  - `apps/web/src/components/sidebar/ContextMenu.tsx`
 - **Step-by-Step Instructions:**
   1. Configure `tauri.conf.json` defining window properties (frameless/custom titlebar, initial size: 1200x800, minimal webview overhead).
   2. Declare IPC command permissions in `capabilities/default.json` for storage and keychain commands.
   3. Wire `tauriSqliteAdapter` into root Solid.js provider in `apps/desktop/src/App.tsx`.
   4. Verify native drag-and-drop and global shortcuts (Cmd/Ctrl+N, Cmd/Ctrl+W, Cmd/Ctrl+Tab).
+  5. Add a sidebar context menu (`ContextMenu.tsx`, shared with the web app) exposing the workspace store actions: archive/unarchive, trash/restore and purge for folders and notes, rename and new subfolder for folders. Show only the actions valid for the item's state (e.g. restore/purge in Trash) and surface rejected actions' error messages.
 - **Verification:**
 ``` bash
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml && pnpm --filter @ankylock/desktop run build

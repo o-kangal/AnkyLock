@@ -90,7 +90,7 @@ Write the reducer as a pure function `(state, action) => Result`. No I/O and no 
 
 ## Folder archive and trash (Task 10b)
 
-- **Archive (BR-LIFE-01):** cascades `is_archived = 1` to every live descendant folder and note. Unarchive clears it on the whole subtree and is rejected while the parent folder is still archived.
+- **Archive (BR-LIFE-01):** stamps `is_archived = 1` and one `archived_at` on the folder and every live descendant that isn't archived yet. Unarchive clears only the items carrying the folder's `archived_at`, so items archived on their own stay archived (migration `V20261013224803__add_archived_at`, IndexedDB v3). It is rejected while the parent folder is still archived.
 - **Trash (BR-LIFE-02):** stamps **one** `deleted_at` on the folder and every live descendant folder and note, keeping their pointers. Restore clears `deleted_at` only on items carrying that same timestamp, so things trashed separately stay in Trash.
 - **Purge:** deletes the folder, its subtree and the notes inside, with a tombstone per entity. Any live leftover under a trashed folder is first moved to the root, so SQLite's `ON DELETE CASCADE` on `folders.parent_id` can never take a live folder with it.
 - Pure checks live in `packages/core/src/state/folderLifecycle.ts`; SQL subtree queries use a recursive CTE with `UNION`, which terminates on cyclic data.

@@ -246,6 +246,16 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
         expect((await engine.getNote(note('na')))?.isArchived).toBe(false);
       });
 
+      it('unarchiving a folder keeps items that were archived on their own', async () => {
+        await tree();
+        await engine.setNoteArchived(note('nb'), true);
+        await engine.archiveFolder(folder('a'));
+        await engine.unarchiveFolder(folder('a'));
+        expect((await engine.getNote(note('na')))?.isArchived).toBe(false);
+        expect((await engine.getNote(note('nb')))?.isArchived).toBe(true);
+        expect((await engine.listFolders()).some((f) => f.isArchived)).toBe(false);
+      });
+
       it('trashes a folder subtree with one timestamp and keeps it read-only (BR-LIFE-02)', async () => {
         await tree();
         const trashed = await engine.trashFolder(folder('a'));

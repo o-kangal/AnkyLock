@@ -24,6 +24,8 @@ export interface Folder {
   readonly parentId: FolderId | null;
   readonly nameCiphertext: Ciphertext;
   readonly isArchived: boolean;
+  /** When it was archived; a folder unarchive restores only items sharing its timestamp. */
+  readonly archivedAt: EpochMs | null;
   readonly deletedAt: EpochMs | null;
   readonly createdAt: EpochMs;
   readonly updatedAt: EpochMs;
@@ -35,6 +37,8 @@ export interface Note {
   readonly categoryId: CategoryId | null;
   readonly isEphemeral: boolean;
   readonly isArchived: boolean;
+  /** When it was archived; a folder unarchive restores only items sharing its timestamp. */
+  readonly archivedAt: EpochMs | null;
   readonly deletedAt: EpochMs | null;
   readonly createdAt: EpochMs;
   readonly updatedAt: EpochMs;
