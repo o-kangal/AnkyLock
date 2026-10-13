@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MS_PER_DAY,
   SYSTEM_ALL,
+  type CategoryId,
   TRASHED_READ_ONLY_MESSAGE,
   deriveNoteState,
   isPurgeEligible,
@@ -17,6 +18,7 @@ import {
 const ms = (n: number): EpochMs => n as EpochMs;
 const NOTE_ID = '3f8b2a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b' as NoteId;
 const FOLDER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' as FolderId;
+const CATEGORY_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7' as CategoryId;
 const T0 = ms(1_776_100_000_000);
 
 const baseNote: Note = {
@@ -31,7 +33,7 @@ const baseNote: Note = {
 };
 
 const ephemeral = baseNote;
-const organized: Note = { ...baseNote, isEphemeral: false, folderId: FOLDER_ID, categoryId: SYSTEM_ALL };
+const organized: Note = { ...baseNote, isEphemeral: false, folderId: FOLDER_ID, categoryId: CATEGORY_ID };
 const archived: Note = { ...organized, isArchived: true };
 const trashed: Note = { ...organized, deletedAt: T0 };
 
@@ -79,6 +81,17 @@ describe('transitionNote: allowed transitions', () => {
     expect(note).toMatchObject({ folderId: FOLDER_ID, categoryId: null, updatedAt: now });
   });
 
+  it('ASSIGN_HIERARCHY rejects system categories, which are views', () => {
+    const result = transitionNote(ephemeral, {
+      type: 'ASSIGN_HIERARCHY',
+      folderId: null,
+      categoryId: SYSTEM_ALL as string as CategoryId,
+      now: T0,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('ERR_SYSTEM_CATEGORY_IMMUTABLE');
+  });
+
   it('ASSIGN_HIERARCHY moves an archived note without unarchiving it', () => {
     const note = expectSaved(archived, { type: 'ASSIGN_HIERARCHY', folderId: null, categoryId: null, now: T0 });
     expect(deriveNoteState(note)).toBe('ARCHIVED');
@@ -118,7 +131,7 @@ describe('transitionNote: allowed transitions', () => {
   it('RESTORE returns a note to ORGANIZED with its pointers when parents exist', () => {
     const note = expectSaved(trashed, { type: 'RESTORE', now: T0, folderExists: true, categoryExists: true });
     expect(deriveNoteState(note)).toBe('ORGANIZED');
-    expect(note).toMatchObject({ folderId: FOLDER_ID, categoryId: SYSTEM_ALL, deletedAt: null });
+    expect(note).toMatchObject({ folderId: FOLDER_ID, categoryId: CATEGORY_ID, deletedAt: null });
   });
 
   it('RESTORE of an archived note returns it to ARCHIVED', () => {

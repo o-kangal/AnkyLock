@@ -1,0 +1,124 @@
+use rusqlite::Connection;
+
+/// Embedded migrations in version order. Append new files; never edit or reorder existing entries.
+const MIGRATIONS: &[(&str, &str)] = &[(
+    "V1__initial_schema",
+    include_str!("../../../../../migrations/V1__initial_schema.sql"),
+)];
+
+/// Applies pending migrations; `PRAGMA user_version` counts how many have been applied.
+///
+/// Leading `PRAGMA` lines run outside the transaction because SQLite ignores or rejects
+/// `foreign_keys` / `journal_mode` changes inside one. The remaining statements run atomically.
+pub fn run(conn: &mut Connection) -> rusqlite::Result<()> {
+    run_up_to(conn, MIGRATIONS.len())
+}
+
+fn run_up_to(conn: &mut Connection, target: usize) -> rusqlite::Result<()> {
+    let applied: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    let applied = usize::try_from(applied).unwrap_or(0);
+    for (index, (_, sql)) in MIGRATIONS.iter().enumerate().take(target).skip(applied) {
+        let (preamble, body) = split_pragma_preamble(sql);
+        conn.execute_batch(&preamble)?;
+        let tx = conn.transaction()?;
+        tx.execute_batch(&body)?;
+        tx.pragma_update(None, "user_version", migration_number(index))?;
+        tx.commit()?;
+        // A migration may switch foreign keys off for a table rebuild; always restore them.
+        conn.pragma_update(None, "foreign_keys", true)?;
+    }
+    Ok(())
+}
+
+fn migration_number(index: usize) -> i64 {
+    i64::try_from(index + 1).unwrap_or(i64::MAX)
+}
+
+fn split_pragma_preamble(sql: &str) -> (String, String) {
+    let lines: Vec<&str> = sql.lines().collect();
+    let split = lines
+        .iter()
+        .position(|line| {
+            let trimmed = line.trim();
+            !(trimmed.is_empty() || trimmed.starts_with("--") || trimmed.starts_with("PRAGMA"))
+        })
+        .unwrap_or(lines.len());
+    (lines[..split].join("\n"), lines[split..].join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn table_names(conn: &Connection) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+            .unwrap();
+        stmt.query_map([], |row| row.get(0)).unwrap().map(Result::unwrap).collect()
+    }
+
+    #[test]
+    fn applies_v1_schema() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        run(&mut conn).unwrap();
+        assert_eq!(
+            table_names(&conn),
+            [
+                "app_settings",
+                "categories",
+                "folders",
+                "note_contents",
+                "notes",
+                "sync_outbox",
+                "sync_tombstones"
+            ]
+        );
+        let version: String = conn
+            .query_row("SELECT value FROM app_settings WHERE key = 'schema_version'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, "1");
+        let fk: bool = conn.pragma_query_value(None, "foreign_keys", |r| r.get(0)).unwrap();
+        assert!(fk);
+    }
+
+    #[test]
+    fn is_idempotent() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        run(&mut conn).unwrap();
+        run(&mut conn).unwrap();
+        let applied: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+        assert_eq!(applied, migration_number(MIGRATIONS.len() - 1));
+    }
+
+    #[test]
+    fn enables_wal_on_file_databases() {
+        let dir = std::env::temp_dir().join(format!("ankylock-wal-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.db");
+        let mut conn = Connection::open(&path).unwrap();
+        run(&mut conn).unwrap();
+        let mode: String = conn.pragma_query_value(None, "journal_mode", |r| r.get(0)).unwrap();
+        drop(conn);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(mode, "wal");
+    }
+
+    #[test]
+    fn passes_integrity_checks() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        run_up_to(&mut conn, 1).unwrap();
+        let integrity: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0)).unwrap();
+        assert_eq!(integrity, "ok");
+        let fk_violations: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(fk_violations, 0);
+    }
+
+    #[test]
+    fn splits_leading_pragmas_only() {
+        let (pre, body) = split_pragma_preamble("PRAGMA a = 1;\n-- note\nPRAGMA b = 2;\n\nCREATE TABLE t (x);\nPRAGMA c;");
+        assert_eq!(pre, "PRAGMA a = 1;\n-- note\nPRAGMA b = 2;\n");
+        assert_eq!(body, "CREATE TABLE t (x);\nPRAGMA c;");
+    }
+}

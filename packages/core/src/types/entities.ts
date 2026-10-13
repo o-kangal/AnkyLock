@@ -1,4 +1,3 @@
-import type { SystemCategoryId } from '../constants.js';
 import type { Brand, Bytes } from './brand.js';
 import type { Ciphertext } from './crypto.js';
 
@@ -7,7 +6,8 @@ export type EpochMs = Brand<number, 'EpochMs'>;
 
 export type NoteId = Brand<string, 'NoteId'>;
 export type FolderId = Brand<string, 'FolderId'>;
-export type CategoryId = Brand<string, 'CategoryId'> | SystemCategoryId;
+/** A user-defined category. System categories are views and never appear as `categoryId`. */
+export type CategoryId = Brand<string, 'CategoryId'>;
 
 export interface Category {
   readonly id: CategoryId;

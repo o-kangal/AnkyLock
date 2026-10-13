@@ -40,8 +40,8 @@ Write a short plan: the files you'll touch and the invariants at risk. Confirm t
 Watch for places where the docs conflict or the plan can't run as written. Known ones today:
 
 - **Dependency installs are denied.** `.claude/settings.json` denies `pnpm add` and `cargo add`. Write dependencies into `package.json` / `Cargo.toml` by hand at exact, current versions (`npm view <pkg> version`), then install.
-- **V1 migration is write-once.** The edit deny on `migrations/V1__initial_schema.sql` was lifted so Task 4 can create it verbatim from SPEC §4. After Task 4, remind the user to add `"Edit(migrations/V1__initial_schema.sql)"` back to the deny list. Never edit it once it exists. Don't route around a deny rule with shell redirection.
-- **Placeholder crates.** Task 1 created minimal stub crates (`fn main() {}`) for `apps/relay` and `apps/desktop/src-tauri` so the Cargo workspace resolves. Tasks 4 and 7 replace their contents; they're not prior work to preserve.
+- **V1 migration is write-once.** `migrations/V1__initial_schema.sql` exists and edits to it are denied in `.claude/settings.json`. Schema changes go in new migrations (see `sqlite-migration`). Don't route around a deny rule with shell redirection.
+- **Placeholders.** `apps/relay` is still a stub crate (`fn main() {}`) until Task 7. `apps/desktop/src-tauri/icons/icon.png` is a generated placeholder and `tauri.conf.json` is minimal; Task 11 replaces both.
 
 When you hit a conflict not listed here, prefer SPEC.md over TASKS.md for behavior and AGENTS.md for guardrails, and mention the conflict in the report. Never resolve one by weakening a guardrail (`any`, LWW, plaintext, editing an existing migration, main-thread crypto).
 

@@ -1,4 +1,4 @@
-import { MS_PER_DAY } from '../constants.js';
+import { MS_PER_DAY, isSystemCategoryId } from '../constants.js';
 import { err, ok, type Result } from '../errors.js';
 import type { CategoryId, EpochMs, FolderId, Note, NoteId } from '../types/entities.js';
 
@@ -84,6 +84,9 @@ export function transitionNote(note: Note | null, action: NoteAction): Result<No
       return invalid();
 
     case 'ASSIGN_HIERARCHY':
+      if (action.categoryId !== null && isSystemCategoryId(action.categoryId)) {
+        return err('ERR_SYSTEM_CATEGORY_IMMUTABLE', 'Notes cannot be assigned to a system category.');
+      }
       return ok({
         kind: 'saved',
         note: {

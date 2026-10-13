@@ -31,7 +31,7 @@ Existing installs already ran every migration in `migrations/`. If you edit one,
    - Seed rows for system singletons use `INSERT OR IGNORE` so re-running is harmless.
 
 4. **Wire it in.**
-   - Desktop: add the file to the embedded list in `apps/desktop/src-tauri/src/db/migrations.rs` (`include_str!("../../../../migrations/V…sql")`, with the path relative to that `.rs` file). The runner applies files in version order, each in its own transaction, and records which ones it applied.
+   - Desktop: add the file to the embedded list in `apps/desktop/src-tauri/src/db/migrations.rs` (`include_str!("../../../../../migrations/V…sql")`: five levels up from `src/db/`, since the path is relative to that `.rs` file). The runner applies files in version order, each in its own transaction, and records which ones it applied.
    - Web: the OPFS/IndexedDB adapter must apply the same change. If it uses SQLite WASM, it runs the same SQL. If it uses IndexedDB, add the matching object store or index change in its `onupgradeneeded` version step.
    - Types: update `packages/core` entity types and both storage adapters in the same change.
 

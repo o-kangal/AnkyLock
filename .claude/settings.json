@@ -21,6 +21,7 @@
             "Edit(vitest.config.ts)"
         ],
         "deny": [
+            "Edit(migrations/V1__initial_schema.sql)",
             "Edit(AGENTS.md)",
             "Bash(rm -rf *)",
             "Bash(pnpm add *)",

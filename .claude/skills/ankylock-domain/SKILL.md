@@ -31,6 +31,7 @@ Error codes are string literals in a single union type, and Rust's `AppError` mu
 - `ERR_INVALID_TRANSITION`: a forbidden state transition
 - `ERR_CATEGORY_NAME_INVALID` / `ERR_CATEGORY_NAME_DUPLICATE`: BR-HIER-02
 - `ERR_NOTE_TOO_LARGE`: BR-NOTE-04
+- `ERR_NOT_FOUND` / `ERR_STORAGE`: missing row / SQLite failure (Rust storage layer)
 
 SPEC.md names only the circular, depth and trashed codes. The others are the convention used here. If the user picks different names, update this list.
 
@@ -48,7 +49,7 @@ Here `depth(root-level folder) = 1` and `height(leaf) = 0`. Creating a folder is
 
 **Distributed cycles (sync).** Two offline devices can each make a move that is valid locally and together form a cycle. When remote hierarchy mutations are applied, run the visited-set check over the assembled graph. Detach the cyclic folder to the root of All Notes (`parent_id = NULL`, `category_id = NULL`). Don't reject it, because the remote mutation has already happened. This is the one place where the code repairs a cycle instead of throwing.
 
-**System categories** are seeded singletons with `is_system = 1`. Every mutation path for categories checks `is_system` first and throws `ERR_SYSTEM_CATEGORY_IMMUTABLE`. Never use a `WHERE id NOT IN (...)` filter that silently skips them. The caller must learn that the operation was refused.
+**System categories are views, not rows** (decided 2026-10-13). `system_all` shows every live note, `system_archive` shows `is_archived = 1`, and `system_trash` shows `deleted_at IS NOT NULL`. They have no `categories` rows: V1 can't seed them because `name_ciphertext` is required, and their labels are fixed UI constants anyway. The UI draws them from `SYSTEM_CATEGORY_IDS`. A `category_id` / `categoryId` must never be a system id. Assigning one, or renaming, deleting or reparenting one, throws `ERR_SYSTEM_CATEGORY_IMMUTABLE`. The guard lives in `isSystemCategoryId` (TS) and `reject_system_category` (Rust). Never use a `WHERE id NOT IN (...)` filter that silently skips them: the caller must learn that the operation was refused.
 
 **Custom category names**: trim, then require 1–50 characters, unique case-insensitive. Names are stored encrypted (`name_ciphertext`), so the database cannot enforce uniqueness. Check against the decrypted in-memory list on the client before encrypting.
 

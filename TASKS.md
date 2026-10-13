@@ -77,6 +77,7 @@ pnpm --filter @ankylock/crypto run test
 ---
 
 ### Task 4: Database DDL & Rust SQLite Storage Manager
+- **Status:** ✅ Completed (2026-10-13)
 - **Type:** Schema/Types & Backend/Service
 - **Read-Only Context Files:** `AGENTS.md`, `packages/core/src/types/entities.ts`
 - **Target Files (Create/Modify):**
