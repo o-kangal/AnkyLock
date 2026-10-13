@@ -5,7 +5,8 @@ type Check = (value: unknown) => boolean;
 export const isString: Check = (v) => typeof v === 'string';
 export const isNumber: Check = (v) => typeof v === 'number' && Number.isFinite(v);
 const isBoolean: Check = (v) => typeof v === 'boolean';
-const isBytes: Check = (v) => v instanceof Uint8Array;
+/** Realm-independent: structured clones (IndexedDB, postMessage) may come from another realm. */
+const isBytes: Check = (v) => ArrayBuffer.isView(v) && Object.prototype.toString.call(v) === '[object Uint8Array]';
 const nullable =
   (check: Check): Check =>
   (v) =>

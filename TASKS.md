@@ -194,6 +194,7 @@ pnpm --filter @ankylock/editor run typecheck
 ---
 
 ### Task 9: Tree Navigation, Drag-and-Drop & Tab Manager
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/core/src/constants.ts`, `packages/core/src/state/noteLifecycle.ts`
 - **Target Files (Create/Modify):**
@@ -256,6 +257,29 @@ cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml && pnpm --filter 
 
 ---
 
+### Task 11b: Web SPA Entry, ServiceWorker & PWA Manifest
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/index.ts`, `apps/desktop/src/App.tsx`
+- **Target Files (Create/Modify):**
+  - `apps/web/index.html`
+  - `apps/web/vite.config.ts`
+  - `apps/web/src/main.tsx`
+  - `apps/web/src/App.tsx`
+  - `apps/web/src/serviceWorker.ts`
+  - `apps/web/public/manifest.webmanifest`
+  - `apps/web/package.json`
+- **Step-by-Step Instructions:**
+  1. Add a Vite + `vite-plugin-solid` setup with `dev` and `build` scripts so `pnpm --filter @ankylock/web dev` works.
+  2. Implement `App.tsx` composing `Sidebar`, `TabBar` and `CodeMirrorView` around `WebIndexedDbAdapter`, the crypto worker (`createWorkerSealer`) and the sync `DocManager`, mirroring the desktop wiring from Task 11.
+  3. Register a ServiceWorker that caches the app shell for offline use; it must never cache or inspect API or relay traffic.
+  4. Provide a PWA manifest (name, icons, `display: standalone`) so the app is installable.
+- **Verification:**
+``` bash
+pnpm --filter @ankylock/web run typecheck && pnpm --filter @ankylock/web run test && pnpm --filter @ankylock/web run build
+``` 
+
+---
+
 ### Task 12: End-to-End State Machine & Cross-Device Sync Verification
 - **Type:** Testing
 - **Read-Only Context Files:** `AGENTS.md`
@@ -299,6 +323,8 @@ Task 1 (Workspace & Config)
            ├──► Task 10 (Retention Purge & Drive Backup)
            │
            └──► Task 11 (Tauri Desktop App Wiring)
+                   │
+                   ├──► Task 11b (Web SPA Entry & PWA)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
 ``` 

@@ -1,0 +1,27 @@
+{
+  "name": "@ankylock/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./workspace": {
+      "@ankylock/source": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ankylock/core": "workspace:*",
+    "@ankylock/storage": "workspace:*",
+    "solid-js": "1.9.17"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.1.2",
+    "typescript": "5.9.3",
+    "vite-plugin-solid": "2.11.14",
+    "vitest": "5.0.4"
+  }
+}
