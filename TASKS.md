@@ -298,12 +298,3 @@ Task 1 (Workspace & Config)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
 ``` 
-
----
-
-## Agent Guardrails
-
-- **DO NOT** create ad-hoc database migration files. Any database change must be appended as a new versioned migration in `migrations/`.
-- **DO NOT** use Monaco Editor or introduce full UI component frameworks (e.g., Tailwind, MUI). Use lightweight CSS utility primitives.
-- **DO NOT** implement Last-Write-Wins (LWW) conflict logic. All concurrent text edits must converge via the Yjs CRDT engine.
-- **DO NOT** store or transmit plaintext titles, folder names, or body content over the network or in relay memory. All external sync payloads must be encrypted with AES-256-GCM.

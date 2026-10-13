@@ -32,7 +32,7 @@ Users keep 100+ scratchpad tabs open. If each kept a CodeMirror DOM tree, a Yjs 
 
 ### Styling
 
-There are no global CSS files and no component libraries (AGENTS.md). TASKS.md also rules out Tailwind. Use component-scoped styles (CSS modules or inline style objects) together with a small set of shared design tokens.
+There are no global CSS files and no component libraries (AGENTS.md). That also rules out Tailwind, which needs a global CSS entry file. Use component-scoped styles (CSS modules or inline style objects) together with a small set of shared design tokens.
 
 ## Part 2: Auditing
 
