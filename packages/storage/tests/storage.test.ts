@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import type { EpochMs, FolderId, NoteContent, NoteId } from '@ankylock/core';
+import type { EpochMs, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
 import { TauriSqliteAdapter, WebIndexedDbAdapter, type Invoke } from '../src/index.js';
 import { storageContract } from './contract.js';
 
@@ -98,7 +98,7 @@ describe('TauriSqliteAdapter', () => {
     const entry = await new TauriSqliteAdapter(invoke).enqueueOutbox({
       entityId: 'n' as NoteId,
       entityType: 'note',
-      encryptedPayload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+      encryptedPayload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) as SealedBytes,
     });
     expect(calls[0]).toEqual(['outbox_enqueue', { entry: { entityId: 'n', entityType: 'note', encryptedPayload: '3q2+7w==' } }]);
     expect(entry.encryptedPayload).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]));

@@ -8,9 +8,16 @@
       "@ankylock/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./worker": {
+      "@ankylock/source": "./src/worker/entry.ts",
+      "types": "./dist/worker/entry.d.ts",
+      "import": "./dist/worker/entry.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

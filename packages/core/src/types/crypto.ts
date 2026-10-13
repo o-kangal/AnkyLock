@@ -10,5 +10,11 @@ export interface EncryptedPayload {
   readonly tag: Bytes;
 }
 
+/**
+ * Packed `iv ‖ ciphertext ‖ tag` bytes. Only `seal()` in @ankylock/crypto produces this type, so
+ * passing plaintext where encrypted bytes are required is a compile error.
+ */
+export type SealedBytes = Brand<Bytes, 'SealedBytes'>;
+
 /** Base64 of the packed `iv ‖ ciphertext ‖ tag` layout, stored in `*_ciphertext` TEXT columns. */
 export type Ciphertext = Brand<string, 'Ciphertext'>;

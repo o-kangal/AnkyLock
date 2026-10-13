@@ -27,6 +27,9 @@ Y.Doc update ──► debounce 150 ms (merge with Y.mergeUpdates) ──► enc
 - **Outbox** (`sync_outbox`): when offline or when a send fails, insert `{entity_id, entity_type, encrypted_payload, created_at}`. On reconnect, drain in `id` order. Delete a row only after the send succeeds. A crash mid-drain then resends, which is safe because applying a Yjs update twice is a no-op.
 - **Reconnect handshake**: on reconnect, exchange state vectors per open doc and send `Y.encodeStateAsUpdate(doc, remoteStateVector)`. That catches up on anything the relay dropped while you were away. The relay keeps no history.
 - **WebSocket client**: exponential backoff with jitter (cap ~30 s), heartbeat ping/pong, and dead-connection detection. Unregister all handlers on dispose (see `memory-check`).
+- **Frame kinds (implemented in Task 6):** binary frames carry data (UTF-8 JSON envelope, below). Text frames are control messages. Browsers can't send WebSocket ping frames, so the heartbeat is the text frame `ping`, which the **relay itself must answer with `pong`** and never forward. The relay forwards only binary frames. Without a `pong` within the timeout, the client closes the socket and reconnects.
+- **Known gaps (as of Task 6):** `sync_outbox` stores `entity_type`, not the packet type, so `HIERARCHY_MUTATION` packets (which can target notes too) can't be queued until a migration adds a `packet_type` column. The reconnect state-vector handshake isn't built yet: there is no packet type for it in SPEC §5.2.
+- **Encryption types:** sync code depends on the `Sealer` interface from `@ankylock/crypto`. In the app it is `createWorkerSealer(new Worker(...@ankylock/crypto/worker))`; in tests it's `createKeySealer`. Payloads are `SealedBytes`, so plaintext can't type-check into a packet or the outbox.
 
 ### Hierarchy and tombstones
 

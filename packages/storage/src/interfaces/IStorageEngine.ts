@@ -1,5 +1,4 @@
 import type {
-  Bytes,
   Category,
   CategoryId,
   Ciphertext,
@@ -9,6 +8,7 @@ import type {
   Note,
   NoteContent,
   NoteId,
+  SealedBytes,
   SyncEntityType,
   SyncOutboxEntry,
 } from '@ankylock/core';
@@ -24,7 +24,7 @@ export interface NewFolder {
 export interface NewOutboxEntry {
   readonly entityId: SyncOutboxEntry['entityId'];
   readonly entityType: SyncEntityType;
-  readonly encryptedPayload: Bytes;
+  readonly encryptedPayload: SealedBytes;
 }
 
 /**

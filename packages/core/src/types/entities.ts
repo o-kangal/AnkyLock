@@ -1,5 +1,5 @@
 import type { Brand, Bytes } from './brand.js';
-import type { Ciphertext } from './crypto.js';
+import type { Ciphertext, SealedBytes } from './crypto.js';
 
 /** UTC epoch milliseconds. */
 export type EpochMs = Brand<number, 'EpochMs'>;
@@ -43,10 +43,11 @@ export interface Note {
 export interface NoteContent {
   readonly noteId: NoteId;
   readonly titleCiphertext: Ciphertext;
-  /** Packed `iv ‖ ciphertext ‖ tag` bytes. */
-  readonly contentCiphertext: Bytes;
+  readonly contentCiphertext: SealedBytes;
+  /** Clock metadata only (client ids and counters); carries no text. */
   readonly yjsStateVector: Bytes;
-  readonly yjsUpdates: Bytes;
+  /** The Yjs update log holds the full text, so it is encrypted at rest too. */
+  readonly yjsUpdates: SealedBytes;
   readonly updatedAt: EpochMs;
 }
 
@@ -56,7 +57,6 @@ export interface SyncOutboxEntry {
   readonly id: number;
   readonly entityId: NoteId | FolderId | CategoryId;
   readonly entityType: SyncEntityType;
-  /** Packed `iv ‖ ciphertext ‖ tag` bytes; never plaintext. */
-  readonly encryptedPayload: Bytes;
+  readonly encryptedPayload: SealedBytes;
   readonly createdAt: EpochMs;
 }

@@ -4,7 +4,8 @@ export type CryptoErrorCode =
   | 'ERR_WEAK_KDF_PARAMS'
   | 'ERR_EMPTY_PASSPHRASE'
   | 'ERR_WRONG_PASSPHRASE'
-  | 'ERR_VAULT_LOCKED';
+  | 'ERR_VAULT_LOCKED'
+  | 'ERR_WORKER_FAILURE';
 
 export class CryptoError extends Error {
   readonly code: CryptoErrorCode;

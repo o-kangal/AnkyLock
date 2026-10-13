@@ -1,0 +1,30 @@
+{
+  "name": "@ankylock/sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@ankylock/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ankylock/core": "workspace:*",
+    "@ankylock/crypto": "workspace:*",
+    "@ankylock/storage": "workspace:*",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5",
+    "typescript": "5.9.3",
+    "vitest": "5.0.4"
+  }
+}

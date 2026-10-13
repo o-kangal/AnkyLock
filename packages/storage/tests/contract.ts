@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Bytes, CategoryId, Ciphertext, FolderId, NoteContent, NoteId } from '@ankylock/core';
+import type { Bytes, CategoryId, Ciphertext, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
 import type { IStorageEngine } from '../src/index.js';
 
 const cat = (s: string): CategoryId => s as CategoryId;
@@ -7,14 +7,16 @@ const folder = (s: string): FolderId => s as FolderId;
 const note = (s: string): NoteId => s as NoteId;
 const name = (s: string): Ciphertext => s as Ciphertext;
 const bytes = (...values: number[]): Bytes => new Uint8Array(values);
+/** Opaque stand-in for encrypted bytes; storage never inspects them. */
+const sealed = (...values: number[]): SealedBytes => bytes(...values) as SealedBytes;
 
 function content(noteId: string, updatedAt: number): NoteContent {
   return {
     noteId: note(noteId),
     titleCiphertext: name('dGl0bGU='),
-    contentCiphertext: bytes(1, 2, 3),
+    contentCiphertext: sealed(1, 2, 3),
     yjsStateVector: bytes(0),
-    yjsUpdates: bytes(4, 5),
+    yjsUpdates: sealed(4, 5),
     updatedAt: updatedAt as NoteContent['updatedAt'],
   };
 }
@@ -219,9 +221,9 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
 
     describe('sync outbox', () => {
       it('drains in insertion order and keeps payload bytes intact', async () => {
-        const first = await engine.enqueueOutbox({ entityId: note('n1'), entityType: 'note', encryptedPayload: bytes(0xde, 0xad) });
-        await engine.enqueueOutbox({ entityId: folder('f1'), entityType: 'folder', encryptedPayload: bytes(1) });
-        await engine.enqueueOutbox({ entityId: note('n2'), entityType: 'tombstone', encryptedPayload: bytes(2) });
+        const first = await engine.enqueueOutbox({ entityId: note('n1'), entityType: 'note', encryptedPayload: sealed(0xde, 0xad) });
+        await engine.enqueueOutbox({ entityId: folder('f1'), entityType: 'folder', encryptedPayload: sealed(1) });
+        await engine.enqueueOutbox({ entityId: note('n2'), entityType: 'tombstone', encryptedPayload: sealed(2) });
         const head = await engine.listOutbox(2);
         expect(head.map((e) => e.entityId)).toEqual(['n1', 'f1']);
         expect(head[0]?.encryptedPayload).toEqual(bytes(0xde, 0xad));

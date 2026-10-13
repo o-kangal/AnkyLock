@@ -16,3 +16,6 @@ export const MAX_RETENTION_DAYS = 365;
 export const MS_PER_DAY = 86_400_000;
 
 export const MAX_FOLDER_DEPTH = 3;
+
+/** BR-NOTE-02: local edits are batched for this long before being encrypted and sent. */
+export const SYNC_DEBOUNCE_MS = 150;

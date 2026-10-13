@@ -1,4 +1,4 @@
-import { IV_LENGTH, TAG_LENGTH, type Bytes, type Ciphertext, type EncryptedPayload } from '@ankylock/core';
+import { IV_LENGTH, TAG_LENGTH, type Bytes, type Ciphertext, type EncryptedPayload, type SealedBytes } from '@ankylock/core';
 import { CryptoError } from './errors.js';
 
 const TAG_BITS = TAG_LENGTH * 8;
@@ -75,9 +75,18 @@ export function base64ToBytes(base64: string): Bytes {
   return bytes;
 }
 
+/** Encrypts to the packed SPEC §5.1 layout; the only producer of `SealedBytes`. */
+export async function seal(key: CryptoKey, plaintext: Bytes): Promise<SealedBytes> {
+  return pack(await encryptPayload(key, plaintext)) as SealedBytes;
+}
+
+export async function open(key: CryptoKey, sealed: SealedBytes): Promise<Bytes> {
+  return decryptPayload(key, unpack(sealed));
+}
+
 /** Encrypts a string for a `*_ciphertext` TEXT column. */
 export async function encryptText(key: CryptoKey, text: string): Promise<Ciphertext> {
-  return bytesToBase64(pack(await encryptPayload(key, encoder.encode(text)))) as Ciphertext;
+  return bytesToBase64(await seal(key, encoder.encode(text))) as Ciphertext;
 }
 
 export async function decryptText(key: CryptoKey, ciphertext: Ciphertext): Promise<string> {

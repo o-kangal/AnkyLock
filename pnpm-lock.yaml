@@ -56,6 +56,31 @@ importers:
         specifier: 5.0.4
         version: 5.0.4(vite@8.3.4)
 
+  packages/sync:
+    dependencies:
+      '@ankylock/core':
+        specifier: workspace:*
+        version: link:../core
+      '@ankylock/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@ankylock/storage':
+        specifier: workspace:*
+        version: link:../storage
+      yjs:
+        specifier: 13.6.33
+        version: 13.6.33
+    devDependencies:
+      fake-indexeddb:
+        specifier: 6.2.5
+        version: 6.2.5
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 5.0.4
+        version: 5.0.4(vite@8.3.4)
+
 packages:
 
   '@jridgewell/resolve-uri@3.1.2':
@@ -235,6 +260,14 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  isomorphic.js@0.2.5:
+    resolution: {integrity: sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw==}
+
+  lib0@0.2.119:
+    resolution: {integrity: sha512-vh+TiejVy8Xm+hCdnRfn9BthGNvNUZdEXltNjVZL3TzRIKP3s1lnQh8pWd/Q0wCgY0FPAGVVjFF4ZiHUV3LFgA==}
+    engines: {node: '>=16'}
+    hasBin: true
 
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
@@ -451,6 +484,10 @@ packages:
     engines: {node: '>=20.11'}
     hasBin: true
 
+  yjs@13.6.33:
+    resolution: {integrity: sha512-q/UYvr1gOk4XII+Cu1CW2dINjYqJJFifTzogEaIARznrvX7uOlHsdTEXcnOBMuIsrCGEEKdNxi74kyMLZlKVfw==}
+    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
+
 snapshots:
 
   '@jridgewell/resolve-uri@3.1.2': {}
@@ -555,6 +592,12 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  isomorphic.js@0.2.5: {}
+
+  lib0@0.2.119:
+    dependencies:
+      isomorphic.js: 0.2.5
 
   lightningcss-android-arm64@1.33.0:
     optional: true
@@ -689,3 +732,7 @@ snapshots:
       - msw
 
   why-is-node-running@3.2.1: {}
+
+  yjs@13.6.33:
+    dependencies:
+      lib0: 0.2.119
