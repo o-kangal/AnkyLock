@@ -31,6 +31,7 @@ pnpm install && pnpm install --frozen-lockfile && cargo check --workspace
 ---
 
 ### Task 2: Core Domain Types, Enums & State Machine Contracts
+- **Status:** ✅ Completed (2026-10-13)
 - **Type:** Schema/Types
 - **Read-Only Context Files:** `AGENTS.md`
 - **Target Files (Create/Modify):**
