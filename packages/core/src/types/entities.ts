@@ -1,5 +1,5 @@
 import type { SystemCategoryId } from '../constants.js';
-import type { Brand } from './brand.js';
+import type { Brand, Bytes } from './brand.js';
 import type { Ciphertext } from './crypto.js';
 
 /** UTC epoch milliseconds. */
@@ -44,9 +44,9 @@ export interface NoteContent {
   readonly noteId: NoteId;
   readonly titleCiphertext: Ciphertext;
   /** Packed `iv ‖ ciphertext ‖ tag` bytes. */
-  readonly contentCiphertext: Uint8Array;
-  readonly yjsStateVector: Uint8Array;
-  readonly yjsUpdates: Uint8Array;
+  readonly contentCiphertext: Bytes;
+  readonly yjsStateVector: Bytes;
+  readonly yjsUpdates: Bytes;
   readonly updatedAt: EpochMs;
 }
 
@@ -57,6 +57,6 @@ export interface SyncOutboxEntry {
   readonly entityId: NoteId | FolderId | CategoryId;
   readonly entityType: SyncEntityType;
   /** Packed `iv ‖ ciphertext ‖ tag` bytes; never plaintext. */
-  readonly encryptedPayload: Uint8Array;
+  readonly encryptedPayload: Bytes;
   readonly createdAt: EpochMs;
 }
