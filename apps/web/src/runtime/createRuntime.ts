@@ -227,8 +227,14 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
   auth?.onChange((state) => {
     updateSync({ auth: state.kind });
-    if (state.kind === 'signed-in') startSync();
-    else void stopSync();
+    if (state.kind === 'signed-in') {
+      startSync();
+      // After a renewal, catch up on a backup that waited for fresh tokens.
+      scheduler?.notifyIdle();
+    } else if (state.kind === 'signed-out' || state.kind === 'expired') {
+      void stopSync();
+    }
+    // `signing-in` and `stale` keep a running sync: its live connection still works.
   });
 
   async function start(opened: IStorageEngine, id: VaultId, header: string): Promise<string | null> {

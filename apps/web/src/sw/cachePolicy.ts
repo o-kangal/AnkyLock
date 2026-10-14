@@ -9,6 +9,12 @@ export function precacheUrls(buildAssets: readonly string[]): string[] {
   return [...PUBLIC_SHELL, ...buildAssets.map((path) => `/${path}`)];
 }
 
+/**
+ * The ServiceWorker itself, and the Google sign-in landing page: it carries tokens in its URL
+ * fragment and must never be cached, least of all in place of the app shell.
+ */
+const BYPASS_PATHS = new Set(['/sw.js', '/oauth-callback.html', '/oauth-callback.js']);
+
 export type CacheStrategy =
   /** Pages: try the network for the newest app, fall back to the cached shell when offline. */
   | 'network-first'
@@ -29,7 +35,7 @@ export interface RequestInfo {
  */
 export function cacheStrategy(request: RequestInfo, origin: string): CacheStrategy {
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== origin || url.pathname === '/sw.js') return 'bypass';
+  if (request.method !== 'GET' || url.origin !== origin || BYPASS_PATHS.has(url.pathname)) return 'bypass';
   if (request.mode === 'navigate') return 'network-first';
   if (url.pathname.startsWith('/assets/')) return 'cache-first';
   if (url.pathname === '/manifest.webmanifest' || url.pathname.startsWith('/icons/')) return 'network-first';

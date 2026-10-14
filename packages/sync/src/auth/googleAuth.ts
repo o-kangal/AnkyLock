@@ -24,6 +24,11 @@ export class AuthError extends Error {
  * OS keychain), Google Identity Services on the web (Task 11d).
  */
 export interface AuthTransport {
+  /**
+   * False when tokens cannot be renewed without the user (the web has no refresh token): the
+   * session then turns `stale` at expiry instead of refreshing. Defaults to true.
+   */
+  readonly canRefresh?: boolean;
   signIn(): Promise<AuthTokens>;
   /** Silent session restore at startup; null when the user isn't signed in. */
   restore(): Promise<AuthTokens | null>;
@@ -35,6 +40,11 @@ export type AuthState =
   | { readonly kind: 'signed-out' }
   | { readonly kind: 'signing-in' }
   | { readonly kind: 'signed-in' }
+  /**
+   * Tokens expired and the platform cannot renew them silently (web). A live relay connection
+   * keeps working; reconnects and backups wait until the user renews with one click.
+   */
+  | { readonly kind: 'stale' }
   /** The grant was revoked or expired; local work continues, sync waits for a new sign-in. */
   | { readonly kind: 'expired' };
 
@@ -84,9 +94,15 @@ export function createAuthSession(transport: AuthTransport, options: AuthSession
     timer = setTimeout(() => void refresh(), Math.max(0, delay));
   };
 
+  const canRefresh = transport.canRefresh ?? true;
+
   const accept = (next: AuthTokens): void => {
     tokens = next;
-    schedule(next.expiresAt - margin - now());
+    if (canRefresh) schedule(next.expiresAt - margin - now());
+    else {
+      clearTimeout(timer);
+      timer = setTimeout(() => setState({ kind: 'stale' }), Math.max(0, next.expiresAt - margin - now()));
+    }
     if (state.kind !== 'signed-in') setState({ kind: 'signed-in' });
   };
 
@@ -130,12 +146,15 @@ export function createAuthSession(transport: AuthTransport, options: AuthSession
     },
 
     async signIn() {
+      const renewing = state.kind === 'stale';
       setState({ kind: 'signing-in' });
       try {
         accept(await transport.signIn());
         return null;
       } catch (error) {
-        drop({ kind: 'signed-out' });
+        // A failed renewal keeps the stale session (and its live connection) as it was.
+        if (renewing) setState({ kind: 'stale' });
+        else drop({ kind: 'signed-out' });
         return error instanceof Error ? error.message : String(error);
       }
     },
@@ -151,7 +170,10 @@ export function createAuthSession(transport: AuthTransport, options: AuthSession
     },
 
     async accessToken() {
-      if (tokens && tokens.expiresAt - margin <= now()) await refresh();
+      if (tokens && tokens.expiresAt - margin <= now()) {
+        if (!canRefresh) throw new AuthError('ERR_AUTH_EXPIRED', 'Renew Google access to back up.');
+        await refresh();
+      }
       if (!tokens) throw new AuthError('ERR_AUTH_EXPIRED', 'Not signed in.');
       return tokens.accessToken;
     },

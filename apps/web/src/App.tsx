@@ -2,6 +2,8 @@ import { createSignal, onCleanup, type JSX } from 'solid-js';
 import { createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { WebVaultDirectory } from '@ankylock/storage';
+import { createAuthSession } from '@ankylock/sync';
+import { createWebAuthTransport } from './auth/webGoogleAuth.js';
 import { AnkyLockApp } from './components/AnkyLockApp.jsx';
 import { UpdateBanner } from './pwa/UpdateBanner.jsx';
 import { watchForUpdates } from './pwa/updates.js';
@@ -14,12 +16,22 @@ import { createRuntime } from './runtime/createRuntime.js';
 export function App(): JSX.Element {
   const worker = new CryptoWorker();
   const sealer = createWorkerSealer(worker as MessagePortLike);
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  // Without a configured Google client the app is local-only (no sync, no Drive backup).
+  const auth = clientId
+    ? createAuthSession(
+        createWebAuthTransport({ clientId, redirectUri: `${window.location.origin}/oauth-callback.html` }),
+        { onError: (error) => console.error(error) },
+      )
+    : undefined;
   const runtime = createRuntime({
     vaults: new WebVaultDirectory(indexedDB),
     sealer,
+    ...(auth ? { auth, relayUrl: import.meta.env.VITE_RELAY_URL ?? 'ws://127.0.0.1:8787/ws' } : {}),
     onError: (message) => console.error(message),
   });
   onCleanup(() => {
+    auth?.dispose();
     sealer.dispose();
     worker.terminate();
   });

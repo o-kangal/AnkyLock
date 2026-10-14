@@ -88,6 +88,17 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
               Sign in again
             </button>
           </Match>
+          <Match when={status().auth === 'stale'}>
+            {status().connection === 'open' ? 'Synced' : 'Offline; changes are queued'} ·
+            <button
+              type="button"
+              style={linkButton}
+              title="Google access expired; renewing takes one click and no new consent"
+              onClick={() => void signIn()}
+            >
+              Renew Google access
+            </button>
+          </Match>
           <Match when={status().auth === 'signed-in'}>
             {status().connection === 'open'
               ? 'Synced'

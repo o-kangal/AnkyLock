@@ -24,6 +24,8 @@ describe('ServiceWorker cache policy', () => {
     expect(cacheStrategy({ url: 'https://relay.ankylock.dev/ws', method: 'GET', mode: 'cors' }, ORIGIN)).toBe('bypass');
     expect(cacheStrategy(req('/assets/x.js', 'POST'), ORIGIN)).toBe('bypass');
     expect(cacheStrategy(req('/sw.js'), ORIGIN)).toBe('bypass');
+    // The Google sign-in landing page carries tokens and must never replace the cached shell.
+    expect(cacheStrategy({ ...req('/oauth-callback.html'), mode: 'navigate' }, ORIGIN)).toBe('bypass');
     expect(cacheStrategy(req('/unknown.json'), ORIGIN)).toBe('bypass');
   });
 

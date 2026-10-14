@@ -1,28 +1,34 @@
 import solid from 'vite-plugin-solid';
-import { build, defaultClientConditions, defineConfig, type Plugin } from 'vite';
+import { build, defaultClientConditions, defineConfig, loadEnv, type Plugin } from 'vite';
 
 /**
  * Production CSP. Not applied in dev, where Vite's HMR client needs its own connections.
- * Task 11c widens connect-src for Google sign-in, Drive and the relay.
+ * Network access is limited to Drive's API, token revocation and the configured relay; Google
+ * sign-in runs in a popup, so no Google script or frame is ever allowed into the page.
  */
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  // CodeMirror injects its theme styles at runtime.
-  "style-src 'self' 'unsafe-inline'",
-  "worker-src 'self' blob:",
-  "img-src 'self' data:",
-  "connect-src 'self'",
-  "manifest-src 'self'",
-  "base-uri 'none'",
-  "form-action 'none'",
-].join('; ');
+function contentSecurityPolicy(relayUrl: string | undefined): string {
+  const relay = relayUrl ? new URL(relayUrl).origin : '';
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    // CodeMirror injects its theme styles at runtime.
+    "style-src 'self' 'unsafe-inline'",
+    "worker-src 'self' blob:",
+    "img-src 'self' data:",
+    `connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com ${relay}`.trim(),
+    "manifest-src 'self'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ');
+}
 
-const productionCsp = (): Plugin => ({
+const productionCsp = (csp: string): Plugin => ({
   name: 'ankylock-csp',
   apply: 'build',
   transformIndexHtml: () => [
-    { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP }, injectTo: 'head-prepend' },
+    { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: csp }, injectTo: 'head-prepend' },
   ],
 });
 
@@ -73,8 +79,8 @@ const serviceWorker = (): Plugin => {
   };
 };
 
-export default defineConfig({
-  plugins: [solid(), productionCsp(), serviceWorker()],
+export default defineConfig(({ mode }) => ({
+  plugins: [solid(), productionCsp(contentSecurityPolicy(loadEnv(mode, new URL('.', import.meta.url).pathname)['VITE_RELAY_URL'])), serviceWorker()],
   // Workspace packages are consumed from their TypeScript sources via the @ankylock/source condition.
   resolve: { conditions: ['@ankylock/source', ...defaultClientConditions] },
   worker: { format: 'es' },
@@ -83,4 +89,4 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
-});
+}));

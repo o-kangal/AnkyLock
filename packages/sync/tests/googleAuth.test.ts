@@ -112,4 +112,39 @@ describe('createAuthSession', () => {
     expect(await session.signIn()).toBe('Google sign-in was cancelled.');
     expect(session.state()).toEqual({ kind: 'signed-out' });
   });
+
+  it('turns stale instead of refreshing when the platform cannot renew silently (web)', async () => {
+    const t = transport({ canRefresh: false });
+    const session = createAuthSession(t);
+    await session.signIn();
+    await vi.advanceTimersByTimeAsync(HOUR - 5 * 60_000);
+    expect(session.state().kind).toBe('stale');
+    expect(t.refreshes).toBe(0);
+    // The live connection keeps its token; backups need a renewal.
+    expect(session.idToken()).toBe('id-1');
+    await expect(session.accessToken()).rejects.toMatchObject({ code: 'ERR_AUTH_EXPIRED' });
+
+    expect(await session.signIn()).toBeNull();
+    expect(session.state().kind).toBe('signed-in');
+    expect(await session.accessToken()).toBe('at-2');
+    session.dispose();
+  });
+
+  it('keeps a stale session when renewing fails', async () => {
+    let attempts = 0;
+    const session = createAuthSession(
+      transport({
+        canRefresh: false,
+        signIn: async () => {
+          if (++attempts > 1) throw new AuthError('ERR_AUTH', 'Google sign-in was cancelled.');
+          return tokens(1, Date.now() + HOUR);
+        },
+      }),
+    );
+    await session.signIn();
+    await vi.advanceTimersByTimeAsync(HOUR);
+    expect(await session.signIn()).toBe('Google sign-in was cancelled.');
+    expect(session.state().kind).toBe('stale');
+    session.dispose();
+  });
 });

@@ -1,4 +1,5 @@
 import type { EpochMs, SealedBytes } from '@ankylock/core';
+import { AuthError } from '../auth/googleAuth.js';
 import { DriveError, type DriveErrorKind, type GoogleDriveClient } from './googleDriveClient.js';
 import {
   parseVaultHeaderFile,
@@ -88,7 +89,14 @@ export function createSnapshotScheduler(options: SnapshotSchedulerOptions): Snap
       await ensureHeader();
       await drive.upload(vaultSnapshotFileName(vault.vaultId, options.deviceId), snapshot, 'application/octet-stream');
     } catch (error) {
-      const reason = error instanceof HeaderConflict ? 'conflict' : error instanceof DriveError ? error.kind : 'http';
+      const reason =
+        error instanceof HeaderConflict
+          ? 'conflict'
+          : error instanceof DriveError
+            ? error.kind
+            : error instanceof AuthError
+              ? 'auth'
+              : 'http';
       return { kind: 'error', reason, at: now() };
     }
     lastSuccess = now();

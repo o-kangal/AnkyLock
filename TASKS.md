@@ -337,6 +337,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --manifest-path apps/des
 ---
 
 ### Task 11d: Web Google Sign-In (Google Identity Services)
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/runtime/createRuntime.ts`, `packages/sync/src/auth/googleAuth.ts`, `apps/relay/src/auth.rs`
 - **Target Files (Create/Modify):**
@@ -375,7 +376,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
 
 ---
 
-### Task 11f: UI Polish (Status Bar, Backup Progress, Title Bar Logo)
+### Task 11f: UI Polish (Status Bar, Backup Progress, Title Bar Logo, Web Shortcuts)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/SyncStatusBar.tsx`, `apps/desktop/src/TitleBar.tsx`, `packages/sync/src/backup/snapshotScheduler.ts`
 - **Target Files (Create/Modify):**
@@ -388,6 +389,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
   1. ✅ Done early (2026-10-14). Make the status bar taller (about 28 px with comfortable padding) so its buttons sit clear of the frameless window's bottom resize edge; clicking "Sign in with Google" must never start a window resize.
   2. Report backups in progress: add a `running` state to `BackupStatus` (emitted when a snapshot export/upload starts) and show a small spinner with "Backing up…" in the status bar until it finishes.
   3. Show the app logo (from `src-tauri/icons/app-icon.svg`, about 16 px) before the "AnkyLock" title in the desktop title bar, keeping it part of the drag region.
+  4. Browsers reserve Ctrl+N/T/W for their own tabs and never pass them to the page. On the web, bind new-note and the other reserved shortcuts to alternatives (e.g. Alt+N), keep Ctrl+N on desktop, and show the platform's shortcut in hints such as "Press Ctrl+N".
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && pnpm --filter @ankylock/desktop run build
