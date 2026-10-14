@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-folder-set-category"
+description = "Enables the folder_set_category command without any pre-configured scope."
+commands.allow = ["folder_set_category"]
+
+[[permission]]
+identifier = "deny-folder-set-category"
+description = "Denies the folder_set_category command without any pre-configured scope."
+commands.deny = ["folder_set_category"]

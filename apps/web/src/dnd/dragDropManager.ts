@@ -19,8 +19,8 @@ export const DRAG_MIME = 'application/x-ankylock-item';
 
 /**
  * Pure drop rule shared by drag feedback and the drop itself. Folder moves get the same
- * depth and cycle checks as storage (BR-HIER-03, BR-HIER-05); moving folders between
- * categories is not supported yet.
+ * depth and cycle checks as storage (BR-HIER-03, BR-HIER-05). A folder dropped on a category
+ * moves to its root with the whole subtree, which never adds depth.
  */
 export function canDrop(item: DragItem, target: DropTarget, folders: ReadonlyMap<FolderId, FolderLink>): Result<void> {
   if (item.kind === 'note') return ok(undefined);
@@ -30,7 +30,7 @@ export function canDrop(item: DragItem, target: DropTarget, folders: ReadonlyMap
     case 'root':
       return validateFolderMove(folders, item.id, null);
     case 'category':
-      return err('ERR_INVALID_TRANSITION', 'Folders cannot be moved between categories yet.');
+      return ok(undefined);
   }
 }
 
@@ -95,8 +95,12 @@ export function createDragDropManager(store: WorkspaceStore, onError: (message: 
     const { target } = check.value;
 
     if (item.kind === 'folder') {
-      const parentId = target.kind === 'folder' ? target.id : null;
       const folder = store.state.folders.find((f) => f.id === item.id);
+      if (target.kind === 'category') {
+        const unchanged = folder?.parentId === null && folder.categoryId === target.id;
+        return unchanged ? ok(undefined) : store.moveFolderToCategory(item.id, target.id);
+      }
+      const parentId = target.kind === 'folder' ? target.id : null;
       return folder?.parentId === parentId ? ok(undefined) : store.moveFolder(item.id, parentId);
     }
 

@@ -234,7 +234,7 @@ describe('createSnapshotScheduler', () => {
     const { s, drive, statuses } = scheduler();
     expect(await s.runNow()).toEqual({ kind: 'ok', at: NOW });
     expect([...drive.files.keys()]).toEqual([vaultHeaderFileName(VAULT), vaultSnapshotFileName(VAULT, DEVICE_A)]);
-    expect(statuses).toEqual([{ kind: 'ok', at: NOW }]);
+    expect(statuses).toEqual([{ kind: 'running' }, { kind: 'ok', at: NOW }]);
     await s.runNow();
     expect(drive.files.size).toBe(2);
   });
@@ -253,7 +253,7 @@ describe('createSnapshotScheduler', () => {
     drive.failWith = new DriveError('quota', 403, 'full');
     const { s, statuses } = scheduler(drive);
     await expect(s.runNow()).resolves.toEqual({ kind: 'error', reason: 'quota', at: NOW });
-    expect(statuses).toHaveLength(1);
+    expect(statuses).toEqual([{ kind: 'running' }, { kind: 'error', reason: 'quota', at: NOW }]);
   });
 
   it('reports a failed local export as a snapshot error', async () => {

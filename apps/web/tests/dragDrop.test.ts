@@ -31,9 +31,9 @@ describe('canDrop', () => {
     });
   });
 
-  it('allows moving a folder to the root but not between categories', () => {
+  it('allows moving a folder to the root and between categories', () => {
     expect(canDrop({ kind: 'folder', id: f('beta') }, { kind: 'root' }, tree).ok).toBe(true);
-    expect(canDrop({ kind: 'folder', id: f('beta') }, { kind: 'category', id: 'c' as CategoryId }, tree).ok).toBe(false);
+    expect(canDrop({ kind: 'folder', id: f('beta') }, { kind: 'category', id: 'c' as CategoryId }, tree).ok).toBe(true);
   });
 });
 
@@ -55,6 +55,21 @@ describe('createDragDropManager', () => {
     const dnd = createDragDropManager(store, () => undefined);
     expectOk(await dnd.drop({ kind: 'note', id: 'id-3' as NoteId }, { kind: 'folder', id: f('id-2') }));
     expect(store.state.notes['id-3' as NoteId]).toMatchObject({ folderId: 'id-2', categoryId: 'id-1' });
+  });
+
+  it('moves a dropped folder to the root of a category with its subtree', async () => {
+    const { store } = setup();
+    await store.createCategory('Work');
+    await store.createCategory('Home');
+    await store.createFolder('Projects', null, 'id-1' as CategoryId);
+    await store.createFolder('Old', f('id-3'), null);
+    await store.createTab();
+    const dnd = createDragDropManager(store, () => undefined);
+    expectOk(await dnd.drop({ kind: 'note', id: 'id-5' as NoteId }, { kind: 'folder', id: f('id-4') }));
+    expectOk(await dnd.drop({ kind: 'folder', id: f('id-4') }, { kind: 'category', id: 'id-2' as CategoryId }));
+    expect(store.state.folders.find((x) => x.id === 'id-4')).toMatchObject({ parentId: null, categoryId: 'id-2' });
+    expect(store.state.notes['id-5' as NoteId]?.categoryId).toBe('id-2');
+    expect(store.state.folders.find((x) => x.id === 'id-3')?.categoryId).toBe('id-1');
   });
 
   it('refuses invalid folder drops without touching storage', async () => {

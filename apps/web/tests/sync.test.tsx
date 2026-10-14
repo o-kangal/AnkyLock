@@ -328,6 +328,21 @@ describe('SyncStatusBar', () => {
     await a.runtime.lock();
   });
 
+  it('offers Sync now while syncing, and shows progress while it runs', async () => {
+    const a = await withNewVault(new FakeRelay(), 'Personal', true, new FakeDrive());
+    const bar = mount(a.runtime);
+    expect(bar.querySelector('[aria-label="Sync now"]')).toBeNull();
+    await a.runtime.signIn();
+    await until(() => bar.textContent?.includes('Backed up') === true, 'first backup');
+
+    (bar.querySelector('[aria-label="Sync now"]') as HTMLElement).click();
+    expect(bar.querySelector('[role="progressbar"]')).not.toBeNull();
+    expect(bar.textContent).toContain('Syncing…');
+    await until(() => bar.textContent?.includes('Backed up') === true && bar.querySelector('[role="progressbar"]') === null, 'synced again');
+    expect(bar.querySelector('[aria-label="Sync now"]')).not.toBeNull();
+    await a.runtime.lock();
+  });
+
   it('shows the vault name and locks back to the vault list', async () => {
     const a = await withNewVault(new FakeRelay(), 'Work notes', false);
     const bar = mount(a.runtime);

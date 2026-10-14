@@ -18,6 +18,8 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export type BackupStatus =
   | { readonly kind: 'never' }
+  /** A backup is being exported and uploaded right now. */
+  | { readonly kind: 'running' }
   | { readonly kind: 'ok'; readonly at: EpochMs }
   | { readonly kind: 'error'; readonly reason: DriveErrorKind | 'snapshot' | 'conflict'; readonly at: EpochMs };
 
@@ -104,6 +106,7 @@ export function createSnapshotScheduler(options: SnapshotSchedulerOptions): Snap
   }
 
   function runNow(): Promise<BackupStatus> {
+    if (!running) options.onStatus({ kind: 'running' });
     running ??= backup()
       .then((status) => {
         options.onStatus(status);

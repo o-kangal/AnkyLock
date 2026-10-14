@@ -424,6 +424,26 @@ export class WebIndexedDbAdapter implements IStorageEngine {
     });
   }
 
+  moveFolderToCategory(id: FolderId, categoryId: CategoryId): Promise<Folder> {
+    return this.#run([STORES.folders, STORES.notes, STORES.categories], 'readwrite', async (tx) => {
+      rejectSystemCategory(categoryId);
+      await tx.requireWritableFolder(id);
+      await tx.requireCategory(categoryId);
+      const now = this.#now();
+      const { ids, folders, notes } = await tx.subtree(id);
+      for (const f of folders) {
+        if (!ids.has(f.id) || (f.id !== id && f.categoryId === categoryId)) continue;
+        await tx.put(STORES.folders, { ...f, categoryId, updatedAt: now, ...(f.id === id ? { parentId: null } : {}) });
+      }
+      for (const n of notes) {
+        if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === null && n.categoryId !== categoryId) {
+          await tx.putNote(n, { ...n, categoryId, updatedAt: now });
+        }
+      }
+      return tx.requireFolder(id);
+    });
+  }
+
   renameFolder(id: FolderId, nameCiphertext: Ciphertext): Promise<Folder> {
     return this.#run([STORES.folders], 'readwrite', async (tx) => {
       const renamed: Folder = { ...(await tx.requireWritableFolder(id)), nameCiphertext, updatedAt: this.#now() };

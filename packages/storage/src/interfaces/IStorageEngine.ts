@@ -48,6 +48,11 @@ export interface IStorageEngine {
   listFolders(): Promise<Folder[]>;
   createFolder(folder: NewFolder): Promise<Folder>;
   moveFolder(id: FolderId, newParentId: FolderId | null): Promise<Folder>;
+  /**
+   * Moves a folder to the root of a category with its whole subtree: subfolders and the live
+   * notes filed in them take the category too.
+   */
+  moveFolderToCategory(id: FolderId, categoryId: CategoryId): Promise<Folder>;
   renameFolder(id: FolderId, nameCiphertext: Ciphertext): Promise<Folder>;
   /** Trashed folders, most recently trashed first. */
   listTrashedFolders(): Promise<Folder[]>;

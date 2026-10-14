@@ -160,6 +160,33 @@ pub fn move_folder(conn: &mut Connection, id: &str, new_parent_id: Option<&str>,
     Ok(folder)
 }
 
+/// Moves a folder into a category: to the root of it, with its whole subtree. Subfolders and the
+/// live notes filed in them take the category too, since a subtree shares its root's category.
+pub fn set_folder_category(conn: &mut Connection, id: &str, category_id: &str, now: i64) -> AppResult<Folder> {
+    reject_system_category(Some(category_id))?;
+    let tx = conn.transaction()?;
+    require_writable_folder(&tx, id)?;
+    require_category(&tx, category_id)?;
+    tx.execute(
+        "UPDATE folders SET parent_id = NULL, category_id = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, category_id, now],
+    )?;
+    tx.execute(
+        &format!("{SUBTREE} UPDATE folders SET category_id = ?2, updated_at = ?3 WHERE id IN sub AND id != ?1 AND category_id IS NOT ?2"),
+        params![id, category_id, now],
+    )?;
+    tx.execute(
+        &format!(
+            "{SUBTREE} UPDATE notes SET category_id = ?2, updated_at = ?3 \
+             WHERE folder_id IN sub AND deleted_at IS NULL AND category_id IS NOT ?2"
+        ),
+        params![id, category_id, now],
+    )?;
+    let folder = find_folder(&tx, id)?.ok_or(AppError::NotFound("Folder"))?;
+    tx.commit()?;
+    Ok(folder)
+}
+
 pub fn rename_folder(conn: &mut Connection, id: &str, name_ciphertext: &str, now: i64) -> AppResult<Folder> {
     let tx = conn.transaction()?;
     require_writable_folder(&tx, id)?;
@@ -372,6 +399,11 @@ pub fn folder_move(db: State<'_, DbPool>, id: String, new_parent_id: Option<Stri
 }
 
 #[tauri::command(async)]
+pub fn folder_set_category(db: State<'_, DbPool>, id: String, category_id: String) -> AppResult<Folder> {
+    set_folder_category(&mut *db.conn()?, &id, &category_id, now_ms())
+}
+
+#[tauri::command(async)]
 pub fn folder_rename(db: State<'_, DbPool>, id: String, name_ciphertext: String) -> AppResult<Folder> {
     rename_folder(&mut *db.conn()?, &id, &name_ciphertext, now_ms())
 }
@@ -531,6 +563,7 @@ mod tests {
 
     mod lifecycle {
         use super::*;
+        use crate::commands::categories::create_category;
         use crate::commands::notes::{create_note, find_note, move_note, restore_note, trash_note};
 
         /// cat ─ a ─ b, with note `na` in `a` and `nb` in `b`.
@@ -545,6 +578,26 @@ mod tests {
 
         fn folder(conn: &Connection, id: &str) -> Folder {
             find_folder(conn, id).unwrap().unwrap()
+        }
+
+        #[test]
+        fn moving_to_a_category_takes_the_subtree_along() {
+            let mut conn = test_conn();
+            tree(&mut conn);
+            create_category(&mut conn, "other", "b3RoZXI=", T).unwrap();
+            // A subfolder dropped on a category leaves its parent for the root of that category.
+            let b = set_folder_category(&mut conn, "b", "other", T + 1).unwrap();
+            assert_eq!((b.parent_id, b.category_id.as_deref()), (None, Some("other")));
+            assert_eq!(find_note(&conn, "nb").unwrap().unwrap().category_id.as_deref(), Some("other"));
+            assert_eq!(find_note(&conn, "na").unwrap().unwrap().category_id, None, "outside the moved subtree");
+
+            create_folder(&mut conn, "c", Some("b"), None, "Yw==", T).unwrap();
+            set_folder_category(&mut conn, "b", "cat", T + 2).unwrap();
+            assert_eq!(folder(&conn, "c").category_id.as_deref(), Some("cat"));
+            assert_eq!(code(set_folder_category(&mut conn, "b", "system_all", T)), "ERR_SYSTEM_CATEGORY_IMMUTABLE");
+            assert_eq!(code(set_folder_category(&mut conn, "b", "ghost", T)), "ERR_NOT_FOUND");
+            trash_folder(&mut conn, "b", T + 3).unwrap();
+            assert_eq!(code(set_folder_category(&mut conn, "b", "other", T)), "ERR_READ_ONLY_TRASHED_ENTITY");
         }
 
         #[test]

@@ -433,6 +433,11 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
      * Validates locally first for instant feedback, then lets storage re-check atomically.
      * State only changes after storage succeeds, so a rejected drop leaves the folder in place.
      */
+    /** Moves a folder to the root of a category; its subfolders and notes come along. */
+    moveFolderToCategory(id: FolderId, categoryId: CategoryId): Promise<Result<void>> {
+      return cascade(() => storage.moveFolderToCategory(id, categoryId));
+    },
+
     moveFolder(id: FolderId, newParentId: FolderId | null): Promise<Result<void>> {
       const links = new Map(state.folders.map((f) => [f.id, { id: f.id, parentId: f.parentId }]));
       const valid = validateFolderMove(links, id, newParentId);

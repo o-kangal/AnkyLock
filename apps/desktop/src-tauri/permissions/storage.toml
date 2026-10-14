@@ -11,6 +11,7 @@ permissions = [
   "allow-folder-create",
   "allow-folder-move",
   "allow-folder-rename",
+  "allow-folder-set-category",
   "allow-folder-list-trashed",
   "allow-folder-set-archived",
   "allow-folder-trash",

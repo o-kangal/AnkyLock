@@ -33,7 +33,7 @@ export function App(): JSX.Element {
     <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%' }}>
       <TitleBar />
       <div style={{ flex: '1', 'min-height': '0' }}>
-        <AnkyLockApp runtime={runtime} />
+        <AnkyLockApp runtime={runtime} platform="desktop" />
       </div>
     </div>
   );

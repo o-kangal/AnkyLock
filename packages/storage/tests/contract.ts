@@ -327,6 +327,37 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
       });
     });
 
+    describe('moving folders between categories', () => {
+      it('moves a folder to the root of a category with its subtree', async () => {
+        await engine.createCategory(cat('work'), name('d29yaw=='));
+        await engine.createCategory(cat('home'), name('aG9tZQ=='));
+        await engine.createFolder({ id: folder('a'), parentId: null, categoryId: cat('work'), nameCiphertext: name('YQ==') });
+        await engine.createFolder({ id: folder('b'), parentId: folder('a'), categoryId: null, nameCiphertext: name('Yg==') });
+        await engine.createFolder({ id: folder('c'), parentId: folder('b'), categoryId: null, nameCiphertext: name('Yw==') });
+        await engine.createNote(note('nc'));
+        await engine.moveNote(note('nc'), folder('c'), cat('work'));
+        await engine.createNote(note('na'));
+        await engine.moveNote(note('na'), folder('a'), cat('work'));
+
+        const moved = await engine.moveFolderToCategory(folder('b'), cat('home'));
+        expect([moved.parentId, moved.categoryId]).toEqual([null, 'home']);
+        const byId = new Map((await engine.listFolders()).map((f) => [f.id, f]));
+        expect(byId.get(folder('c'))?.categoryId).toBe('home');
+        expect(byId.get(folder('a'))?.categoryId).toBe('work');
+        expect((await engine.getNote(note('nc')))?.categoryId).toBe('home');
+        expect((await engine.getNote(note('na')))?.categoryId).toBe('work');
+      });
+
+      it('rejects system and missing categories and trashed folders', async () => {
+        await engine.createFolder({ id: folder('f'), parentId: null, categoryId: null, nameCiphertext: name('Zg==') });
+        await expectCode(engine.moveFolderToCategory(folder('f'), cat('system_all')), 'ERR_SYSTEM_CATEGORY_IMMUTABLE');
+        await expectCode(engine.moveFolderToCategory(folder('f'), cat('ghost')), 'ERR_NOT_FOUND');
+        await engine.createCategory(cat('work'), name('d29yaw=='));
+        await engine.trashFolder(folder('f'));
+        await expectCode(engine.moveFolderToCategory(folder('f'), cat('work')), 'ERR_READ_ONLY_TRASHED_ENTITY');
+      });
+    });
+
     describe('vault restore', () => {
       const at = (n: number) => n as EpochMs;
 

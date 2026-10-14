@@ -173,6 +173,10 @@ export class TauriSqliteAdapter implements IStorageEngine {
     return this.#call('folder_create', { ...folder }, isFolder);
   }
 
+  moveFolderToCategory(id: FolderId, categoryId: CategoryId): Promise<Folder> {
+    return this.#call('folder_set_category', { id, categoryId }, isFolder);
+  }
+
   moveFolder(id: FolderId, newParentId: FolderId | null): Promise<Folder> {
     return this.#call('folder_move', { id, newParentId }, isFolder);
   }

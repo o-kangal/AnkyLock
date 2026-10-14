@@ -1,5 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { JSX } from 'solid-js';
+import logoUrl from '../src-tauri/icons/app-icon.svg';
 
 const buttonStyle: JSX.CSSProperties = {
   width: '44px',
@@ -26,6 +27,15 @@ export function TitleBar(): JSX.Element {
         'border-bottom': '1px solid rgba(127, 127, 127, 0.25)',
       }}
     >
+      {/* Clicks pass through the logo to the header, so dragging it moves the window. */}
+      <img
+        src={logoUrl}
+        alt=""
+        width="16"
+        height="16"
+        draggable={false}
+        style={{ 'margin-right': '8px', 'pointer-events': 'none' }}
+      />
       <span data-tauri-drag-region style={{ flex: '1' }}>
         AnkyLock
       </span>

@@ -64,6 +64,8 @@ export interface SyncStatus {
   readonly auth: AuthState['kind'] | 'unavailable';
   readonly connection: ConnectionStatus | 'off';
   readonly backup: BackupStatus;
+  /** Merging other devices' Drive backups right now. */
+  readonly catchingUp: boolean;
 }
 
 export interface Runtime {
@@ -108,6 +110,8 @@ export interface Runtime {
   /** Opens Google sign-in; resolves with an error message, or null on success. */
   signIn(): Promise<string | null>;
   signOut(): Promise<void>;
+  /** Catches up from Drive and backs up now ("Sync now"); a no-op while sync is off. */
+  syncNow(): Promise<void>;
 }
 
 const LOCK_BACKUP_WAIT_MS = 5_000;
@@ -171,6 +175,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     auth: auth ? auth.state().kind : 'unavailable',
     connection: 'off',
     backup: { kind: 'never' },
+    catchingUp: false,
   });
   const updateSync = (patch: Partial<SyncStatus>): void => {
     setSyncStatus((current) => ({ ...current, ...patch }));
@@ -194,6 +199,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   /** Merges what other devices backed up while this one was away (the relay keeps no history). */
   async function runCatchUp(): Promise<void> {
     if (!catchUp) return;
+    updateSync({ catchingUp: true });
     try {
       const result = await catchUp.run();
       if (result.unreadable > 0) report(`${result.unreadable} backup(s) of this vault could not be read and were skipped.`);
@@ -201,6 +207,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     } catch (error) {
       // Expired web access waits for a renewal; the next connect retries.
       if (!(error instanceof AuthError && error.code === 'ERR_AUTH_EXPIRED')) report(error);
+    } finally {
+      updateSync({ catchingUp: false });
     }
   }
 
@@ -463,6 +471,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     async signOut() {
       await auth?.signOut();
+    },
+
+    async syncNow() {
+      await runCatchUp();
+      await scheduler?.runNow();
     },
 
     isEmptyAndUnmodified(noteId) {

@@ -17,6 +17,8 @@ function backupLabel(backup: BackupStatus): string | null {
   switch (backup.kind) {
     case 'never':
       return null;
+    case 'running':
+      return 'Backing up…';
     case 'ok':
       return `Backed up ${new Date(backup.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
     case 'error':
@@ -30,6 +32,30 @@ function backupLabel(backup: BackupStatus): string | null {
       }[backup.reason];
   }
 }
+
+/** Circular-arrow icon; spins (SVG animation, no stylesheet needed) while sync work runs. */
+function SyncIcon(props: { readonly spinning: boolean }): JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+      <g>
+        <path d="M20 12a8 8 0 1 1-2.34-5.66" stroke-linecap="round" />
+        <path d="M20 4v5h-5" stroke-linecap="round" stroke-linejoin="round" />
+        <Show when={props.spinning}>
+          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite" />
+        </Show>
+      </g>
+    </svg>
+  );
+}
+
+const iconButton: JSX.CSSProperties = {
+  display: 'inline-flex',
+  border: 'none',
+  background: 'transparent',
+  padding: '2px',
+  color: 'inherit',
+  cursor: 'pointer',
+};
 
 /**
  * Non-intrusive status line (SPEC §7): the open vault, sign-in, relay connection and Drive backup
@@ -115,7 +141,29 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
           <span style={{ color: tokens.danger }}>{error()}</span>
         </Show>
       </span>
-      <span>{backupLabel(status().backup)}</span>
+      <span style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+        <Show
+          when={status().catchingUp || status().backup.kind === 'running'}
+          fallback={
+            <Show when={status().connection !== 'off'}>
+              <button
+                type="button"
+                aria-label="Sync now"
+                title="Sync now: merge other devices' backups from Google Drive and back up"
+                style={iconButton}
+                onClick={() => void props.runtime.syncNow()}
+              >
+                <SyncIcon spinning={false} />
+              </button>
+            </Show>
+          }
+        >
+          <span role="progressbar" aria-label="Syncing" style={{ display: 'inline-flex', padding: '2px' }}>
+            <SyncIcon spinning={true} />
+          </span>
+        </Show>
+        <span>{status().catchingUp ? 'Syncing…' : backupLabel(status().backup)}</span>
+      </span>
     </footer>
   );
 }

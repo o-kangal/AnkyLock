@@ -127,6 +127,7 @@ export function publishingStorage(storage: IStorageEngine, publish: HierarchyPub
     deleteCategory: (_r, [id]) => publish.onRemoved(id as string, 'category'),
     createFolder: (folder) => send({ folders: [folder as Folder] }),
     moveFolder: (folder) => send({ folders: [folder as Folder] }),
+    moveFolderToCategory: async (folder) => send(await subtreeRecords(storage, (folder as Folder).id)),
     renameFolder: (folder) => send({ folders: [folder as Folder] }),
     archiveFolder: async (folder) => send(await subtreeRecords(storage, (folder as Folder).id)),
     unarchiveFolder: async (folder) => send(await subtreeRecords(storage, (folder as Folder).id)),

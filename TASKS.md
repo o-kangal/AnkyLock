@@ -378,6 +378,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
 ---
 
 ### Task 11f: UI Polish (Status Bar, Backup Progress, Title Bar Logo, Web Shortcuts, Sync Now, Folder Categories)
+- **Status:** ✅ Completed (2026-10-15)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/SyncStatusBar.tsx`, `apps/desktop/src/TitleBar.tsx`, `packages/sync/src/backup/snapshotScheduler.ts`
 - **Target Files (Create/Modify):**

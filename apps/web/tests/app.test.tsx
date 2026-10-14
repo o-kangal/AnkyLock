@@ -4,7 +4,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { EpochMs, FolderId, NoteId } from '@ankylock/core';
 import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
-import { AnkyLockApp, createRuntime, menuActions, type Runtime } from '../src/index.js';
+import { AnkyLockApp, createRuntime, menuActions, type Platform, type Runtime } from '../src/index.js';
 import { setup, TestVaults } from './helpers.js';
 
 beforeAll(() => {
@@ -37,11 +37,11 @@ afterEach(() => {
   root?.remove();
 });
 
-function mount(vaults: TestVaults): Runtime {
+function mount(vaults: TestVaults, platform: Platform = 'desktop'): Runtime {
   const runtime = createRuntime({ vaults, sealer: localSealer() });
   root = document.createElement('div');
   document.body.append(root);
-  dispose = render(() => <AnkyLockApp runtime={runtime} />, root);
+  dispose = render(() => <AnkyLockApp runtime={runtime} platform={platform} />, root);
   return runtime;
 }
 
@@ -144,6 +144,24 @@ describe('vault screens', () => {
     type('[aria-label="Passphrase"]', 'correct horse battery');
     submit();
     await waitFor(() => text().includes('Press Ctrl+N'), 'workspace');
+  });
+});
+
+describe('web shortcuts', () => {
+  it('uses Alt+N in the browser, which keeps Ctrl+N for itself', async () => {
+    const vaults = new TestVaults();
+    mount(vaults, 'web');
+    await waitFor(() => text().includes('Create a vault'), 'create screen');
+    type('[aria-label="Vault name"]', 'Personal');
+    type('[aria-label="Passphrase"]', 'correct horse battery');
+    type('[aria-label="Confirm passphrase"]', 'correct horse battery');
+    submit();
+    await waitFor(() => text().includes('Press Alt+N'), 'web hint');
+    pressCtrl('n');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.querySelector('.cm-editor')).toBeNull();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', code: 'KeyN', altKey: true, bubbles: true }));
+    await waitFor(() => document.querySelector('.cm-editor') !== null, 'editor from Alt+N');
   });
 });
 

@@ -9,6 +9,7 @@ const COMMANDS: &[&str] = &[
     "folder_create",
     "folder_move",
     "folder_rename",
+    "folder_set_category",
     "folder_list_trashed",
     "folder_set_archived",
     "folder_trash",

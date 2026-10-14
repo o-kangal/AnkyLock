@@ -33,6 +33,7 @@ fn main() {
             folders::folder_create,
             folders::folder_move,
             folders::folder_rename,
+            folders::folder_set_category,
             folders::folder_list_trashed,
             folders::folder_set_archived,
             folders::folder_trash,
