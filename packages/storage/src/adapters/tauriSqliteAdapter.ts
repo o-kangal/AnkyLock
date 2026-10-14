@@ -231,6 +231,14 @@ export class TauriSqliteAdapter implements IStorageEngine {
     await this.#call('outbox_delete', { ids: [...ids] }, isNull);
   }
 
+  getVaultHeader(): Promise<string | null> {
+    return this.#call('settings_get_vault_header', {}, (v): v is string | null => v === null || typeof v === 'string');
+  }
+
+  async setVaultHeader(header: string): Promise<void> {
+    await this.#call('settings_set_vault_header', { header }, isNull);
+  }
+
   getTrashRetentionDays(): Promise<number> {
     return this.#call('settings_get_retention_days', {}, isWholeNumber);
   }

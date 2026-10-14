@@ -4,15 +4,32 @@
   "version": "0.1.0",
   "identifier": "dev.ankylock.desktop",
   "build": {
-    "devUrl": "http://localhost:1420"
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "AnkyLock",
         "width": 1200,
-        "height": 800
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 400,
+        "decorations": false
       }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
     ]
   }
 }

@@ -1,5 +1,6 @@
 import { createStore, produce } from 'solid-js/store';
 import {
+  DEFAULT_RETENTION_DAYS,
   err,
   ok,
   validateCategoryName,
@@ -13,9 +14,11 @@ import {
   type Note,
   type NoteId,
   type Result,
+  type RetentionChangePlan,
   type SystemCategoryId,
 } from '@ankylock/core';
 import { StorageError, type IStorageEngine } from '@ankylock/storage';
+import { changeTrashRetention } from '@ankylock/sync';
 
 /** Encrypts and decrypts short names and titles; backed by the crypto worker in the app. */
 export interface NameCodec {
@@ -74,6 +77,8 @@ export interface WorkspaceState {
   /** Index into `tabs`, or -1 when no tab is open. */
   activeTabIndex: number;
   selection: Selection;
+  /** BR-LIFE-03: days before trashed items are purged; 0 means manual purge only. */
+  retentionDays: number;
 }
 
 export interface WorkspaceDeps {
@@ -133,6 +138,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     tabs: [],
     activeTabIndex: -1,
     selection: { kind: 'system', id: 'system_all' },
+    retentionDays: DEFAULT_RETENTION_DAYS,
   });
 
   const folderView = async (folder: Folder): Promise<FolderView> => ({
@@ -159,11 +165,12 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
 
   /** Loads categories, live and trashed folders and every note. Titles load lazily per row. */
   async function loadAll(): Promise<void> {
-    const [categories, liveFolders, trashedFolders, trashed] = await Promise.all([
+    const [categories, liveFolders, trashedFolders, trashed, retentionDays] = await Promise.all([
       storage.listCategories(),
       storage.listFolders(),
       storage.listTrashedFolders(),
       storage.listTrashedNotes(),
+      storage.getTrashRetentionDays(),
     ]);
     const perFolder = await Promise.all([null, ...liveFolders.map((f) => f.id)].map((id) => storage.listNotes(id)));
     const categoryViews = await Promise.all(
@@ -172,7 +179,17 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     const folderViews = await Promise.all([...liveFolders, ...trashedFolders].map(folderView));
     const notes: Record<NoteId, NoteView> = {};
     for (const note of [...perFolder.flat(), ...trashed]) notes[note.id] = noteView(note, state.notes[note.id]?.title);
-    setState({ categories: categoryViews, folders: folderViews, notes });
+    setState({ categories: categoryViews, folders: folderViews, notes, retentionDays });
+    dropTabsOfMissingNotes();
+  }
+
+  /** Purges can remove notes that are open in tabs; close those tabs and keep a sensible active one. */
+  function dropTabsOfMissingNotes(): void {
+    const active = state.tabs[state.activeTabIndex]?.noteId;
+    const tabs = state.tabs.filter((t) => state.notes[t.noteId] !== undefined);
+    if (tabs.length === state.tabs.length) return;
+    const kept = tabs.findIndex((t) => t.noteId === active);
+    setState({ tabs, activeTabIndex: kept >= 0 ? kept : Math.min(state.activeTabIndex, tabs.length - 1) });
   }
 
   /** Folder archive and trash cascade through whole subtrees, so state is reloaded afterwards. */
@@ -203,6 +220,58 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
 
     restoreFolder(id: FolderId): Promise<Result<void>> {
       return cascade(() => storage.restoreFolder(id));
+    },
+
+    /**
+     * Changes trash retention (SPEC §6). Shortening it so that items would be purged right away
+     * returns `confirm_required` with the count and changes nothing until called with `confirmed`.
+     */
+    async changeRetention(days: number, confirmed: boolean): Promise<Result<RetentionChangePlan | { kind: 'applied' }>> {
+      try {
+        const result = await changeTrashRetention({ storage }, days, { confirmed });
+        if (result.kind !== 'applied') return ok(result);
+        await loadAll();
+        return ok({ kind: 'applied' });
+      } catch (error) {
+        return { ok: false, error: toDomainError(error) };
+      }
+    },
+
+    /** Permanently deletes everything in Trash: trashed folder trees first, then remaining notes. */
+    emptyTrash(): Promise<Result<void>> {
+      return cascade(async () => {
+        const trashedIds = new Set(state.folders.filter((f) => f.deletedAt !== null).map((f) => f.id));
+        const topLevel = state.folders.filter(
+          (f) => f.deletedAt !== null && (f.parentId === null || !trashedIds.has(f.parentId)),
+        );
+        for (const folder of topLevel) await storage.purgeFolder(folder.id);
+        for (const note of await storage.listTrashedNotes()) await storage.purgeNote(note.id);
+      });
+    },
+
+    purgeFolder(id: FolderId): Promise<Result<void>> {
+      return cascade(() => storage.purgeFolder(id));
+    },
+
+    renameFolder(id: FolderId, name: string): Promise<Result<void>> {
+      const trimmed = name.trim();
+      if (trimmed === '') return Promise.resolve(err('ERR_INVALID_TRANSITION', 'Folder names cannot be empty.'));
+      return attempt(async () => {
+        await storage.renameFolder(id, await names.encrypt(trimmed));
+        setState('folders', (f) => f.id === id, 'name', trimmed);
+      });
+    },
+
+    setNoteArchived(noteId: NoteId, archived: boolean): Promise<Result<void>> {
+      return attempt(async () => putNote(await storage.setNoteArchived(noteId, archived)));
+    },
+
+    purgeNote(noteId: NoteId): Promise<Result<void>> {
+      return attempt(async () => {
+        await storage.purgeNote(noteId);
+        setState('notes', produce((notes) => void delete notes[noteId]));
+        dropTabsOfMissingNotes();
+      });
     },
 
     /** Decrypts a note's title on demand (rows are virtualized, so only visible rows ask). */
@@ -284,6 +353,28 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
       return attempt(async () => {
         const category = await storage.createCategory(newId() as CategoryId, await names.encrypt(valid.value));
         setState('categories', (list) => [...list, { id: category.id, name: valid.value, sortOrder: category.sortOrder }]);
+      });
+    },
+
+    renameCategory(id: CategoryId, name: string): Promise<Result<void>> {
+      const valid = validateCategoryName(
+        name,
+        state.categories.filter((c) => c.id !== id).map((c) => c.name),
+      );
+      if (!valid.ok) return Promise.resolve(valid);
+      return attempt(async () => {
+        await storage.renameCategory(id, await names.encrypt(valid.value));
+        setState('categories', (c) => c.id === id, 'name', valid.value);
+      });
+    },
+
+    /** Its folders and notes stay, without a category; a selected deleted category falls back to All Notes. */
+    deleteCategory(id: CategoryId): Promise<Result<void>> {
+      return cascade(async () => {
+        await storage.deleteCategory(id);
+        if (state.selection.kind === 'category' && state.selection.id === id) {
+          setState('selection', { kind: 'system', id: 'system_all' });
+        }
       });
     },
 

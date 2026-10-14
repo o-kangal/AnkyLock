@@ -1,6 +1,7 @@
 import { createSignal, For, Show, type JSX } from 'solid-js';
 import { SYSTEM_ALL, SYSTEM_ARCHIVE, SYSTEM_TRASH, type SystemCategoryId } from '@ankylock/core';
 import type { DragDropManager } from '../../dnd/dragDropManager.js';
+import type { MenuTarget } from './ContextMenu.jsx';
 import type { Selection, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { rowStyle, tokens } from './styles.js';
 
@@ -16,6 +17,7 @@ const SYSTEM_ORDER: SystemCategoryId[] = [SYSTEM_ALL, SYSTEM_ARCHIVE, SYSTEM_TRA
 export interface CategoryListProps {
   readonly store: WorkspaceStore;
   readonly dnd: DragDropManager;
+  readonly onItemMenu?: (event: MouseEvent, item: MenuTarget) => void;
 }
 
 const isSelected = (selection: Selection, kind: Selection['kind'], id: string): boolean =>
@@ -59,6 +61,10 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
             aria-pressed={isSelected(props.store.state.selection, 'category', category.id)}
             style={rowStyle(0, isSelected(props.store.state.selection, 'category', category.id))}
             onClick={() => props.store.select({ kind: 'category', id: category.id })}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              props.onItemMenu?.(event, { kind: 'category', id: category.id });
+            }}
           >
             {category.name}
           </div>

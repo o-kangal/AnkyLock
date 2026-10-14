@@ -36,6 +36,7 @@ const DB_NAME = 'ankylock';
  */
 const DB_VERSION = 3;
 const RETENTION_KEY = 'trash_retention_days';
+const VAULT_HEADER_KEY = 'vault_header';
 
 const STORES = {
   categories: 'categories',
@@ -76,8 +77,8 @@ const all =
   (value: unknown): value is T[] =>
     Array.isArray(value) && value.every(guard);
 
-const isSetting = (value: unknown): value is { key: string; value: number } =>
-  typeof value === 'object' && value !== null && typeof (value as { value?: unknown }).value === 'number';
+const isSetting = (value: unknown): value is { key: string; value: unknown } =>
+  typeof value === 'object' && value !== null && 'value' in value;
 
 const anything = (_value: unknown): _value is unknown => true;
 const isKey = (value: unknown): value is number => typeof value === 'number';
@@ -621,8 +622,24 @@ export class WebIndexedDbAdapter implements IStorageEngine {
   getTrashRetentionDays(): Promise<number> {
     return this.#run([STORES.settings], 'readonly', async (tx) => {
       const record = await tx.get(STORES.settings, RETENTION_KEY, isSetting);
-      const stored = record ? validateRetentionDays(record.value) : null;
+      const stored = typeof record?.value === 'number' ? validateRetentionDays(record.value) : null;
       return stored?.ok ? stored.value : DEFAULT_RETENTION_DAYS;
+    });
+  }
+
+  getVaultHeader(): Promise<string | null> {
+    return this.#run([STORES.settings], 'readonly', async (tx) => {
+      const record = await tx.get(STORES.settings, VAULT_HEADER_KEY, isSetting);
+      return typeof record?.value === 'string' ? record.value : null;
+    });
+  }
+
+  setVaultHeader(header: string): Promise<void> {
+    return this.#run([STORES.settings], 'readwrite', async (tx) => {
+      if (await tx.get(STORES.settings, VAULT_HEADER_KEY, isSetting)) {
+        throw new StorageError('ERR_INVALID_SETTING', 'The vault is already initialized.');
+      }
+      await tx.put(STORES.settings, { key: VAULT_HEADER_KEY, value: header });
     });
   }
 

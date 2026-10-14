@@ -35,6 +35,37 @@ pub fn set_retention_days(conn: &Connection, days: u32) -> AppResult<u32> {
     Ok(days)
 }
 
+const VAULT_HEADER_KEY: &str = "vault_header";
+
+/// Serialized vault header (salt, iterations, key check). Not secret, but written only once:
+/// replacing it would orphan everything encrypted under the existing key.
+pub fn get_vault_header(conn: &Connection) -> AppResult<Option<String>> {
+    Ok(conn
+        .query_row("SELECT value FROM app_settings WHERE key = ?1", [VAULT_HEADER_KEY], |r| r.get(0))
+        .optional()?)
+}
+
+pub fn set_vault_header(conn: &Connection, header: &str) -> AppResult<()> {
+    let inserted = conn.execute(
+        "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?1, ?2)",
+        params![VAULT_HEADER_KEY, header],
+    )?;
+    if inserted == 0 {
+        return Err(AppError::InvalidSetting("The vault is already initialized.".into()));
+    }
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn settings_get_vault_header(db: State<'_, DbPool>) -> AppResult<Option<String>> {
+    get_vault_header(&db.conn())
+}
+
+#[tauri::command(async)]
+pub fn settings_set_vault_header(db: State<'_, DbPool>, header: String) -> AppResult<()> {
+    set_vault_header(&db.conn(), &header)
+}
+
 #[tauri::command(async)]
 pub fn settings_get_retention_days(db: State<'_, DbPool>) -> AppResult<u32> {
     get_retention_days(&db.conn())
@@ -76,5 +107,15 @@ mod tests {
         let conn = test_conn();
         conn.execute("UPDATE app_settings SET value = 'soon' WHERE key = ?1", [RETENTION_KEY]).unwrap();
         assert_eq!(get_retention_days(&conn).unwrap(), 28);
+    }
+
+    #[test]
+    fn stores_the_vault_header_once() {
+        let conn = test_conn();
+        assert_eq!(get_vault_header(&conn).unwrap(), None);
+        set_vault_header(&conn, "{\"version\":1}").unwrap();
+        assert_eq!(get_vault_header(&conn).unwrap().as_deref(), Some("{\"version\":1}"));
+        assert_eq!(set_vault_header(&conn, "{}").unwrap_err().code(), "ERR_INVALID_SETTING");
+        assert_eq!(get_vault_header(&conn).unwrap().as_deref(), Some("{\"version\":1}"));
     }
 }

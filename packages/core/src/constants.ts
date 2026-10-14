@@ -25,3 +25,6 @@ export const TITLE_FALLBACK_LENGTH = 40;
 
 /** BR-HIER-02: custom category names are 1..=50 characters after trimming. */
 export const MAX_CATEGORY_NAME_LENGTH = 50;
+
+/** BR-NOTE-04: maximum plaintext size of one note, in UTF-8 bytes. */
+export const MAX_NOTE_PLAINTEXT_BYTES = 10 * 1024 * 1024;

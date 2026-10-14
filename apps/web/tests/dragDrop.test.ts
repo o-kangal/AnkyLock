@@ -67,3 +67,63 @@ describe('createDragDropManager', () => {
     expect(store.state.folders.find((x) => x.id === 'id-1')?.parentId).toBeNull();
   });
 });
+
+describe('dropping on the empty tree area', () => {
+  async function categorizedNote() {
+    const { store, storage } = setup();
+    await store.createCategory('Work');
+    const category = 'id-1' as CategoryId;
+    await store.createTab();
+    await store.moveNote('id-2' as NoteId, null, category);
+    const dnd = createDragDropManager(store, () => undefined);
+    return { store, storage, dnd, category, note: 'id-2' as NoteId };
+  }
+
+  it('keeps the category when dropped in the category view (regression)', async () => {
+    const { store, storage, dnd, category, note } = await categorizedNote();
+    store.select({ kind: 'category', id: category });
+    const before = (await storage.getNote(note))?.updatedAt;
+    expectOk(await dnd.drop({ kind: 'note', id: note }, { kind: 'root' }));
+    expect(store.state.notes[note]).toMatchObject({ folderId: null, categoryId: category });
+    expect((await storage.getNote(note))?.updatedAt).toBe(before);
+  });
+
+  it('takes a note out of its folder but keeps its category', async () => {
+    const { store, dnd, category, note } = await categorizedNote();
+    await store.createFolder('Clients', null, category);
+    await store.moveNote(note, f('id-3'), category);
+    store.select({ kind: 'category', id: category });
+    expectOk(await dnd.drop({ kind: 'note', id: note }, { kind: 'root' }));
+    expect(store.state.notes[note]).toMatchObject({ folderId: null, categoryId: category });
+
+    await store.moveNote(note, f('id-3'), category);
+    store.select({ kind: 'system', id: 'system_all' });
+    expectOk(await dnd.drop({ kind: 'note', id: note }, { kind: 'root' }));
+    expect(store.state.notes[note]).toMatchObject({ folderId: null, categoryId: category });
+  });
+
+  it('moves into the selected folder in a folder view', async () => {
+    const { store, dnd, note } = await categorizedNote();
+    await store.createFolder('Inbox', null, null);
+    store.select({ kind: 'folder', id: f('id-3') });
+    expectOk(await dnd.drop({ kind: 'note', id: note }, { kind: 'root' }));
+    expect(store.state.notes[note]?.folderId).toBe('id-3');
+  });
+
+  it('refuses drops in Archive and Trash', async () => {
+    const { store, dnd, note } = await categorizedNote();
+    store.select({ kind: 'system', id: 'system_trash' });
+    expect(await dnd.drop({ kind: 'note', id: note }, { kind: 'root' })).toMatchObject({
+      ok: false,
+      error: { code: 'ERR_INVALID_TRANSITION' },
+    });
+  });
+
+  it('changes the category only when dropped onto another category', async () => {
+    const { store, dnd, note } = await categorizedNote();
+    await store.createCategory('Home');
+    expectOk(await dnd.drop({ kind: 'note', id: note }, { kind: 'category', id: 'id-3' as CategoryId }));
+    expect(store.state.notes[note]?.categoryId).toBe('id-3');
+  });
+});
+

@@ -321,6 +321,14 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
         expect(await engine.getTrashRetentionDays()).toBe(0);
       });
 
+      it('stores the vault header once', async () => {
+        expect(await engine.getVaultHeader()).toBeNull();
+        await engine.setVaultHeader('{"version":1}');
+        expect(await engine.getVaultHeader()).toBe('{"version":1}');
+        await expectCode(engine.setVaultHeader('{}'), 'ERR_INVALID_SETTING');
+        expect(await engine.getVaultHeader()).toBe('{"version":1}');
+      });
+
       it('rejects invalid retention values', async () => {
         for (const days of [-1, 1.5, 366]) await expectCode(engine.setTrashRetentionDays(days), 'ERR_INVALID_SETTING');
         expect(await engine.getTrashRetentionDays()).toBe(28);

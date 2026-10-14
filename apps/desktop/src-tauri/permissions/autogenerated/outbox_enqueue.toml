@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-outbox-enqueue"
+description = "Enables the outbox_enqueue command without any pre-configured scope."
+commands.allow = ["outbox_enqueue"]
+
+[[permission]]
+identifier = "deny-outbox-enqueue"
+description = "Denies the outbox_enqueue command without any pre-configured scope."
+commands.deny = ["outbox_enqueue"]

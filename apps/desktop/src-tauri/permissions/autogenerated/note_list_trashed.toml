@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-note-list-trashed"
+description = "Enables the note_list_trashed command without any pre-configured scope."
+commands.allow = ["note_list_trashed"]
+
+[[permission]]
+identifier = "deny-note-list-trashed"
+description = "Denies the note_list_trashed command without any pre-configured scope."
+commands.deny = ["note_list_trashed"]

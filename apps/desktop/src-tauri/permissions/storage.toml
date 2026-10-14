@@ -1,0 +1,38 @@
+# Storage IPC commands used by the frontend's TauriSqliteAdapter.
+[[set]]
+identifier = "storage"
+description = "Local encrypted storage: notes, folders, categories, sync outbox and settings."
+permissions = [
+  "allow-category-list",
+  "allow-category-create",
+  "allow-category-rename",
+  "allow-category-delete",
+  "allow-folder-list",
+  "allow-folder-create",
+  "allow-folder-move",
+  "allow-folder-rename",
+  "allow-folder-list-trashed",
+  "allow-folder-set-archived",
+  "allow-folder-trash",
+  "allow-folder-restore",
+  "allow-folder-purge",
+  "allow-note-create",
+  "allow-note-get",
+  "allow-note-list",
+  "allow-note-list-trashed",
+  "allow-note-move",
+  "allow-note-set-archived",
+  "allow-note-trash",
+  "allow-note-restore",
+  "allow-note-purge",
+  "allow-note-discard-ephemeral",
+  "allow-note-get-content",
+  "allow-note-save-content",
+  "allow-outbox-enqueue",
+  "allow-outbox-list",
+  "allow-outbox-delete",
+  "allow-settings-get-retention-days",
+  "allow-settings-set-retention-days",
+  "allow-settings-get-vault-header",
+  "allow-settings-set-vault-header",
+]

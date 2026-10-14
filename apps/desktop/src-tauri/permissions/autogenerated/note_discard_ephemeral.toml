@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-note-discard-ephemeral"
+description = "Enables the note_discard_ephemeral command without any pre-configured scope."
+commands.allow = ["note_discard_ephemeral"]
+
+[[permission]]
+identifier = "deny-note-discard-ephemeral"
+description = "Denies the note_discard_ephemeral command without any pre-configured scope."
+commands.deny = ["note_discard_ephemeral"]

@@ -7,7 +7,11 @@ export type DragItem = { readonly kind: 'note'; readonly id: NoteId } | { readon
 export type DropTarget =
   | { readonly kind: 'folder'; readonly id: FolderId }
   | { readonly kind: 'category'; readonly id: CategoryId }
-  /** Workspace root: no folder (and, for notes, no category). */
+  /**
+   * The empty tree area. It means "the top of the current view": the selected folder in a folder
+   * view, otherwise no folder. It never changes a note's category; only dropping onto a category
+   * does. Not a drop target in Archive or Trash.
+   */
   | { readonly kind: 'root' };
 
 /** Private MIME type so drops from other apps or tabs are ignored. */
@@ -69,23 +73,48 @@ export function createDragDropManager(store: WorkspaceStore, onError: (message: 
   const folderLinks = (): Map<FolderId, FolderLink> =>
     new Map(store.state.folders.map((f) => [f.id, { id: f.id, parentId: f.parentId }]));
 
-  async function drop(item: DragItem, target: DropTarget): Promise<Result<void>> {
-    const allowed = canDrop(item, target, folderLinks());
-    if (!allowed.ok) return allowed;
+  /** Resolves the empty tree area against the current view; null where dropping isn't allowed. */
+  function resolve(target: DropTarget): DropTarget | null {
+    if (target.kind !== 'root') return target;
+    const { selection } = store.state;
+    if (selection.kind === 'folder') return { kind: 'folder', id: selection.id };
+    if (selection.kind === 'system' && selection.id !== 'system_all') return null;
+    return target;
+  }
+
+  function allowed(item: DragItem, target: DropTarget): Result<{ target: DropTarget }> {
+    const resolved = resolve(target);
+    if (resolved === null) return err('ERR_INVALID_TRANSITION', 'Items cannot be dropped here.');
+    const check = canDrop(item, resolved, folderLinks());
+    return check.ok ? ok({ target: resolved }) : check;
+  }
+
+  async function drop(item: DragItem, requested: DropTarget): Promise<Result<void>> {
+    const check = allowed(item, requested);
+    if (!check.ok) return check;
+    const { target } = check.value;
+
     if (item.kind === 'folder') {
-      return store.moveFolder(item.id, target.kind === 'folder' ? target.id : null);
+      const parentId = target.kind === 'folder' ? target.id : null;
+      const folder = store.state.folders.find((f) => f.id === item.id);
+      return folder?.parentId === parentId ? ok(undefined) : store.moveFolder(item.id, parentId);
     }
+
     const note = store.state.notes[item.id];
-    switch (target.kind) {
-      case 'folder': {
-        const folder = store.state.folders.find((f) => f.id === target.id);
-        return store.moveNote(item.id, target.id, folder?.categoryId ?? note?.categoryId ?? null);
-      }
-      case 'category':
-        return store.moveNote(item.id, null, target.id);
-      case 'root':
-        return store.moveNote(item.id, null, null);
+    if (!note) return err('ERR_NOT_FOUND', 'Note not found.');
+    let folderId: FolderId | null = null;
+    let categoryId = note.categoryId;
+    if (target.kind === 'folder') {
+      folderId = target.id;
+      categoryId = store.state.folders.find((f) => f.id === target.id)?.categoryId ?? note.categoryId;
+    } else if (target.kind === 'category') {
+      categoryId = target.id;
+    } else if (store.state.selection.kind === 'category') {
+      // Keep the note visible in the category being viewed.
+      categoryId = store.state.selection.id;
     }
+    if (note.folderId === folderId && note.categoryId === categoryId && !note.isEphemeral) return ok(undefined);
+    return store.moveNote(item.id, folderId, categoryId);
   }
 
   return {
@@ -108,7 +137,7 @@ export function createDragDropManager(store: WorkspaceStore, onError: (message: 
     dropTarget(target) {
       return {
         onDragOver: (event: DragEvent) => {
-          if (!current || !canDrop(current, target, folderLinks()).ok) return;
+          if (!current || !allowed(current, target).ok) return;
           event.preventDefault();
           event.stopPropagation();
           if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';

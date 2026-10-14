@@ -3,6 +3,8 @@ import type { Bytes, SealedBytes } from '@ankylock/core';
 import {
   CryptoError,
   createKeySealer,
+  createTextCodec,
+  decryptText,
   createWorkerSealer,
   open,
   seal,
@@ -36,6 +38,17 @@ describe('createKeySealer', () => {
     await expect(sealer.seal(encode('x'))).rejects.toMatchObject({ code: 'ERR_VAULT_LOCKED' });
     key = await newKey();
     expect(decode(await sealer.open(await sealer.seal(encode('x'))))).toBe('x');
+  });
+});
+
+describe('createTextCodec', () => {
+  it('produces Ciphertext values interchangeable with encryptText/decryptText', async () => {
+    const key = await newKey();
+    const codec = createTextCodec(createKeySealer(() => key));
+    const ciphertext = await codec.encrypt('Klasör 🔐');
+    expect(ciphertext).not.toContain('Klasör');
+    expect(await decryptText(key, ciphertext)).toBe('Klasör 🔐');
+    expect(await codec.decrypt(ciphertext)).toBe('Klasör 🔐');
   });
 });
 

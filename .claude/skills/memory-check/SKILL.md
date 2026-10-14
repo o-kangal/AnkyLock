@@ -30,6 +30,10 @@ Users keep 100+ scratchpad tabs open. If each kept a CodeMirror DOM tree, a Yjs 
 - The sidebar note and folder lists and any list that can exceed **50 items** are virtualized. Render only the rows in the viewport plus a small overscan. Use a headless Solid virtualizer such as `@tanstack/solid-virtual`, or a small hand-written windowing primitive. Don't use a component library (AGENTS.md).
 - Drag-and-drop across a virtualized tree must work on ids, not DOM nodes, because the drop target row may not be mounted yet.
 
+### Floating UI
+
+Menus, popovers and dialogs use the shared `Popover` component (`apps/web/src/components/Popover.tsx`), which renders in a Solid `Portal` on `<body>` with `position: fixed`. WebKit (WKWebView on macOS, WebKitGTK on Linux) composites `overflow: auto` scroll containers on their own layer and paints them over absolutely positioned descendants of sibling elements, whatever their `z-index`. jsdom does no layout, so unit tests can't catch this. Check what's on top with `document.elementFromPoint` in a real engine.
+
 ### Styling
 
 There are no global CSS files and no component libraries (AGENTS.md). That also rules out Tailwind, which needs a global CSS entry file. Use component-scoped styles (CSS modules or inline style objects) together with a small set of shared design tokens.

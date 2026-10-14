@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-settings-get-vault-header"
+description = "Enables the settings_get_vault_header command without any pre-configured scope."
+commands.allow = ["settings_get_vault_header"]
+
+[[permission]]
+identifier = "deny-settings-get-vault-header"
+description = "Denies the settings_get_vault_header command without any pre-configured scope."
+commands.deny = ["settings_get_vault_header"]

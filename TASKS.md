@@ -267,6 +267,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --manifest-path apps/des
 ---
 
 ### Task 11: Tauri v2 Desktop App Integration & IPC Wiring
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Frontend/UI & Backend/Service
 - **Read-Only Context Files:** `apps/desktop/src-tauri/src/main.rs`, `apps/web/src/stores/workspaceStore.ts`
 - **Target Files (Create/Modify):**
@@ -307,6 +308,28 @@ cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml && pnpm --filter 
 - **Verification:**
 ``` bash
 pnpm --filter @ankylock/web run typecheck && pnpm --filter @ankylock/web run test && pnpm --filter @ankylock/web run build
+``` 
+
+---
+
+### Task 11c: Google Sign-In (OAuth 2.0 + PKCE) & Sync/Backup Activation
+- **Type:** Backend/Service & Frontend/UI
+- **Read-Only Context Files:** `SPEC.md` (§1.1, §2.4, §7), `packages/sync/src/client/blindWebSocketClient.ts`, `packages/sync/src/backup/snapshotScheduler.ts`, `apps/web/src/runtime/createRuntime.ts`
+- **Target Files (Create/Modify):**
+  - `packages/sync/src/auth/googleAuth.ts`
+  - `apps/desktop/src-tauri/src/commands/oauth.rs`
+  - `apps/desktop/src-tauri/src/main.rs`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/web/src/components/SignInButton.tsx`
+  - `packages/sync/tests/googleAuth.test.ts`
+- **Step-by-Step Instructions:**
+  1. Implement the OAuth 2.0 authorization-code flow with PKCE: desktop opens the system browser and receives the code on a loopback redirect handled by a Rust IPC command; web uses a redirect back to the app. Request only `openid`, `email` and `https://www.googleapis.com/auth/drive.appdata`.
+  2. Keep tokens in memory (refresh token in the OS keychain on desktop) and refresh before expiry; never derive or store key material from OAuth credentials (BR-SEC-03).
+  3. After sign-in, start the `BlindWebSocketClient` (fresh ID token on every connect), the `OutboxQueue` drain on reconnect, the delta packer for open docs and the snapshot scheduler; sign-out stops them while local editing keeps working.
+  4. Surface auth, quota and network status as a non-intrusive status bar badge (SPEC §7).
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ``` 
 
 ---
@@ -358,6 +381,8 @@ Task 1 (Workspace & Config)
            └──► Task 11 (Tauri Desktop App Wiring)
                    │
                    ├──► Task 11b (Web SPA Entry & PWA)
+                   │
+                   ├──► Task 11c (Google Sign-In & Sync/Backup Activation)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
 ``` 

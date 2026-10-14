@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-folder-set-archived"
+description = "Enables the folder_set_archived command without any pre-configured scope."
+commands.allow = ["folder_set_archived"]
+
+[[permission]]
+identifier = "deny-folder-set-archived"
+description = "Denies the folder_set_archived command without any pre-configured scope."
+commands.deny = ["folder_set_archived"]

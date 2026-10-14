@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-category-create"
+description = "Enables the category_create command without any pre-configured scope."
+commands.allow = ["category_create"]
+
+[[permission]]
+identifier = "deny-category-create"
+description = "Denies the category_create command without any pre-configured scope."
+commands.deny = ["category_create"]

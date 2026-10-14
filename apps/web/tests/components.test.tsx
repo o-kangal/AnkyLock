@@ -18,7 +18,13 @@ afterEach(() => {
   root?.remove();
 });
 
-const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+async function waitFor(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
+  for (let i = 0; i < 400; i++) {
+    if (await check()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`Timed out waiting for: ${label}`);
+}
 
 describe('VirtualList', () => {
   it('renders only the visible window of a large list', () => {
@@ -61,15 +67,12 @@ describe('TabBar', () => {
     const { store, storage } = setup();
     mount(() => <TabBar store={store} isEmptyAndUnmodified={() => true} />);
     (root.querySelector('[aria-label="New tab"]') as HTMLButtonElement).click();
-    await flush();
-    await flush();
+    await waitFor(() => root.querySelector('[role="tab"]') !== null, 'new tab');
     expect(root.querySelector('[role="tab"]')?.textContent).toContain('Untitled-1');
     expect(root.querySelector('[role="tab"]')?.getAttribute('aria-selected')).toBe('true');
 
     (root.querySelector('[aria-label="Close tab"]') as HTMLButtonElement).click();
-    await flush();
-    await flush();
+    await waitFor(async () => (await storage.getNote('id-1' as NoteId)) === null, 'note discarded');
     expect(root.querySelectorAll('[role="tab"]')).toHaveLength(0);
-    expect(await storage.getNote('id-1' as NoteId)).toBeNull();
   });
 });

@@ -49,6 +49,8 @@ fn main() {
             outbox::outbox_delete,
             settings::settings_get_retention_days,
             settings::settings_set_retention_days,
+            settings::settings_get_vault_header,
+            settings::settings_set_vault_header,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run AnkyLock");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-folder-list-trashed"
+description = "Enables the folder_list_trashed command without any pre-configured scope."
+commands.allow = ["folder_list_trashed"]
+
+[[permission]]
+identifier = "deny-folder-list-trashed"
+description = "Denies the folder_list_trashed command without any pre-configured scope."
+commands.deny = ["folder_list_trashed"]

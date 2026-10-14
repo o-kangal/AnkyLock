@@ -82,6 +82,11 @@ export interface IStorageEngine {
   getTrashRetentionDays(): Promise<number>;
   /** Stores the value; rejects invalid ones with ERR_INVALID_SETTING. Confirmation is the caller's job. */
   setTrashRetentionDays(days: number): Promise<number>;
+
+  /** Serialized vault header (see `serializeVaultHeader`), or null before the vault exists. */
+  getVaultHeader(): Promise<string | null>;
+  /** Written once; a second call fails with ERR_INVALID_SETTING so the key can't be orphaned. */
+  setVaultHeader(header: string): Promise<void>;
 }
 
 export class StorageError extends Error {

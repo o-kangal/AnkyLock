@@ -1,5 +1,5 @@
 import { onMount, type JSX } from 'solid-js';
-import type { DragDropManager } from '../../dnd/dragDropManager.js';
+import type { DragDropManager, DragItem } from '../../dnd/dragDropManager.js';
 import type { NoteView, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { rowStyle } from './styles.js';
 
@@ -8,6 +8,7 @@ export interface NoteItemProps {
   readonly dnd: DragDropManager;
   readonly note: NoteView;
   readonly depth: number;
+  readonly onItemMenu?: (event: MouseEvent, item: DragItem) => void;
 }
 
 /** One note row. Its title is decrypted lazily when the (virtualized) row first renders. */
@@ -28,6 +29,11 @@ export function NoteItem(props: NoteItemProps): JSX.Element {
       style={rowStyle(props.depth, active())}
       title={props.note.title ?? 'Untitled'}
       onClick={() => props.store.openNote(props.note.id)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        props.onItemMenu?.(event, { kind: 'note', id: props.note.id });
+      }}
     >
       <span style={{ opacity: props.note.title ? '1' : '0.6' }}>{props.note.title ?? 'Untitled'}</span>
     </div>

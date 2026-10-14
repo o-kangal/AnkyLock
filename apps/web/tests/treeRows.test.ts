@@ -46,6 +46,7 @@ function state(selection: Selection): WorkspaceState {
     tabs: [],
     activeTabIndex: -1,
     selection,
+    retentionDays: 28,
   };
 }
 

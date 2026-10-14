@@ -55,6 +55,8 @@ Here `depth(root-level folder) = 1` and `height(leaf) = 0`. Creating a folder is
 
 **Loose notes** (`folder_id = NULL`) are valid and not an error state.
 
+**Drag-and-drop never changes a category implicitly.** Only dropping onto a category does. Dropping onto a folder adopts that folder's category. Dropping onto the empty tree area means "the top of the current view": no folder, with the category kept (or set to the viewed category), or the selected folder in a folder view. It is refused in Archive and Trash. A drop onto the current location writes nothing.
+
 ## Lifecycle state machine
 
 State is derived from columns, not stored as an enum:
