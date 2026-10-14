@@ -72,6 +72,7 @@ export function transitionNote(note: Note | null, action: NoteAction): Result<No
         deletedAt: null,
         createdAt: action.now,
         updatedAt: action.now,
+        metaUpdatedAt: action.now,
       },
     });
   }

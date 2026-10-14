@@ -9,7 +9,7 @@ use tauri::Manager;
 
 use crate::commands::oauth::{GoogleAuth, KeychainStore, OAuthClient};
 use crate::commands::vaults::{self, Vaults};
-use crate::commands::{categories, folders, notes, oauth, outbox, settings};
+use crate::commands::{categories, folders, notes, oauth, outbox, settings, sync};
 use crate::db::pool::DbPool;
 
 fn main() {
@@ -62,6 +62,9 @@ fn main() {
             vaults::vault_create,
             vaults::vault_open,
             vaults::vault_import,
+            sync::sync_list_tombstones,
+            sync::sync_merge_records,
+            sync::sync_detach_folders,
             oauth::oauth_sign_in,
             oauth::oauth_restore,
             oauth::oauth_refresh,

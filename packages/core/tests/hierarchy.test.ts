@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  planHierarchyRepair,
   folderDepth,
   subtreeHeight,
   validateFolderCreate,
@@ -71,5 +72,29 @@ describe('validateFolderMove', () => {
 
   it('allows moving to the root', () => {
     expect(validateFolderMove(folders, id('l3'), null).ok).toBe(true);
+  });
+});
+
+describe('planHierarchyRepair (SPEC §7)', () => {
+  const links = (pairs: [string, string | null][]) =>
+    pairs.map(([id, parentId]) => ({ id: id as FolderId, parentId: parentId as FolderId | null }));
+
+  it('leaves a valid hierarchy alone', () => {
+    expect(planHierarchyRepair(links([['a', null], ['b', 'a'], ['c', 'b']]))).toEqual([]);
+  });
+
+  it('breaks a distributed circular move at the smallest id of the cycle', () => {
+    // Device A moved f1 into f2 while device B moved f2 into f1.
+    expect(planHierarchyRepair(links([['f2', 'f1'], ['f1', 'f2'], ['inside', 'f2']]))).toEqual(['f1']);
+    expect(planHierarchyRepair(links([['x', 'y'], ['y', 'z'], ['z', 'x']]))).toEqual(['x']);
+  });
+
+  it('moves folders nested deeper than three levels to the root with their subtree', () => {
+    expect(planHierarchyRepair(links([['a', null], ['b', 'a'], ['c', 'b'], ['d', 'c'], ['e', 'd']]))).toEqual(['d']);
+  });
+
+  it('gives the same answer for any input order', () => {
+    const records = links([['f1', 'f2'], ['f2', 'f1'], ['a', 'f1'], ['b', 'a'], ['c', 'b']]);
+    expect(planHierarchyRepair([...records].reverse())).toEqual(planHierarchyRepair(records));
   });
 });

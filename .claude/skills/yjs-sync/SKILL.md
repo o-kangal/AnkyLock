@@ -35,6 +35,13 @@ Y.Doc update ──► debounce 150 ms (merge with Y.mergeUpdates) ──► enc
 
 Folder, category and note metadata (moves, archive, trash) are not Yjs text. They travel as `HIERARCHY_MUTATION` packets with encrypted bodies. On apply, re-validate with the `ankylock-domain` rules. A cycle created by concurrent moves is repaired (detach to the All Notes root), not rejected. `TOMBSTONE` packets come from purges. Applying one deletes the entity locally and records it in `sync_tombstones` so a late-arriving update can't resurrect it.
 
+**As built (Task 11e):**
+- **State, not operations.** A `HIERARCHY_MUTATION` carries the changed records (whole subtrees for cascading folder archive/trash/restore), sealed as one payload. `publishingStorage` wraps the store's storage and publishes after each write; remote changes apply to the unwrapped storage, so nothing echoes.
+- **Clocks.** `mergeRecords` keeps a record unless the local clock is newer: `updatedAt` for folders and categories, `metaUpdatedAt` for notes. A note's `updatedAt` also moves on text edits, so it must never decide metadata. `meta_updated_at` is kept by SQLite triggers (IndexedDB: `withMetaClock`). Equal clocks favor the incoming record, so a device's own changes within one millisecond arrive in order.
+- **Repair** (`planHierarchyRepair`): deterministic, so it's never sent anywhere. A cycle loses the link of its smallest id; a folder deeper than 3 moves to the root. Dangling references become null inside `mergeRecords`.
+- **Catch-up** (`createCatchUp`): the relay keeps no history. On sync start and every reconnect, merge the other devices' Drive snapshots in order: tombstones, then records, then text via `mergeNoteUpdate`, which only saves when the state vector changed (no write and no clock change on replays). Snapshots carry tombstones. Locking backs up first, so other devices can catch up on the session.
+- **Outbox** stores `packet_type`; `entity_type` stays only for its CHECK constraint.
+
 ### Vaults (Task 11g)
 
 Every vault is isolated: its own salt, key, database (`ankylock-<vaultId>.db` on desktop, IndexedDB `ankylock-<vaultId>` on web) and relay channel. `IVaultDirectory` lists, creates and opens them; the runtime builds a fresh `WorkspaceStore`, sync engine and backup scheduler per opened vault and tears them all down on `lock()`. Two test devices on the same vault must share the vault id and header (create the second one's vault with the first one's header and derive the key from the same passphrase), not just a `CryptoKey`, or relay scoping goes untested.

@@ -1,4 +1,4 @@
-import type { Brand, Bytes, EpochMs, SealedBytes, SyncOutboxEntry } from '@ankylock/core';
+import type { Brand, Bytes, EpochMs, SealedBytes, SyncOutboxEntry, SyncPacketType } from '@ankylock/core';
 import { base64ToBytes, bytesToBase64, type Sealer } from '@ankylock/crypto';
 
 export const PROTOCOL_VERSION = 1;
@@ -8,7 +8,7 @@ const MIN_ENVELOPE_LENGTH = 28;
 
 export type DeviceId = Brand<string, 'DeviceId'>;
 
-export type PacketType = 'CRDT_DELTA' | 'HIERARCHY_MUTATION' | 'TOMBSTONE';
+export type PacketType = SyncPacketType;
 
 /** Decoded relay frame. Only these fields are visible to the relay; `payload` is opaque. */
 export interface SyncPacket {

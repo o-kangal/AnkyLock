@@ -89,6 +89,41 @@ describe('WebIndexedDbAdapter', () => {
     expect(restored).toMatchObject({ isArchived: false, archivedAt: null });
   });
 
+  it('adds sync clocks when upgrading from version 3', async () => {
+    const factory = new IDBFactory();
+    await new Promise<void>((resolve, reject) => {
+      const req = factory.open('ankylock', 3);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        for (const name of ['categories', 'folders', 'notes']) db.createObjectStore(name, { keyPath: 'id' });
+        db.createObjectStore('note_contents', { keyPath: 'noteId' });
+        const outbox = db.createObjectStore('sync_outbox', { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore('sync_tombstones', { keyPath: 'entityId' });
+        db.createObjectStore('app_settings', { keyPath: 'key' });
+        req.transaction?.objectStore('notes').put({
+          id: 'old',
+          folderId: null,
+          categoryId: null,
+          isEphemeral: true,
+          isArchived: false,
+          archivedAt: null,
+          deletedAt: null,
+          createdAt: 1,
+          updatedAt: 40,
+        });
+        outbox.put({ entityId: 'old', entityType: 'tombstone', encryptedPayload: new Uint8Array([1]), createdAt: 1 });
+      };
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    const engine = new WebIndexedDbAdapter(factory, counterClock());
+    expect((await engine.getNote('old' as NoteId))?.metaUpdatedAt).toBe(40);
+    expect((await engine.listOutbox(10)).map((e) => e.packetType)).toEqual(['TOMBSTONE']);
+  });
+
   it('lists notes most recently updated first', async () => {
     const engine = new WebIndexedDbAdapter(new IDBFactory(), counterClock());
     await engine.createNote('a' as NoteId);
@@ -120,6 +155,7 @@ describe('TauriSqliteAdapter', () => {
     deletedAt: null,
     createdAt: 1,
     updatedAt: 2,
+    metaUpdatedAt: 2,
   };
 
   it('sends camelCase arguments to snake_case commands', async () => {
@@ -160,15 +196,20 @@ describe('TauriSqliteAdapter', () => {
       id: 7,
       entityId: 'n',
       entityType: 'note',
+      packetType: 'CRDT_DELTA',
       encryptedPayload: '3q2+7w==',
       createdAt: 1,
     });
     const entry = await new TauriSqliteAdapter(invoke).enqueueOutbox({
       entityId: 'n' as NoteId,
       entityType: 'note',
+      packetType: 'CRDT_DELTA',
       encryptedPayload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) as SealedBytes,
     });
-    expect(calls[0]).toEqual(['outbox_enqueue', { entry: { entityId: 'n', entityType: 'note', encryptedPayload: '3q2+7w==' } }]);
+    expect(calls[0]).toEqual([
+      'outbox_enqueue',
+      { entry: { entityId: 'n', entityType: 'note', packetType: 'CRDT_DELTA', encryptedPayload: '3q2+7w==' } },
+    ]);
     expect(entry.encryptedPayload).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
   });
 

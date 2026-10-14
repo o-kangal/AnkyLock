@@ -13,6 +13,8 @@ pub struct OutboxEntry {
     pub id: i64,
     pub entity_id: String,
     pub entity_type: String,
+    /// CRDT_DELTA, HIERARCHY_MUTATION or TOMBSTONE (CHECK-constrained).
+    pub packet_type: String,
     #[serde(with = "crate::b64")]
     pub encrypted_payload: Vec<u8>,
     pub created_at: i64,
@@ -23,27 +25,30 @@ fn map_entry(row: &Row<'_>) -> rusqlite::Result<OutboxEntry> {
         id: row.get(0)?,
         entity_id: row.get(1)?,
         entity_type: row.get(2)?,
+        packet_type: row.get(5)?,
         encrypted_payload: row.get(3)?,
         created_at: row.get(4)?,
     })
 }
 
-/// `entity_type` is constrained by the schema's CHECK to note / folder / category / tombstone.
+/// `entity_type` and `packet_type` are constrained by the schema's CHECKs.
 pub fn enqueue_outbox(
     conn: &Connection,
     entity_id: &str,
     entity_type: &str,
+    packet_type: &str,
     encrypted_payload: &[u8],
     now: i64,
 ) -> AppResult<OutboxEntry> {
     conn.execute(
-        "INSERT INTO sync_outbox (entity_id, entity_type, encrypted_payload, created_at) VALUES (?1, ?2, ?3, ?4)",
-        params![entity_id, entity_type, encrypted_payload, now],
+        "INSERT INTO sync_outbox (entity_id, entity_type, packet_type, encrypted_payload, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![entity_id, entity_type, packet_type, encrypted_payload, now],
     )?;
     Ok(OutboxEntry {
         id: conn.last_insert_rowid(),
         entity_id: entity_id.to_owned(),
         entity_type: entity_type.to_owned(),
+        packet_type: packet_type.to_owned(),
         encrypted_payload: encrypted_payload.to_vec(),
         created_at: now,
     })
@@ -52,7 +57,7 @@ pub fn enqueue_outbox(
 /// Oldest entries first so the queue drains in insertion order.
 pub fn list_outbox(conn: &Connection, limit: u32) -> AppResult<Vec<OutboxEntry>> {
     let mut stmt = conn.prepare(
-        "SELECT id, entity_id, entity_type, encrypted_payload, created_at FROM sync_outbox ORDER BY id LIMIT ?1",
+        "SELECT id, entity_id, entity_type, encrypted_payload, created_at, packet_type FROM sync_outbox ORDER BY id LIMIT ?1",
     )?;
     let entries = stmt.query_map([limit], map_entry)?.collect::<Result<_, _>>()?;
     Ok(entries)
@@ -73,6 +78,7 @@ pub fn delete_outbox(conn: &mut Connection, ids: &[i64]) -> AppResult<()> {
 pub struct OutboxInput {
     entity_id: String,
     entity_type: String,
+    packet_type: String,
     #[serde(with = "crate::b64")]
     encrypted_payload: Vec<u8>,
 }
@@ -83,6 +89,7 @@ pub fn outbox_enqueue(db: State<'_, DbPool>, entry: OutboxInput) -> AppResult<Ou
         &*db.conn()?,
         &entry.entity_id,
         &entry.entity_type,
+        &entry.packet_type,
         &entry.encrypted_payload,
         now_ms(),
     )
@@ -108,9 +115,9 @@ mod tests {
     #[test]
     fn enqueues_lists_in_order_and_deletes() {
         let mut conn = test_conn();
-        let first = enqueue_outbox(&conn, "n1", "note", &[1, 2, 3], T).unwrap();
-        let second = enqueue_outbox(&conn, "f1", "folder", &[4], T + 1).unwrap();
-        enqueue_outbox(&conn, "n2", "tombstone", &[5], T + 2).unwrap();
+        let first = enqueue_outbox(&conn, "n1", "note", "CRDT_DELTA", &[1, 2, 3], T).unwrap();
+        let second = enqueue_outbox(&conn, "f1", "folder", "HIERARCHY_MUTATION", &[4], T + 1).unwrap();
+        enqueue_outbox(&conn, "n2", "tombstone", "TOMBSTONE", &[5], T + 2).unwrap();
 
         let listed = list_outbox(&conn, 2).unwrap();
         assert_eq!(listed, vec![first.clone(), second]);
@@ -121,24 +128,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_entity_types() {
+    fn rejects_unknown_entity_and_packet_types() {
         let conn = test_conn();
-        assert_eq!(enqueue_outbox(&conn, "x", "user", &[1], T).unwrap_err().code(), "ERR_STORAGE");
+        assert_eq!(enqueue_outbox(&conn, "x", "user", "CRDT_DELTA", &[1], T).unwrap_err().code(), "ERR_STORAGE");
+        assert_eq!(enqueue_outbox(&conn, "x", "note", "GOSSIP", &[1], T).unwrap_err().code(), "ERR_STORAGE");
     }
 
     #[test]
     fn payload_crosses_ipc_as_base64() {
         let conn = test_conn();
-        let entry = enqueue_outbox(&conn, "n1", "note", &[0xde, 0xad, 0xbe, 0xef], T).unwrap();
+        let entry = enqueue_outbox(&conn, "n1", "note", "CRDT_DELTA", &[0xde, 0xad, 0xbe, 0xef], T).unwrap();
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["encryptedPayload"], "3q2+7w==");
         assert_eq!(json["entityType"], "note");
 
         let input: OutboxInput =
-            serde_json::from_str(r#"{"entityId":"n1","entityType":"note","encryptedPayload":"3q2+7w=="}"#).unwrap();
+            serde_json::from_str(r#"{"entityId":"n1","entityType":"note","packetType":"CRDT_DELTA","encryptedPayload":"3q2+7w=="}"#).unwrap();
         assert_eq!(input.encrypted_payload, [0xde, 0xad, 0xbe, 0xef]);
         assert!(serde_json::from_str::<OutboxInput>(
-            r#"{"entityId":"n1","entityType":"note","encryptedPayload":"%%%"}"#
+            r#"{"entityId":"n1","entityType":"note","packetType":"CRDT_DELTA","encryptedPayload":"%%%"}"#
         )
         .is_err());
     }

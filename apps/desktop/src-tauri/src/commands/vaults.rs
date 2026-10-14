@@ -204,9 +204,9 @@ pub fn import_records(conn: &mut Connection, data: &VaultImport) -> AppResult<()
     }
     for n in &data.notes {
         tx.execute(
-            "INSERT INTO notes (id, folder_id, category_id, is_ephemeral, is_archived, archived_at, deleted_at, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![n.id, n.folder_id, n.category_id, n.is_ephemeral, n.is_archived, n.archived_at, n.deleted_at, n.created_at, n.updated_at],
+            "INSERT INTO notes (id, folder_id, category_id, is_ephemeral, is_archived, archived_at, deleted_at, created_at, updated_at, meta_updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![n.id, n.folder_id, n.category_id, n.is_ephemeral, n.is_archived, n.archived_at, n.deleted_at, n.created_at, n.updated_at, n.meta_updated_at],
         )?;
     }
     for c in &data.contents {

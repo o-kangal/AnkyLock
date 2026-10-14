@@ -31,6 +31,7 @@ const baseNote: Note = {
   deletedAt: null,
   createdAt: T0,
   updatedAt: T0,
+  metaUpdatedAt: T0,
 };
 
 const ephemeral = baseNote;

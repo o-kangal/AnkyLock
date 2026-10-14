@@ -9,18 +9,11 @@ export interface PacketTransport {
 
 const DRAIN_BATCH = 50;
 
-/**
- * The outbox schema stores `entity_type`, not the packet type. Only one-to-one mappings are
- * supported until HIERARCHY_MUTATION packets get their own column (they can target notes too).
- */
-const ENTITY_TYPE_FOR: Partial<Record<PacketType, SyncEntityType>> = {
+/** The outbox's `entity_type` column, kept for its CHECK constraint; `packet_type` drives replay. */
+const ENTITY_TYPE_FOR: Record<PacketType, SyncEntityType> = {
   CRDT_DELTA: 'note',
+  HIERARCHY_MUTATION: 'folder',
   TOMBSTONE: 'tombstone',
-};
-
-const PACKET_TYPE_FOR: Partial<Record<SyncEntityType, PacketType>> = {
-  note: 'CRDT_DELTA',
-  tombstone: 'TOMBSTONE',
 };
 
 /**
@@ -47,16 +40,13 @@ export class OutboxQueue {
 
   /** Sends now if nothing older is waiting; otherwise queues behind the backlog to keep order. */
   async submit(packet: SyncPacket): Promise<void> {
-    const entityType = ENTITY_TYPE_FOR[packet.packetType];
-    if (entityType === undefined) {
-      throw new Error(`${packet.packetType} packets cannot be queued until the outbox stores packet types.`);
-    }
     if (!this.#hasBacklog && this.#transport.send(encodeFrame(packet))) return;
     this.#hasBacklog = true;
     this.#enqueued++;
     await this.#storage.enqueueOutbox({
       entityId: packet.entityId,
-      entityType,
+      entityType: ENTITY_TYPE_FOR[packet.packetType],
+      packetType: packet.packetType,
       encryptedPayload: packet.payload,
     });
   }
@@ -90,10 +80,8 @@ export class OutboxQueue {
   }
 
   #toPacket(entry: SyncOutboxEntry): SyncPacket {
-    const packetType = PACKET_TYPE_FOR[entry.entityType];
-    if (packetType === undefined) throw new Error(`Cannot replay outbox entity type ${entry.entityType}.`);
     return {
-      packetType,
+      packetType: entry.packetType,
       entityId: entry.entityId,
       senderDeviceId: this.#deviceId,
       timestampMs: entry.createdAt,

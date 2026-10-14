@@ -1,11 +1,12 @@
-import * as Y from 'yjs';
-import { deriveTitle, type FolderId, type NoteId } from '@ankylock/core';
+import type * as Y from 'yjs';
+import type { CategoryId, EpochMs, FolderId, NoteId } from '@ankylock/core';
 import type { Sealer } from '@ankylock/crypto';
-import type { IStorageEngine } from '@ankylock/storage';
+import type { IStorageEngine, RemoteRecords } from '@ankylock/storage';
 import { BlindWebSocketClient, type ConnectionStatus, type SocketLike } from '../client/blindWebSocketClient.js';
-import { TEXT_FIELD, type DocManager } from '../crdt/docManager.js';
+import type { DocManager } from '../crdt/docManager.js';
 import { watchDoc, type DocWatcher } from '../crdt/deltaPacker.js';
-import { loadNoteState, saveNoteState } from '../persistence/notePersistence.js';
+import { applyRemoteRecords, applyRemoteTombstone, createHierarchyPacket, readHierarchyPayload } from '../hierarchy/hierarchySync.js';
+import { mergeNoteUpdate } from '../persistence/notePersistence.js';
 import { createTombstonePacket, decodeFrame, type DeviceId, type SyncPacket } from '../protocol/frame.js';
 import { OutboxQueue } from '../queue/outboxQueue.js';
 
@@ -17,7 +18,7 @@ export interface SyncEngineOptions {
   readonly relayUrl: string;
   /** Current Google ID token; read on every (re)connect. */
   readonly getIdToken: () => string;
-  /** Notes changed or removed by another device; the UI reloads them. */
+  /** Notes changed or removed by another device (empty for folder and category changes); the UI reloads. */
   readonly onRemoteChange: (noteIds: NoteId[]) => void;
   readonly onStatusChange: (status: ConnectionStatus) => void;
   /** The outbox drained after (re)connecting: a good moment for a background backup. */
@@ -34,17 +35,18 @@ export interface SyncEngine {
   watch(noteId: NoteId, doc: Y.Doc): void;
   unwatch(noteId: NoteId): Promise<void>;
   /** Tells other devices that an entity was purged (BR-LIFE-04). */
-  submitTombstone(entityId: NoteId | FolderId, entityType: 'note' | 'folder'): Promise<void>;
+  submitTombstone(entityId: NoteId | FolderId | CategoryId, entityType: 'note' | 'folder' | 'category'): Promise<void>;
+  /** Sends records the user changed here: folders, categories, note placement and lifecycle. */
+  submitHierarchy(records: RemoteRecords): Promise<void>;
 }
 
 const textDecoder = new TextDecoder('utf-8', { fatal: true });
-const LINE_ONE_LIMIT = 1024;
 
 /**
- * Live note sync over the blind relay. Outgoing: local Yjs edits are batched, sealed and sent, or
- * queued in the encrypted outbox while offline. Incoming: sealed deltas are opened and merged
- * with Y.applyUpdate (never last-write-wins), into the open doc or into the stored state.
- * Folder and category changes are not synced yet (Task 11e).
+ * Live sync over the blind relay. Outgoing: local Yjs edits are batched, sealed and sent, or
+ * queued in the encrypted outbox while offline, like hierarchy changes and purges. Incoming:
+ * sealed deltas merge with Y.applyUpdate (never last-write-wins), into the open doc or the stored
+ * state; hierarchy records merge by their clocks and are repaired; tombstones purge.
  */
 export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
   const { storage, sealer, docs, deviceId } = options;
@@ -68,47 +70,45 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
   const queue = new OutboxQueue(storage, client, deviceId);
 
   async function mergeIntoStorage(noteId: NoteId, update: Uint8Array): Promise<void> {
-    const note = await storage.getNote(noteId);
-    if (note === null) await storage.createNote(noteId);
-    const doc = new Y.Doc();
-    try {
-      const stored = await loadNoteState({ storage, sealer }, noteId);
-      if (stored) Y.applyUpdate(doc, stored);
-      Y.applyUpdate(doc, update);
-      const text = doc.getText(TEXT_FIELD).toString();
-      const firstLine = text.slice(0, LINE_ONE_LIMIT).split('\n', 1)[0] ?? '';
-      await saveNoteState({ storage, sealer }, noteId, doc, deriveTitle(firstLine));
-    } finally {
-      doc.destroy();
-    }
+    await mergeNoteUpdate({ storage, sealer }, noteId, update);
   }
 
-  async function removeNote(noteId: NoteId): Promise<void> {
-    const note = await storage.getNote(noteId);
-    if (note === null) return;
-    if (note.deletedAt === null) await storage.trashNote(noteId);
-    await storage.purgeNote(noteId);
-  }
+  /** Hierarchy changes and purges apply one at a time, so each repair sees the previous merge. */
+  let structural: Promise<unknown> = Promise.resolve();
+  const inOrder = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = structural.then(work);
+    structural = next.catch(() => undefined);
+    return next;
+  };
 
   async function apply(packet: SyncPacket): Promise<void> {
     const noteId = packet.entityId as NoteId;
     const plaintext = await sealer.open(packet.payload);
-    if (packet.packetType === 'CRDT_DELTA') {
-      if (!docs.applyRemote(noteId, plaintext)) {
-        const previous = merging.get(noteId) ?? Promise.resolve();
-        const next = previous.then(() => mergeIntoStorage(noteId, plaintext));
-        merging.set(noteId, next.catch(() => undefined));
-        await next;
+    switch (packet.packetType) {
+      case 'CRDT_DELTA': {
+        if (!docs.applyRemote(noteId, plaintext)) {
+          const previous = merging.get(noteId) ?? Promise.resolve();
+          const next = previous.then(() => mergeIntoStorage(noteId, plaintext));
+          merging.set(noteId, next.catch(() => undefined));
+          await next;
+        }
+        options.onRemoteChange([noteId]);
+        return;
       }
-    } else if (packet.packetType === 'TOMBSTONE') {
-      const { entityType } = JSON.parse(textDecoder.decode(plaintext)) as { entityType?: unknown };
-      // Folder tombstones need hierarchy sync (Task 11e).
-      if (entityType !== 'note') return;
-      await removeNote(noteId);
-    } else {
-      return; // HIERARCHY_MUTATION: Task 11e.
+      case 'TOMBSTONE': {
+        const { entityType } = JSON.parse(textDecoder.decode(plaintext)) as { entityType?: unknown };
+        if (entityType !== 'note' && entityType !== 'folder' && entityType !== 'category') return;
+        await inOrder(() => applyRemoteTombstone(storage, packet.entityId, entityType));
+        options.onRemoteChange(entityType === 'note' ? [noteId] : []);
+        return;
+      }
+      case 'HIERARCHY_MUTATION': {
+        const records = readHierarchyPayload(plaintext);
+        await inOrder(() => applyRemoteRecords(storage, records));
+        options.onRemoteChange([]);
+        return;
+      }
     }
-    options.onRemoteChange([noteId]);
   }
 
   async function receive(frame: Uint8Array): Promise<void> {
@@ -155,7 +155,12 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
 
     async submitTombstone(entityId, entityType) {
       if (!running) return;
-      await queue.submit(await createTombstonePacket(sealer, deviceId, entityId, entityType, Date.now() as SyncPacket['timestampMs']));
+      await queue.submit(await createTombstonePacket(sealer, deviceId, entityId, entityType, Date.now() as EpochMs));
+    },
+
+    async submitHierarchy(records) {
+      if (!running) return;
+      await queue.submit(await createHierarchyPacket(sealer, deviceId, records, Date.now() as EpochMs));
     },
   };
 }

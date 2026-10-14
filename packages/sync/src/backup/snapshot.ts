@@ -1,6 +1,6 @@
 import type { Category, EpochMs, Folder, Note, NoteContent, SealedBytes } from '@ankylock/core';
 import { base64ToBytes, bytesToBase64, type Sealer } from '@ankylock/crypto';
-import type { IStorageEngine } from '@ankylock/storage';
+import type { IStorageEngine, Tombstone } from '@ankylock/storage';
 
 const SNAPSHOT_VERSION = 1;
 
@@ -13,6 +13,8 @@ export interface Snapshot {
   readonly folders: Folder[];
   readonly notes: Note[];
   readonly contents: NoteContent[];
+  /** Purges, so devices that missed a TOMBSTONE packet still purge (absent in early snapshots). */
+  readonly tombstones: Tombstone[];
 }
 
 type WireContent = Omit<NoteContent, 'contentCiphertext' | 'yjsStateVector' | 'yjsUpdates'> & {
@@ -30,12 +32,13 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
  * structure (counts, ids, timestamps) from Google Drive. The format is the same on web and desktop.
  */
 export async function exportSnapshot(storage: IStorageEngine, sealer: Sealer, now: EpochMs): Promise<SealedBytes> {
-  const [categories, liveFolders, trashedFolders, trashed, retentionDays] = await Promise.all([
+  const [categories, liveFolders, trashedFolders, trashed, retentionDays, tombstones] = await Promise.all([
     storage.listCategories(),
     storage.listFolders(),
     storage.listTrashedFolders(),
     storage.listTrashedNotes(),
     storage.getTrashRetentionDays(),
+    storage.listTombstones(),
   ]);
   const folders = [...liveFolders, ...trashedFolders];
   const live = await Promise.all([null, ...liveFolders.map((f) => f.id)].map((id) => storage.listNotes(id)));
@@ -52,7 +55,7 @@ export async function exportSnapshot(storage: IStorageEngine, sealer: Sealer, no
           } satisfies WireContent,
         ],
   );
-  const document = { version: SNAPSHOT_VERSION, createdAt: now, retentionDays, categories, folders, notes, contents };
+  const document = { version: SNAPSHOT_VERSION, createdAt: now, retentionDays, categories, folders, notes, contents, tombstones };
   return sealer.seal(encoder.encode(JSON.stringify(document)));
 }
 
@@ -65,9 +68,10 @@ export async function openSnapshot(sealer: Sealer, sealed: SealedBytes): Promise
   if (typeof parsed !== 'object' || parsed === null || (parsed as { version?: unknown }).version !== SNAPSHOT_VERSION) {
     throw new Error('Unsupported snapshot version.');
   }
-  const raw = parsed as Omit<Snapshot, 'contents'> & { contents: WireContent[] };
+  const raw = parsed as Omit<Snapshot, 'contents' | 'tombstones'> & { contents: WireContent[]; tombstones?: Tombstone[] };
   return {
     ...raw,
+    tombstones: raw.tombstones ?? [],
     contents: raw.contents.map((c) => ({
       ...c,
       contentCiphertext: base64ToBytes(c.contentCiphertext) as SealedBytes,

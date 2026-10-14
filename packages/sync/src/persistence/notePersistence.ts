@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import {
   MAX_NOTE_PLAINTEXT_BYTES,
+  deriveTitle,
   type Bytes,
   type Ciphertext,
   type EpochMs,
@@ -18,6 +19,8 @@ export interface NotePersistenceDeps {
 }
 
 const encoder = new TextEncoder();
+/** Titles come from the first line; a longer line is cut before searching for its end. */
+const LINE_ONE_LIMIT = 1024;
 
 /** Decrypts a note's stored Yjs state, or undefined when nothing was saved yet. */
 export async function loadNoteState(deps: NotePersistenceDeps, noteId: NoteId): Promise<Bytes | undefined> {
@@ -61,6 +64,36 @@ export async function saveNoteState(
   const titleCiphertext = await createTextCodec(deps.sealer).encrypt(title ?? '');
   const updatedAt = deps.now?.() ?? (Date.now() as EpochMs);
   await deps.storage.saveNoteContent(await encodeNoteContent(deps.sealer, noteId, doc, titleCiphertext, updatedAt));
+}
+
+/**
+ * Merges a Yjs update from another device into a note that is not open here, through Yjs (never
+ * last-write-wins). Saves only when the update brought something new, so replaying known updates
+ * (catch-up, duplicates) costs no write and leaves the note's clocks alone. Trashed notes are
+ * read-only and skipped. Resolves whether the note changed.
+ */
+export async function mergeNoteUpdate(
+  deps: NotePersistenceDeps,
+  noteId: NoteId,
+  update: Uint8Array,
+): Promise<boolean> {
+  const note = await deps.storage.getNote(noteId);
+  if (note === null) await deps.storage.createNote(noteId);
+  else if (note.deletedAt !== null) return false;
+  const doc = new Y.Doc();
+  try {
+    const stored = await loadNoteState(deps, noteId);
+    if (stored) Y.applyUpdate(doc, stored);
+    const before = Y.encodeStateVector(doc);
+    Y.applyUpdate(doc, update);
+    const after = Y.encodeStateVector(doc);
+    if (stored && before.length === after.length && before.every((b, i) => b === after[i])) return false;
+    const firstLine = doc.getText(TEXT_FIELD).toString().slice(0, LINE_ONE_LIMIT).split('\n', 1)[0] ?? '';
+    await saveNoteState(deps, noteId, doc, deriveTitle(firstLine));
+    return true;
+  } finally {
+    doc.destroy();
+  }
 }
 
 export interface DocPersister {

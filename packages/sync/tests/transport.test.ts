@@ -129,10 +129,15 @@ describe('OutboxQueue', () => {
     expect(transport.sent[0]).toMatchObject({ packetType: 'CRDT_DELTA', entityId: 'n1', senderDeviceId: 'device-a' });
   });
 
-  it('refuses packet types the outbox cannot round-trip yet', async () => {
-    await expect(queue.submit({ ...packet('f1', 1), packetType: 'HIERARCHY_MUTATION' })).rejects.toThrow(
-      'HIERARCHY_MUTATION',
-    );
+  it('queues and replays every packet type with its type intact', async () => {
+    await queue.submit({ ...packet('f1', 1), packetType: 'HIERARCHY_MUTATION' });
+    await queue.submit({ ...packet('n1', 2), packetType: 'TOMBSTONE' });
+    transport.online = true;
+    await queue.drain();
+    expect(transport.sent.map((p) => [p.entityId, p.packetType])).toEqual([
+      ['f1', 'HIERARCHY_MUTATION'],
+      ['n1', 'TOMBSTONE'],
+    ]);
   });
 });
 

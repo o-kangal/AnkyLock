@@ -357,6 +357,7 @@ pnpm --filter @ankylock/web run typecheck && pnpm --filter @ankylock/web run tes
 ---
 
 ### Task 11e: Offline Catch-Up & Hierarchy Sync
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Backend/Service
 - **Read-Only Context Files:** `SPEC.md` (§5.2, §7), `packages/sync/src/queue/outboxQueue.ts`, `packages/sync/src/backup/snapshot.ts`
 - **Target Files (Create/Modify):**
@@ -376,7 +377,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
 
 ---
 
-### Task 11f: UI Polish (Status Bar, Backup Progress, Title Bar Logo, Web Shortcuts)
+### Task 11f: UI Polish (Status Bar, Backup Progress, Title Bar Logo, Web Shortcuts, Sync Now, Folder Categories)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/SyncStatusBar.tsx`, `apps/desktop/src/TitleBar.tsx`, `packages/sync/src/backup/snapshotScheduler.ts`
 - **Target Files (Create/Modify):**
@@ -390,6 +391,8 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
   2. Report backups in progress: add a `running` state to `BackupStatus` (emitted when a snapshot export/upload starts) and show a small spinner with "Backing up…" in the status bar until it finishes.
   3. Show the app logo (from `src-tauri/icons/app-icon.svg`, about 16 px) before the "AnkyLock" title in the desktop title bar, keeping it part of the drag region.
   4. Browsers reserve Ctrl+N/T/W for their own tabs and never pass them to the page. On the web, bind new-note and the other reserved shortcuts to alternatives (e.g. Alt+N), keep Ctrl+N on desktop, and show the platform's shortcut in hints such as "Press Ctrl+N".
+  5. Add a "Sync now" icon left of the backup status: it runs the Drive catch-up and a backup immediately and spins while they run (shared with the "Backing up…" indicator of step 2).
+  6. Allow dragging a folder onto a category: a new storage operation (Rust command and IndexedDB) moves the folder to that category with its whole subtree (subfolders and the notes filed in them), a subfolder dropped on a category moves to the root of it, and the change is published to other devices like other cascading folder operations. Replace the "Folders cannot be moved between categories yet" rule in `canDrop`.
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && pnpm --filter @ankylock/desktop run build

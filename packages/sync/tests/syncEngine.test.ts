@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import type { NoteId } from '@ankylock/core';
+import type { CategoryId, Ciphertext, FolderId, NoteId } from '@ankylock/core';
 import { createKeySealer, createTextCodec, type Sealer } from '@ankylock/crypto';
 import { WebIndexedDbAdapter } from '@ankylock/storage';
 import {
@@ -9,6 +9,7 @@ import {
   TEXT_FIELD,
   createSyncEngine,
   loadNoteState,
+  publishingStorage,
   type DeviceId,
   type SocketLike,
   type SyncEngine,
@@ -209,5 +210,95 @@ describe('createSyncEngine', () => {
     doc.getText(TEXT_FIELD).insert(0, 'last words');
     await a.engine.stop();
     expect(await a.storage.listOutbox(10)).toHaveLength(1);
+  });
+
+  describe('hierarchy', () => {
+    /** The storage the UI writes through: every change is published to the engine. */
+    const ui = (d: Device) =>
+      publishingStorage(d.storage, {
+        onRecords: (records) => void d.engine.submitHierarchy(records),
+        onRemoved: (id, type) => void d.engine.submitTombstone(id as FolderId, type),
+        onError: (e) => {
+          throw e;
+        },
+      });
+    const name = 'Zg==' as Ciphertext;
+    const f = (id: string) => id as FolderId;
+
+    async function pair(onlineA = true, onlineB = true) {
+      const relay = new FakeRelay();
+      const s = await sealer();
+      const a = device(relay, s, 'desktop-a', onlineA);
+      const b = device(relay, s, 'desktop-b', onlineB);
+      a.engine.start();
+      b.engine.start();
+      return { relay, s, a, b };
+    }
+
+    it('syncs folder, category and note placement changes live', async () => {
+      const { relay, a, b } = await pair();
+      await until(() => relay.sockets.size === 2, 'both connected');
+      const storageA = ui(a);
+      await storageA.createCategory('cat' as CategoryId, name);
+      await storageA.createFolder({ id: f('work'), parentId: null, categoryId: 'cat' as CategoryId, nameCiphertext: name });
+      await storageA.createNote(NOTE);
+      await storageA.moveNote(NOTE, f('work'), null);
+      await until(async () => (await b.storage.getNote(NOTE))?.folderId === 'work', 'note filed on B');
+      expect((await b.storage.listFolders())[0]).toMatchObject({ id: 'work', categoryId: 'cat' });
+
+      await storageA.trashFolder(f('work'));
+      await until(async () => (await b.storage.listTrashedFolders()).length === 1, 'folder trashed on B');
+      expect((await b.storage.getNote(NOTE))?.deletedAt).not.toBeNull();
+
+      await storageA.purgeFolder(f('work'));
+      await a.engine.submitTombstone(f('work'), 'folder');
+      await storageA.deleteCategory('cat' as CategoryId);
+      await until(async () => (await b.storage.listCategories()).length === 0, 'category deleted on B');
+      expect(await b.storage.listTrashedFolders()).toEqual([]);
+      expect(await b.storage.getNote(NOTE)).toBeNull();
+      await Promise.all([a.engine.stop(), b.engine.stop()]);
+    });
+
+    it('converges after a distributed circular move made offline (SPEC §7)', async () => {
+      const { s, a, b } = await pair(false, false);
+      for (const d of [a, b]) {
+        await d.storage.createFolder({ id: f('f1'), parentId: null, categoryId: null, nameCiphertext: name });
+        await d.storage.createFolder({ id: f('f2'), parentId: null, categoryId: null, nameCiphertext: name });
+      }
+      // Offline: A moves f1 into f2 while B moves f2 into f1.
+      await ui(a).moveFolder(f('f1'), f('f2'));
+      await ui(b).moveFolder(f('f2'), f('f1'));
+      await until(async () => (await a.storage.listOutbox(10)).length === 1 && (await b.storage.listOutbox(10)).length === 1, 'queued');
+      await Promise.all([a.engine.stop(), b.engine.stop()]);
+
+      // Both come back online: each outbox drains into the other device.
+      const relay = new FakeRelay();
+      const applied = [0, 0];
+      const online = [a, b].map((d, i) =>
+        createSyncEngine({
+          storage: d.storage,
+          sealer: s,
+          docs: d.docs,
+          deviceId: `desktop-${i}` as DeviceId,
+          relayUrl: 'ws://relay.test/ws',
+          getIdToken: () => 'id-token',
+          onRemoteChange: () => void applied[i]!++,
+          onStatusChange: () => undefined,
+          onError: (e) => {
+            throw e;
+          },
+          createSocket: () => new FakeSocket(relay, () => true),
+        }),
+      );
+      // Both sockets exist before either opens, so each drain reaches the other device.
+      for (const engine of online) engine.start();
+      const shape = async (d: Device) =>
+        Object.fromEntries((await d.storage.listFolders()).map((folder) => [folder.id, folder.parentId]));
+      await until(() => applied[0] === 1 && applied[1] === 1, "each device applied the other's move");
+      // Each device saw the cycle and broke it the same way: at f1, the smallest id.
+      await until(async () => JSON.stringify(await shape(a)) === JSON.stringify(await shape(b)), 'converged');
+      expect(await shape(a)).toEqual({ f1: null, f2: 'f1' });
+      await Promise.all(online.map((engine) => engine.stop()));
+    });
   });
 });

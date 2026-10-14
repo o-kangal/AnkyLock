@@ -20,6 +20,10 @@ pub struct Note {
     pub deleted_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// When the note's folder, category or lifecycle last changed; text edits don't move it.
+    /// Decides which device's metadata wins. Maintained by triggers (see the sync clocks migration).
+    #[serde(default)]
+    pub meta_updated_at: i64,
 }
 
 /// Encrypted note body; every field is ciphertext or opaque Yjs bytes. Byte fields cross IPC as base64.
@@ -38,7 +42,7 @@ pub struct NoteContent {
 }
 
 const NOTE_COLUMNS: &str =
-    "id, folder_id, category_id, is_ephemeral, is_archived, deleted_at, created_at, updated_at, archived_at";
+    "id, folder_id, category_id, is_ephemeral, is_archived, deleted_at, created_at, updated_at, archived_at, meta_updated_at";
 
 fn map_note(row: &Row<'_>) -> rusqlite::Result<Note> {
     Ok(Note {
@@ -51,6 +55,7 @@ fn map_note(row: &Row<'_>) -> rusqlite::Result<Note> {
         deleted_at: row.get(5)?,
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
+        meta_updated_at: row.get(9)?,
     })
 }
 

@@ -43,7 +43,13 @@ export interface Note {
   readonly archivedAt: EpochMs | null;
   readonly deletedAt: EpochMs | null;
   readonly createdAt: EpochMs;
+  /** Moves on every change, text edits included; orders notes by recent activity. */
   readonly updatedAt: EpochMs;
+  /**
+   * When the note's folder, category or lifecycle last changed (text edits don't move it).
+   * Decides which device's metadata wins; text always merges through Yjs.
+   */
+  readonly metaUpdatedAt: EpochMs;
 }
 
 export interface NoteContent {
@@ -59,10 +65,14 @@ export interface NoteContent {
 
 export type SyncEntityType = 'note' | 'folder' | 'category' | 'tombstone';
 
+/** Relay packet kinds (SPEC §5.2). */
+export type SyncPacketType = 'CRDT_DELTA' | 'HIERARCHY_MUTATION' | 'TOMBSTONE';
+
 export interface SyncOutboxEntry {
   readonly id: number;
   readonly entityId: NoteId | FolderId | CategoryId;
   readonly entityType: SyncEntityType;
+  readonly packetType: SyncPacketType;
   readonly encryptedPayload: SealedBytes;
   readonly createdAt: EpochMs;
 }

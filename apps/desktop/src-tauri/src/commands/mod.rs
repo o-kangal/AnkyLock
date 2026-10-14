@@ -4,6 +4,7 @@ pub mod notes;
 pub mod oauth;
 pub mod outbox;
 pub mod settings;
+pub mod sync;
 pub mod vaults;
 
 use std::time::{SystemTime, UNIX_EPOCH};

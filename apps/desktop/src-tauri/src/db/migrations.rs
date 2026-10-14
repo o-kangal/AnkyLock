@@ -7,6 +7,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "V20261013224803__add_archived_at",
         include_str!("../../../../../migrations/V20261013224803__add_archived_at.sql"),
     ),
+    (
+        "V20261014200733__add_sync_clocks",
+        include_str!("../../../../../migrations/V20261014200733__add_sync_clocks.sql"),
+    ),
 ];
 
 /// Applies pending migrations; `PRAGMA user_version` counts how many have been applied.
@@ -126,6 +130,46 @@ mod tests {
     }
 
     #[test]
+    fn upgrades_to_sync_clocks_and_keeps_them_moving() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        run_up_to(&mut conn, 2).unwrap();
+        conn.execute_batch(
+            "INSERT INTO folders (id, name_ciphertext, created_at, updated_at) VALUES ('f', 'x', 1, 1);
+             INSERT INTO notes (id, is_ephemeral, created_at, updated_at) VALUES ('n', 1, 1, 40);
+             INSERT INTO sync_outbox (entity_id, entity_type, encrypted_payload, created_at) VALUES ('n', 'note', x'00', 1);
+             INSERT INTO sync_outbox (entity_id, entity_type, encrypted_payload, created_at) VALUES ('n', 'tombstone', x'00', 2);",
+        )
+        .unwrap();
+        run(&mut conn).unwrap();
+
+        let types: Vec<String> = conn
+            .prepare("SELECT packet_type FROM sync_outbox ORDER BY id")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(types, ["CRDT_DELTA", "TOMBSTONE"]);
+        let meta = |conn: &Connection| -> i64 {
+            conn.query_row("SELECT meta_updated_at FROM notes WHERE id = 'n'", [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(meta(&conn), 40, "backfilled from updated_at");
+
+        // A text edit moves updated_at only; a move moves the metadata clock too.
+        conn.execute("UPDATE notes SET updated_at = 50 WHERE id = 'n'", []).unwrap();
+        assert_eq!(meta(&conn), 40);
+        conn.execute("UPDATE notes SET folder_id = 'f', is_ephemeral = 0, updated_at = 60 WHERE id = 'n'", []).unwrap();
+        assert_eq!(meta(&conn), 60);
+        // A merge that sets the clock itself keeps its value.
+        conn.execute("UPDATE notes SET folder_id = NULL, meta_updated_at = 55 WHERE id = 'n'", []).unwrap();
+        assert_eq!(meta(&conn), 55);
+        conn.execute("INSERT INTO notes (id, created_at, updated_at) VALUES ('m', 7, 7)", []).unwrap();
+        let inserted: i64 = conn.query_row("SELECT meta_updated_at FROM notes WHERE id = 'm'", [], |r| r.get(0)).unwrap();
+        assert_eq!(inserted, 7);
+    }
+
+    #[test]
     fn upgrades_v1_data_with_archived_at() {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.pragma_update(None, "foreign_keys", true).unwrap();
@@ -149,7 +193,7 @@ mod tests {
         let version: String = conn
             .query_row("SELECT value FROM app_settings WHERE key = 'schema_version'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, "2");
+        assert_eq!(version, MIGRATIONS.len().to_string());
         let integrity: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0)).unwrap();
         assert_eq!(integrity, "ok");
         let fk_violations: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).unwrap();

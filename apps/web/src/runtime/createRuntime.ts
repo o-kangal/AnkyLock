@@ -15,12 +15,15 @@ import {
   GoogleDriveClient,
   REMOTE_ORIGIN,
   TEXT_FIELD,
+  AuthError,
+  createCatchUp,
   createSnapshotScheduler,
   createSyncEngine,
   downloadSnapshots,
   exportSnapshot,
   listRemoteVaults,
   mergeSnapshots,
+  publishingStorage,
   loadNoteState,
   persistDoc,
   startRetentionWorker,
@@ -29,6 +32,7 @@ import {
   type BackupStatus,
   type ConnectionStatus,
   type DeviceId,
+  type CatchUp,
   type DocPersister,
   type RemoteVault,
   type RetentionWorker,
@@ -106,6 +110,8 @@ export interface Runtime {
   signOut(): Promise<void>;
 }
 
+const LOCK_BACKUP_WAIT_MS = 5_000;
+
 /** Long enough for any sensible label, short enough for the title bar and vault list. */
 export const MAX_VAULT_NAME_LENGTH = 64;
 
@@ -125,6 +131,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const names = createTextCodec(sealer);
   let engine: SyncEngine | null = null;
   let scheduler: SnapshotScheduler | null = null;
+  let catchUp: CatchUp | null = null;
   let headerJson: string | null = null;
   /** The open vault; storage and store are replaced whenever another vault is opened. */
   let vaultId: VaultId | null = null;
@@ -170,14 +177,32 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   };
   let retention: RetentionWorker | null = null;
 
-  // Remote edits can add or retitle notes; coalesce sidebar reloads.
+  // Remote edits can add, move or retitle notes; coalesce sidebar reloads.
   let reloadTimer: ReturnType<typeof setTimeout> | undefined;
-  const reloadSoon = (): void => {
+  const retitled = new Set<NoteId>();
+  const reloadSoon = (noteIds: readonly NoteId[] = []): void => {
+    for (const noteId of noteIds) retitled.add(noteId);
     reloadTimer ??= setTimeout(() => {
       reloadTimer = undefined;
-      void store?.load();
+      const changed = [...retitled];
+      retitled.clear();
+      const current = store;
+      void current?.load().then(() => current.refreshTitles(changed));
     }, 300);
   };
+
+  /** Merges what other devices backed up while this one was away (the relay keeps no history). */
+  async function runCatchUp(): Promise<void> {
+    if (!catchUp) return;
+    try {
+      const result = await catchUp.run();
+      if (result.unreadable > 0) report(`${result.unreadable} backup(s) of this vault could not be read and were skipped.`);
+      if (result.changed) reloadSoon(result.changedNotes);
+    } catch (error) {
+      // Expired web access waits for a renewal; the next connect retries.
+      if (!(error instanceof AuthError && error.code === 'ERR_AUTH_EXPIRED')) report(error);
+    }
+  }
 
   function startSync(): void {
     if (engine || !auth || !relayUrl || status() !== 'unlocked' || auth.state().kind !== 'signed-in') return;
@@ -193,7 +218,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       relayUrl: `${relayUrl.replace(/\/+$/, '')}/${vaultId}`,
       getIdToken: () => auth.idToken(),
       onRemoteChange: reloadSoon,
-      onStatusChange: (connection) => updateSync({ connection }),
+      onStatusChange: (connection) => {
+        updateSync({ connection });
+        // Every (re)connect may follow a gap in which other devices changed things.
+        if (connection === 'open') void runCatchUp();
+      },
       onIdle: () => scheduler?.notifyIdle(),
       onError: report,
       ...(options.createSocket ? { createSocket: options.createSocket } : {}),
@@ -212,11 +241,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       onStatus: (backup) => updateSync({ backup }),
     });
     scheduler.start();
-    // Backups never wait for the relay (SPEC §7): the first one runs right away, online or not.
-    scheduler.notifyIdle();
+    catchUp = createCatchUp({ drive, storage: vaultStorage, sealer, docs, vaultId, deviceId: vaultDeviceId });
+    // Neither waits for the relay (SPEC §7): catch up from Drive, then back up the merged state.
+    void runCatchUp().finally(() => scheduler?.notifyIdle());
   }
 
   async function stopSync(): Promise<void> {
+    catchUp = null;
     scheduler?.stop();
     scheduler = null;
     const stopping = engine;
@@ -241,7 +272,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     await sealer.setKey(vault.getKey());
     const nameCiphertext = await opened.getVaultName();
     const deviceOfVault = await opened.getDeviceId();
-    const nextStore = createWorkspaceStore({ storage: opened, names, onPurged: announcePurged });
+    // Changes made through the store reach other devices; remote changes bypass this wrapper.
+    const published = publishingStorage(opened, {
+      onRecords: (records) => void engine?.submitHierarchy(records).catch(report),
+      onRemoved: (id, type) => void engine?.submitTombstone(id as NoteId, type).catch(report),
+      onError: report,
+    });
+    const nextStore = createWorkspaceStore({ storage: published, names, onPurged: announcePurged });
     const loaded = await nextStore.load();
     if (!loaded.ok) return loaded.error.message;
     storage = opened;
@@ -328,10 +365,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     },
 
     async lock() {
-      await stopSync();
       retention?.stop();
       retention = null;
       await Promise.all(docs.openNoteIds().map(closeDoc));
+      // A last backup, so other devices can catch up on this session; never blocks locking long.
+      if (scheduler) await Promise.race([scheduler.runNow(), new Promise((resolve) => setTimeout(resolve, LOCK_BACKUP_WAIT_MS))]);
+      await stopSync();
       await sealer.setKey(null);
       vault.lock();
       storage = null;

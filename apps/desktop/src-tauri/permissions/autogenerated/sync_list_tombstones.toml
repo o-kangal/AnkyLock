@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-list-tombstones"
+description = "Enables the sync_list_tombstones command without any pre-configured scope."
+commands.allow = ["sync_list_tombstones"]
+
+[[permission]]
+identifier = "deny-sync-list-tombstones"
+description = "Denies the sync_list_tombstones command without any pre-configured scope."
+commands.deny = ["sync_list_tombstones"]

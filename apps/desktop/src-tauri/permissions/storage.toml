@@ -39,5 +39,8 @@ permissions = [
   "allow-vault-create",
   "allow-vault-open",
   "allow-vault-import",
+  "allow-sync-list-tombstones",
+  "allow-sync-merge-records",
+  "allow-sync-detach-folders",
   "allow-settings-get-device-id",
 ]

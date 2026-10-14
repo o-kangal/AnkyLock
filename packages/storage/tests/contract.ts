@@ -345,8 +345,8 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
             { id: folder('parent'), categoryId: cat('c'), parentId: null, nameCiphertext: name('YQ=='), isArchived: false, archivedAt: null, deletedAt: null, createdAt: at(1), updatedAt: at(1) },
           ],
           notes: [
-            { id: note('n'), folderId: folder('child'), categoryId: null, isEphemeral: false, isArchived: false, archivedAt: null, deletedAt: null, createdAt: at(3), updatedAt: at(3) },
-            { id: note('t'), folderId: null, categoryId: null, isEphemeral: false, isArchived: false, archivedAt: null, deletedAt: at(9), createdAt: at(3), updatedAt: at(9) },
+            { id: note('n'), folderId: folder('child'), categoryId: null, isEphemeral: false, isArchived: false, archivedAt: null, deletedAt: null, createdAt: at(3), updatedAt: at(3), metaUpdatedAt: at(3) },
+            { id: note('t'), folderId: null, categoryId: null, isEphemeral: false, isArchived: false, archivedAt: null, deletedAt: at(9), createdAt: at(3), updatedAt: at(9), metaUpdatedAt: at(9) },
           ],
           contents: [content('n', 3), content('t', 9)],
         };
@@ -360,14 +360,81 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
       });
     });
 
+    describe('multi-device merge', () => {
+      const at = (n: number) => n as EpochMs;
+      const remoteFolder = (id: string, parentId: string | null, updatedAt: number, nameCt = 'Zg==') => ({
+        id: folder(id),
+        categoryId: null,
+        parentId: parentId === null ? null : folder(parentId),
+        nameCiphertext: name(nameCt),
+        isArchived: false,
+        archivedAt: null,
+        deletedAt: null,
+        createdAt: at(1),
+        updatedAt: at(updatedAt),
+      });
+      const remoteNote = (id: string, folderId: string | null, meta: number) => ({
+        id: note(id),
+        folderId: folderId === null ? null : folder(folderId),
+        categoryId: null,
+        isEphemeral: false,
+        isArchived: false,
+        archivedAt: null,
+        deletedAt: null,
+        createdAt: at(1),
+        updatedAt: at(meta),
+        metaUpdatedAt: at(meta),
+      });
+
+      it('moves the metadata clock on moves and lifecycle changes, not on text edits', async () => {
+        const created = await engine.createNote(note('n'));
+        expect(created.metaUpdatedAt).toBe(created.updatedAt);
+        await engine.saveNoteContent(content('n', Date.now() + 50_000));
+        const edited = await engine.getNote(note('n'));
+        expect(edited?.metaUpdatedAt).toBe(created.metaUpdatedAt);
+        await engine.createFolder({ id: folder('f'), parentId: null, categoryId: null, nameCiphertext: name('Zg==') });
+        const moved = await engine.moveNote(note('n'), folder('f'), null);
+        expect(moved.metaUpdatedAt).toBeGreaterThan(created.metaUpdatedAt);
+      });
+
+      it('keeps the newer record and skips purged ids', async () => {
+        await engine.mergeRecords({ folders: [remoteFolder('a', null, 10, 'b2xk')], notes: [remoteNote('n', 'a', 10)] });
+        await engine.mergeRecords({
+          folders: [remoteFolder('a', null, 20, 'bmV3'), remoteFolder('a', null, 15, 'c3RhbGU=')],
+          notes: [remoteNote('n', null, 30), remoteNote('n', 'a', 25)],
+        });
+        expect((await engine.listFolders()).map((f) => f.nameCiphertext)).toEqual(['bmV3']);
+        expect((await engine.getNote(note('n')))?.folderId).toBeNull();
+
+        await engine.trashNote(note('n'));
+        await engine.purgeNote(note('n'));
+        await engine.mergeRecords({ notes: [remoteNote('n', null, 99)] });
+        expect(await engine.getNote(note('n'))).toBeNull();
+        expect((await engine.listTombstones()).map((t) => [t.entityId, t.entityType])).toEqual([['n', 'note']]);
+      });
+
+      it('clears references to rows that do not exist here, and detaches folders', async () => {
+        await engine.mergeRecords({
+          folders: [remoteFolder('child', 'missing', 5), remoteFolder('p', null, 1), remoteFolder('c', 'p', 7)],
+          notes: [remoteNote('orphan', 'missing', 5)],
+        });
+        expect((await engine.getNote(note('orphan')))?.folderId).toBeNull();
+        await engine.detachFolders([folder('c')]);
+        const byId = new Map((await engine.listFolders()).map((f) => [f.id, f]));
+        expect(byId.get(folder('child'))?.parentId).toBeNull();
+        expect([byId.get(folder('c'))?.parentId, byId.get(folder('c'))?.updatedAt]).toEqual([null, 7]);
+      });
+    });
+
     describe('sync outbox', () => {
       it('drains in insertion order and keeps payload bytes intact', async () => {
-        const first = await engine.enqueueOutbox({ entityId: note('n1'), entityType: 'note', encryptedPayload: sealed(0xde, 0xad) });
-        await engine.enqueueOutbox({ entityId: folder('f1'), entityType: 'folder', encryptedPayload: sealed(1) });
-        await engine.enqueueOutbox({ entityId: note('n2'), entityType: 'tombstone', encryptedPayload: sealed(2) });
+        const first = await engine.enqueueOutbox({ entityId: note('n1'), entityType: 'note', packetType: 'CRDT_DELTA', encryptedPayload: sealed(0xde, 0xad) });
+        await engine.enqueueOutbox({ entityId: folder('f1'), entityType: 'folder', packetType: 'HIERARCHY_MUTATION', encryptedPayload: sealed(1) });
+        await engine.enqueueOutbox({ entityId: note('n2'), entityType: 'tombstone', packetType: 'TOMBSTONE', encryptedPayload: sealed(2) });
         const head = await engine.listOutbox(2);
         expect(head.map((e) => e.entityId)).toEqual(['n1', 'f1']);
         expect(head[0]?.encryptedPayload).toEqual(bytes(0xde, 0xad));
+        expect(head.map((e) => e.packetType)).toEqual(['CRDT_DELTA', 'HIERARCHY_MUTATION']);
         await engine.deleteOutbox([first.id]);
         expect((await engine.listOutbox(10)).map((e) => e.entityId)).toEqual(['f1', 'n2']);
       });

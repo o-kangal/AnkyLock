@@ -25,7 +25,9 @@ import {
   isNull,
   isNumber,
   isString,
+  isPacketType,
   isSyncEntityType,
+  isTombstone,
   isVaultEntry,
   shape,
 } from '../guards.js';
@@ -35,6 +37,8 @@ import {
   type IVaultDirectory,
   type NewFolder,
   type NewOutboxEntry,
+  type RemoteRecords,
+  type Tombstone,
   type VaultEntry,
   type VaultImport,
 } from '../interfaces/IStorageEngine.js';
@@ -56,6 +60,7 @@ interface WireOutboxEntry {
   readonly id: number;
   readonly entityId: string;
   readonly entityType: string;
+  readonly packetType: string;
   readonly encryptedPayload: string;
   readonly createdAt: number;
 }
@@ -73,6 +78,7 @@ const isWireOutboxEntry = shape<WireOutboxEntry>({
   id: isNumber,
   entityId: isString,
   entityType: isSyncEntityType,
+  packetType: isPacketType,
   encryptedPayload: isString,
   createdAt: isNumber,
 });
@@ -267,6 +273,18 @@ export class TauriSqliteAdapter implements IStorageEngine {
 
   getVaultHeader(): Promise<string | null> {
     return this.#call('settings_get_vault_header', {}, (v): v is string | null => v === null || typeof v === 'string');
+  }
+
+  listTombstones(): Promise<Tombstone[]> {
+    return this.#call('sync_list_tombstones', {}, arrayOf(isTombstone));
+  }
+
+  async mergeRecords(records: RemoteRecords): Promise<void> {
+    await this.#call('sync_merge_records', { records }, isNull);
+  }
+
+  async detachFolders(ids: readonly FolderId[]): Promise<void> {
+    await this.#call('sync_detach_folders', { ids: [...ids] }, isNull);
   }
 
   getDeviceId(): Promise<string> {

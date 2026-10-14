@@ -26,12 +26,14 @@ import {
   type Result,
   type SyncOutboxEntry,
 } from '@ankylock/core';
-import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry } from '../guards.js';
+import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry, isTombstone } from '../guards.js';
 import {
   StorageError,
   type IStorageEngine,
   type NewFolder,
   type NewOutboxEntry,
+  type RemoteRecords,
+  type Tombstone,
   type VaultImport,
 } from '../interfaces/IStorageEngine.js';
 
@@ -39,9 +41,11 @@ import {
 export const LEGACY_DB_NAME = 'ankylock';
 /**
  * v1: entity stores. v2: app_settings. v3: `archivedAt` on folders and notes (mirrors the SQL
- * migration `V20261013224803__add_archived_at`). Upgrades run step by step from the stored version.
+ * migration `V20261013224803__add_archived_at`). v4: `packetType` on outbox entries and
+ * `metaUpdatedAt` on notes (mirrors `V20261014200733__add_sync_clocks`). Upgrades run step by
+ * step from the stored version.
  */
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const RETENTION_KEY = 'trash_retention_days';
 const VAULT_HEADER_KEY = 'vault_header';
 const VAULT_NAME_KEY = 'vault_name';
@@ -58,12 +62,6 @@ const STORES = {
 } as const;
 
 type StoreName = (typeof STORES)[keyof typeof STORES];
-
-interface Tombstone {
-  readonly entityId: string;
-  readonly entityType: 'note' | 'folder' | 'category';
-  readonly purgedAt: EpochMs;
-}
 
 function request<T>(req: IDBRequest, guard: (value: unknown) => value is T): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -101,18 +99,36 @@ const notFound = (entity: string): StorageError => new StorageError('ERR_NOT_FOU
 
 const byUpdatedDesc = (a: Note, b: Note): number => b.updatedAt - a.updatedAt;
 
-/** Archived records get their last update time as `archivedAt`, like the SQL migration. */
-function backfillArchivedAt(store: IDBObjectStore): void {
+/** Adds the fields a record is missing, in one pass per store, like an SQL backfill. */
+function backfill(store: IDBObjectStore, defaults: (record: Record<string, unknown>) => Record<string, unknown>): void {
   store.openCursor().onsuccess = (event) => {
     const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
     if (!cursor) return;
     const record: unknown = cursor.value;
-    if (typeof record === 'object' && record !== null && !('archivedAt' in record)) {
-      const { isArchived, updatedAt } = record as { isArchived?: unknown; updatedAt?: unknown };
-      cursor.update({ ...record, archivedAt: isArchived === true ? updatedAt : null });
+    if (typeof record === 'object' && record !== null) {
+      const current = record as Record<string, unknown>;
+      const missing = Object.entries(defaults(current)).filter(([field]) => !(field in current));
+      if (missing.length > 0) cursor.update({ ...current, ...Object.fromEntries(missing) });
     }
     cursor.continue();
   };
+}
+
+/** Archived records get their last update time as `archivedAt`, like the SQL migration. */
+const archivedAt = (r: Record<string, unknown>): unknown => (r['isArchived'] === true ? r['updatedAt'] : null);
+
+/** Records from snapshots made before the metadata clock existed start it at `updatedAt`. */
+const withClock = (note: Note): Note => (note.metaUpdatedAt ? note : { ...note, metaUpdatedAt: note.updatedAt });
+
+/** Same rule as the SQL trigger `notes_meta_clock_update`. */
+function withMetaClock(previous: Note, next: Note): Note {
+  const moved =
+    previous.folderId !== next.folderId ||
+    previous.categoryId !== next.categoryId ||
+    previous.isEphemeral !== next.isEphemeral ||
+    previous.isArchived !== next.isArchived ||
+    previous.deletedAt !== next.deletedAt;
+  return moved && next.metaUpdatedAt === previous.metaUpdatedAt ? { ...next, metaUpdatedAt: next.updatedAt } : next;
 }
 
 function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
@@ -131,8 +147,13 @@ function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
       if (event.oldVersion < 2) {
         db.createObjectStore(STORES.settings, { keyPath: 'key' });
       }
-      if (event.oldVersion >= 1 && event.oldVersion < 3 && req.transaction) {
-        for (const name of [STORES.folders, STORES.notes]) backfillArchivedAt(req.transaction.objectStore(name));
+      if (event.oldVersion >= 1 && event.oldVersion < DB_VERSION && req.transaction) {
+        const tx = req.transaction;
+        backfill(tx.objectStore(STORES.folders), (r) => ({ archivedAt: archivedAt(r) }));
+        backfill(tx.objectStore(STORES.notes), (r) => ({ archivedAt: archivedAt(r), metaUpdatedAt: r['updatedAt'] }));
+        backfill(tx.objectStore(STORES.outbox), (r) => ({
+          packetType: r['entityType'] === 'tombstone' ? 'TOMBSTONE' : 'CRDT_DELTA',
+        }));
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -167,6 +188,11 @@ class Tx {
   /** Fails with ERR_STORAGE if the key already exists, like a primary-key violation in SQLite. */
   async add(name: StoreName, value: object): Promise<IDBValidKey> {
     return request(this.#store(name).add(value), (v): v is IDBValidKey => v !== undefined);
+  }
+
+  /** Writes a changed note, moving its metadata clock when its place or lifecycle changed. */
+  async putNote(previous: Note, next: Note): Promise<void> {
+    await this.put(STORES.notes, withMetaClock(previous, next));
   }
 
   async delete(name: StoreName, key: IDBValidKey): Promise<void> {
@@ -272,7 +298,11 @@ export class WebIndexedDbAdapter implements IStorageEngine {
   /** Applies a lifecycle action through the core reducer and persists the result. */
   async #transition(tx: Tx, note: Note, action: NoteAction): Promise<NoteTransition> {
     const transition = unwrap(transitionNote(note, action));
-    if (transition.kind === 'saved') await tx.put(STORES.notes, transition.note);
+    if (transition.kind === 'saved') {
+      const stored = withMetaClock(note, transition.note);
+      await tx.put(STORES.notes, stored);
+      return { ...transition, note: stored };
+    }
     if (transition.kind === 'purged') {
       await tx.delete(STORES.notes, note.id);
       await tx.delete(STORES.noteContents, note.id);
@@ -339,7 +369,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
           if (folder.categoryId === id) await tx.put(STORES.folders, { ...folder, categoryId: null });
         }
         for (const note of await tx.getAll(STORES.notes, isNote)) {
-          if (note.categoryId === id) await tx.put(STORES.notes, { ...note, categoryId: null });
+          if (note.categoryId === id) await tx.putNote(note, { ...note, categoryId: null });
         }
         await tx.tombstone(id, 'category', this.#now());
       },
@@ -434,7 +464,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
         if (ids.has(f.id) && affected(f)) await tx.put(STORES.folders, { ...f, ...change });
       }
       for (const n of notes) {
-        if (n.folderId !== null && ids.has(n.folderId) && affected(n)) await tx.put(STORES.notes, { ...n, ...change });
+        if (n.folderId !== null && ids.has(n.folderId) && affected(n)) await tx.putNote(n, { ...n, ...change });
       }
       return tx.requireFolder(id);
     });
@@ -450,7 +480,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
       }
       for (const n of notes) {
         if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === null) {
-          await tx.put(STORES.notes, { ...n, deletedAt: now, updatedAt: now });
+          await tx.putNote(n, { ...n, deletedAt: now, updatedAt: now });
         }
       }
       return tx.requireFolder(id);
@@ -474,7 +504,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
       }
       for (const n of notes) {
         if (n.folderId !== null && ids.has(n.folderId) && n.deletedAt === trashedAt) {
-          await tx.put(STORES.notes, { ...n, deletedAt: null, updatedAt: now });
+          await tx.putNote(n, { ...n, deletedAt: null, updatedAt: now });
         }
       }
       return tx.requireFolder(id);
@@ -494,7 +524,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
       }
       for (const n of before.notes) {
         if (n.folderId !== null && before.ids.has(n.folderId) && n.deletedAt === null && trashed.has(n.folderId)) {
-          await tx.put(STORES.notes, { ...n, folderId: null });
+          await tx.putNote(n, { ...n, folderId: null });
         }
       }
       const { ids, notes } = await tx.subtree(id);
@@ -657,6 +687,68 @@ export class WebIndexedDbAdapter implements IStorageEngine {
     });
   }
 
+  listTombstones(): Promise<Tombstone[]> {
+    return this.#run([STORES.tombstones], 'readonly', (tx) => tx.getAll(STORES.tombstones, isTombstone));
+  }
+
+  mergeRecords(records: RemoteRecords): Promise<void> {
+    const stores = [STORES.categories, STORES.folders, STORES.notes, STORES.tombstones];
+    return this.#run(stores, 'readwrite', async (tx) => {
+      const purged = new Set((await tx.getAll(STORES.tombstones, isTombstone)).map((t) => t.entityId));
+      for (const category of records.categories ?? []) {
+        if (category.isSystem || purged.has(category.id)) continue;
+        const local = await tx.get(STORES.categories, category.id, isCategory);
+        if (!local || category.updatedAt >= local.updatedAt) await tx.put(STORES.categories, category);
+      }
+      for (const folder of records.folders ?? []) {
+        if (purged.has(folder.id)) continue;
+        const local = await tx.get(STORES.folders, folder.id, isFolder);
+        if (!local || folder.updatedAt >= local.updatedAt) await tx.put(STORES.folders, folder);
+      }
+      for (const remote of records.notes ?? []) {
+        if (purged.has(remote.id)) continue;
+        const note = withClock(remote);
+        const local = await tx.get(STORES.notes, note.id, isNote);
+        if (!local) await tx.put(STORES.notes, note);
+        else if (note.metaUpdatedAt >= local.metaUpdatedAt) {
+          await tx.put(STORES.notes, { ...note, updatedAt: Math.max(local.updatedAt, note.updatedAt) as EpochMs });
+        }
+      }
+      // References to rows that don't exist here become null, like the SQL merge.
+      const categoryIds = new Set((await tx.getAll(STORES.categories, isCategory)).map((c) => c.id));
+      const folders = await tx.getAll(STORES.folders, isFolder);
+      const folderIds = new Set(folders.map((f) => f.id));
+      const dangling = (id: string | null, existing: Set<string>): boolean => id !== null && !existing.has(id);
+      for (const f of folders) {
+        if (dangling(f.parentId, folderIds) || dangling(f.categoryId, categoryIds)) {
+          await tx.put(STORES.folders, {
+            ...f,
+            parentId: dangling(f.parentId, folderIds) ? null : f.parentId,
+            categoryId: dangling(f.categoryId, categoryIds) ? null : f.categoryId,
+          });
+        }
+      }
+      for (const n of await tx.getAll(STORES.notes, isNote)) {
+        if (dangling(n.folderId, folderIds) || dangling(n.categoryId, categoryIds)) {
+          await tx.putNote(n, {
+            ...n,
+            folderId: dangling(n.folderId, folderIds) ? null : n.folderId,
+            categoryId: dangling(n.categoryId, categoryIds) ? null : n.categoryId,
+          });
+        }
+      }
+    });
+  }
+
+  detachFolders(ids: readonly FolderId[]): Promise<void> {
+    return this.#run([STORES.folders], 'readwrite', async (tx) => {
+      for (const id of ids) {
+        const folder = await tx.get(STORES.folders, id, isFolder);
+        if (folder) await tx.put(STORES.folders, { ...folder, parentId: null });
+      }
+    });
+  }
+
   getDeviceId(): Promise<string> {
     return this.#run([STORES.settings], 'readwrite', async (tx) => {
       const record = await tx.get(STORES.settings, DEVICE_ID_KEY, isSetting);
@@ -681,7 +773,7 @@ export class WebIndexedDbAdapter implements IStorageEngine {
       }
       for (const category of data.categories) if (!category.isSystem) await tx.put(STORES.categories, category);
       for (const folder of data.folders) await tx.put(STORES.folders, folder);
-      for (const note of data.notes) await tx.put(STORES.notes, note);
+      for (const note of data.notes) await tx.put(STORES.notes, withClock(note));
       for (const content of data.contents) await tx.put(STORES.noteContents, content);
       await tx.put(STORES.settings, { key: RETENTION_KEY, value: valid });
     });

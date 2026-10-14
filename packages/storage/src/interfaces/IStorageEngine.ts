@@ -13,6 +13,7 @@ import type {
   SealedBytes,
   SyncEntityType,
   SyncOutboxEntry,
+  SyncPacketType,
   VaultId,
 } from '@ankylock/core';
 
@@ -27,6 +28,7 @@ export interface NewFolder {
 export interface NewOutboxEntry {
   readonly entityId: SyncOutboxEntry['entityId'];
   readonly entityType: SyncEntityType;
+  readonly packetType: SyncPacketType;
   readonly encryptedPayload: SealedBytes;
 }
 
@@ -80,6 +82,18 @@ export interface IStorageEngine {
   listOutbox(limit: number): Promise<SyncOutboxEntry[]>;
   deleteOutbox(ids: readonly number[]): Promise<void>;
 
+  /** Every purged entity; purged ids never come back from another device's records. */
+  listTombstones(): Promise<Tombstone[]>;
+  /**
+   * Merges another device's records in one transaction. A record wins unless the local clock is
+   * newer (`updatedAt`; `metaUpdatedAt` for notes); on equal clocks the incoming one wins, so a
+   * device's own changes within one millisecond arrive in order. Purged ids are skipped, and references to
+   * rows that don't exist here become null. Note text is untouched: it merges through Yjs.
+   */
+  mergeRecords(records: RemoteRecords): Promise<void>;
+  /** Moves folders to the root without touching their clocks (hierarchy repair, SPEC §7). */
+  detachFolders(ids: readonly FolderId[]): Promise<void>;
+
   /** BR-LIFE-03: 0 (manual purge only) or 1..=365; defaults to 28. */
   getTrashRetentionDays(): Promise<number>;
   /** Stores the value; rejects invalid ones with ERR_INVALID_SETTING. Confirmation is the caller's job. */
@@ -96,6 +110,19 @@ export interface IStorageEngine {
    * (ERR_INVALID_TRANSITION otherwise). Records are stored as given: still encrypted.
    */
   importVault(data: VaultImport): Promise<void>;
+}
+
+export interface Tombstone {
+  readonly entityId: string;
+  readonly entityType: 'note' | 'folder' | 'category';
+  readonly purgedAt: EpochMs;
+}
+
+/** Category, folder and note records from another device (hierarchy packets, snapshots). */
+export interface RemoteRecords {
+  readonly categories?: readonly Category[];
+  readonly folders?: readonly Folder[];
+  readonly notes?: readonly Note[];
 }
 
 /** A vault's records as restored from (merged) Drive snapshots. */

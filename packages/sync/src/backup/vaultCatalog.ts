@@ -28,8 +28,10 @@ const HEADER_FILE = /^vault-([0-9a-f-]{36})\.header\.json$/;
 const SNAPSHOT_FILE = /^vault-([0-9a-f-]{36})\.snapshot-[0-9a-f-]{36}\.bin$/;
 
 export const vaultHeaderFileName = (vaultId: VaultId): string => `${PREFIX}${vaultId}.header.json`;
+/** Name prefix shared by every device's snapshot of a vault. */
+export const vaultSnapshotPrefix = (vaultId: VaultId): string => `${PREFIX}${vaultId}.snapshot-`;
 export const vaultSnapshotFileName = (vaultId: VaultId, deviceId: string): string =>
-  `${PREFIX}${vaultId}.snapshot-${deviceId}.bin`;
+  `${vaultSnapshotPrefix(vaultId)}${deviceId}.bin`;
 
 /**
  * What a new device needs to open a vault: the (non-secret) key header and the encrypted name.

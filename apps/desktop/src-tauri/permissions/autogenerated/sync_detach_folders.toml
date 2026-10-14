@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-detach-folders"
+description = "Enables the sync_detach_folders command without any pre-configured scope."
+commands.allow = ["sync_detach_folders"]
+
+[[permission]]
+identifier = "deny-sync-detach-folders"
+description = "Denies the sync_detach_folders command without any pre-configured scope."
+commands.deny = ["sync_detach_folders"]

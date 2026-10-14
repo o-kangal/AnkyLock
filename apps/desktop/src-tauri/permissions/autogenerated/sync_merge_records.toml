@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-merge-records"
+description = "Enables the sync_merge_records command without any pre-configured scope."
+commands.allow = ["sync_merge_records"]
+
+[[permission]]
+identifier = "deny-sync-merge-records"
+description = "Denies the sync_merge_records command without any pre-configured scope."
+commands.deny = ["sync_merge_records"]

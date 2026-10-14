@@ -305,6 +305,21 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
       });
     },
 
+    /**
+     * Decrypts the titles of notes changed on another device again. A reload keeps titles it
+     * already has, and a row only asks for its title when it first renders.
+     */
+    refreshTitles(noteIds: readonly NoteId[]): Promise<Result<void>> {
+      return attempt(async () => {
+        for (const noteId of noteIds) {
+          if (!state.notes[noteId]) continue;
+          const content = await storage.getNoteContent(noteId);
+          const title = content ? await names.decrypt(content.titleCiphertext) : null;
+          if (state.notes[noteId]) setState('notes', noteId, 'title', title === '' ? null : title);
+        }
+      });
+    },
+
     /** Called by the editor when line 1 changes (BR-NOTE-03). Persisting it is the content pipeline's job. */
     setTitle(noteId: NoteId, title: string | null): void {
       if (state.notes[noteId]) setState('notes', noteId, 'title', title);

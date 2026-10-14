@@ -1,5 +1,5 @@
 import type { Category, Folder, Note, NoteContent, SyncOutboxEntry } from '@ankylock/core';
-import type { VaultEntry } from './interfaces/IStorageEngine.js';
+import type { Tombstone, VaultEntry } from './interfaces/IStorageEngine.js';
 
 type Check = (value: unknown) => boolean;
 
@@ -33,6 +33,7 @@ export const isNull = (value: unknown): value is null => value === null;
 export const isVaultEntry = shape<VaultEntry>({ id: isString, createdAt: isNumber, lastOpenedAt: isNumber });
 
 export const isSyncEntityType: Check = (v) => v === 'note' || v === 'folder' || v === 'category' || v === 'tombstone';
+export const isPacketType: Check = (v) => v === 'CRDT_DELTA' || v === 'HIERARCHY_MUTATION' || v === 'TOMBSTONE';
 
 export const isCategory = shape<Category>({
   id: isString,
@@ -65,6 +66,7 @@ export const isNote = shape<Note>({
   deletedAt: nullable(isNumber),
   createdAt: isNumber,
   updatedAt: isNumber,
+  metaUpdatedAt: isNumber,
 });
 
 export const isNoteContent = shape<NoteContent>({
@@ -80,6 +82,13 @@ export const isOutboxEntry = shape<SyncOutboxEntry>({
   id: isNumber,
   entityId: isString,
   entityType: isSyncEntityType,
+  packetType: isPacketType,
   encryptedPayload: isBytes,
   createdAt: isNumber,
+});
+
+export const isTombstone = shape<Tombstone>({
+  entityId: isString,
+  entityType: (v) => v === 'note' || v === 'folder' || v === 'category',
+  purgedAt: isNumber,
 });

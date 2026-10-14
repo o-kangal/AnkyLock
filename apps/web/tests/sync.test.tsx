@@ -105,8 +105,8 @@ function device(relay: FakeRelay, withAuth = true, drive?: FakeDrive): Device {
 }
 
 /** A device with a new vault of its own. */
-async function withNewVault(relay: FakeRelay, name = 'Personal', withAuth = true): Promise<Device> {
-  const d = device(relay, withAuth);
+async function withNewVault(relay: FakeRelay, name = 'Personal', withAuth = true, drive?: FakeDrive): Promise<Device> {
+  const d = device(relay, withAuth, drive);
   await d.runtime.init();
   expect(await d.runtime.createVault(name, PASSPHRASE)).toBeNull();
   return d;
@@ -116,10 +116,10 @@ async function withNewVault(relay: FakeRelay, name = 'Personal', withAuth = true
  * Two devices on the same vault. The second gets the first one's (non-secret) header, as it will
  * from Google Drive (Task 11h), and derives the same key from the same passphrase.
  */
-async function twoDevices(relay: FakeRelay): Promise<readonly [Device, Device]> {
-  const a = await withNewVault(relay);
+async function twoDevices(relay: FakeRelay, drive?: FakeDrive): Promise<readonly [Device, Device]> {
+  const a = await withNewVault(relay, 'Personal', true, drive);
   const id = (await a.vaults.list())[0]?.id as VaultId;
-  const b = device(relay);
+  const b = device(relay, true, drive);
   const header = (await a.vaults.storage.getVaultHeader()) as string;
   await b.vaults.create(id, header, (await a.vaults.storage.getVaultName())!);
   await b.runtime.init();
@@ -220,6 +220,71 @@ describe('runtime sync', () => {
     await until(() => b.runtime.store.state.notes[noteId] !== undefined, 'note on B');
     expect(await other.vaults.storage.getNote(noteId)).toBeNull();
     for (const d of [a, b, other]) await d.runtime.lock();
+  });
+
+  it('syncs folders and note placement made in the UI', async () => {
+    const relay = new FakeRelay();
+    const [a, b] = await twoDevices(relay);
+    await a.runtime.signIn();
+    await b.runtime.signIn();
+    await until(() => relay.sockets.size === 2 && a.runtime.syncStatus().connection === 'open', 'online');
+    expect((await a.runtime.store.createFolder('Projects', null, null)).ok).toBe(true);
+    await a.runtime.store.createTab();
+    const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
+    const folderId = a.runtime.store.state.folders[0]?.id ?? null;
+    expect((await a.runtime.store.moveNote(noteId, folderId, null)).ok).toBe(true);
+
+    await until(() => b.runtime.store.state.notes[noteId]?.folderId === folderId, 'filed on B');
+    expect(b.runtime.store.state.folders.map((f) => f.name)).toEqual(['Projects']);
+    await a.runtime.lock();
+    await b.runtime.lock();
+  });
+
+  it('catches up from Drive on what changed while this device was closed', async () => {
+    const relay = new FakeRelay();
+    const drive = new FakeDrive();
+    const [a, b] = await twoDevices(relay, drive);
+    const id = b.runtime.vaults()[0]?.id as VaultId;
+    await b.runtime.lock();
+
+    // A works alone, then locks, which backs up to Drive.
+    await a.runtime.signIn();
+    await a.runtime.store.createTab();
+    const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
+    (await a.runtime.openDoc(noteId)).getText(TEXT_FIELD).insert(0, 'written while B was closed');
+    expect((await a.runtime.store.createFolder('Inbox', null, null)).ok).toBe(true);
+    await a.runtime.lock();
+    expect(relay.sockets.size).toBe(0);
+
+    // B comes back with no other device online: everything arrives through Drive.
+    expect(await b.runtime.unlock(id, PASSPHRASE)).toBeNull();
+    await b.runtime.signIn();
+    await until(() => b.runtime.store.state.notes[noteId] !== undefined, 'note caught up on B');
+    expect(b.runtime.store.state.folders.map((f) => f.name)).toEqual(['Inbox']);
+    expect((await b.runtime.openDoc(noteId)).getText(TEXT_FIELD).toString()).toBe('written while B was closed');
+    await b.runtime.lock();
+  });
+
+  it('shows titles retitled on another device in the sidebar', async () => {
+    const relay = new FakeRelay();
+    const [a, b] = await twoDevices(relay);
+    await a.runtime.signIn();
+    await b.runtime.signIn();
+    await until(() => relay.sockets.size === 2 && a.runtime.syncStatus().connection === 'open', 'online');
+    await a.runtime.store.createTab();
+    const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
+    const doc = (await a.runtime.openDoc(noteId)).getText(TEXT_FIELD);
+    doc.insert(0, 'Shopping list');
+    await until(() => b.runtime.store.state.notes[noteId] !== undefined, 'note on B');
+    await b.runtime.store.loadTitle(noteId);
+    await until(() => b.runtime.store.state.notes[noteId]?.title === 'Shopping list', 'first title on B');
+
+    // The row already has a title; a remote retitle must still replace it.
+    doc.delete(0, 'Shopping list'.length);
+    doc.insert(0, 'Groceries');
+    await until(() => b.runtime.store.state.notes[noteId]?.title === 'Groceries', 'retitled on B');
+    await a.runtime.lock();
+    await b.runtime.lock();
   });
 
   it('announces purges to other devices', async () => {
