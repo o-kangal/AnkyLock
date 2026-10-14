@@ -483,6 +483,31 @@ pnpm run test && pnpm run typecheck
 
 ---
 
+### Task 13: Production Release (Web, Relay & Desktop Distribution)
+- **Type:** DevOps/Release
+- **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
+- **Target Files (Create/Modify):**
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/release.yml`
+  - `apps/relay/Dockerfile`
+  - `apps/web/public/privacy.html`
+  - `apps/web/public/terms.html`
+  - `apps/desktop/src-tauri/tauri.conf.json`
+  - `README.md`
+- **Step-by-Step Instructions:**
+  1. Decide the hosting with the user before writing deployment config: the web PWA on `ankylock.com` (with `www.ankylock.com` redirecting to it, DNS on Cloudflare) and the relay on a subdomain such as `relay.ankylock.com` over `wss://` with TLS.
+  2. Containerize the stateless relay (small image, non-root, `/healthz` probe) and configure its production client ids, bind address and frame limit through the environment only.
+  3. Build the web app with the production relay URL and a strict CSP; serve it with long-lived caching for hashed assets and no caching for `sw.js` and `index.html`.
+  4. Publish the Google OAuth consent screen for production: privacy policy and terms pages, the authorized domain `ankylock.com`, and verification of the requested scopes (`openid email drive.appdata`).
+  5. Ship signed desktop builds from CI for Linux (AppImage, deb, rpm), Windows (signed MSI/NSIS) and macOS (signed and notarized DMG), and enable the Tauri updater with a signing key kept only in CI secrets.
+  6. Add CI for every push (typecheck, lint, tests, clippy, cargo test, crypto scan) and a tagged release workflow; document the release steps and the required secrets in `README.md`. Settle the license before the first public release.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && cargo test --workspace
+``` 
+
+---
+
 ## Dependency Graph & Critical Path
 
 ``` text
@@ -521,4 +546,5 @@ Task 1 (Workspace & Config)
                    │       └──► Task 11f (UI Polish)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
+                           └──► Task 13 (Production Release)
 ``` 
