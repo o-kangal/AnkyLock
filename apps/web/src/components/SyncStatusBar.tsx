@@ -49,8 +49,12 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
       style={{
         display: 'flex',
         'justify-content': 'space-between',
+        'align-items': 'center',
         gap: '12px',
-        padding: '3px 10px',
+        // Tall enough that its links sit clear of the frameless window's bottom resize edge.
+        'min-height': '30px',
+        'box-sizing': 'border-box',
+        padding: '0 12px',
         'border-top': `1px solid ${tokens.border}`,
         font: tokens.font,
         'font-size': '12px',

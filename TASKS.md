@@ -385,7 +385,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
   - `apps/desktop/src/TitleBar.tsx`
   - `apps/web/tests/sync.test.tsx`
 - **Step-by-Step Instructions:**
-  1. Make the status bar taller (about 28 px with comfortable padding) so its buttons sit clear of the frameless window's bottom resize edge; clicking "Sign in with Google" must never start a window resize.
+  1. ✅ Done early (2026-10-14). Make the status bar taller (about 28 px with comfortable padding) so its buttons sit clear of the frameless window's bottom resize edge; clicking "Sign in with Google" must never start a window resize.
   2. Report backups in progress: add a `running` state to `BackupStatus` (emitted when a snapshot export/upload starts) and show a small spinner with "Backing up…" in the status bar until it finishes.
   3. Show the app logo (from `src-tauri/icons/app-icon.svg`, about 16 px) before the "AnkyLock" title in the desktop title bar, keeping it part of the drag region.
 - **Verification:**
