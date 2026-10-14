@@ -1,19 +1,28 @@
-import { cacheStrategy, precacheUrls } from './sw/cachePolicy.js';
+import { SKIP_WAITING, cacheStrategy, precacheUrls } from './sw/cachePolicy.js';
 
 declare const self: ServiceWorkerGlobalScope;
 
-// Both strings are replaced at build time; a new build gets a new cache and drops the old one.
-const CACHE_VERSION = `ankylock-shell-${'__ANKYLOCK_BUILD_ID__'}`;
+/** Compiled in by the `serviceWorker` Vite plugin. */
+declare const __ANKYLOCK_PRECACHE__: string[];
+declare const __ANKYLOCK_BUILD_ID__: string;
+
+// A new build gets a new cache name, and activation drops the old one.
+const CACHE_VERSION = `ankylock-shell-${__ANKYLOCK_BUILD_ID__}`;
 /** Everything needed to boot offline, fetched at install so the app works after one visit. */
-const SHELL = precacheUrls('__ANKYLOCK_PRECACHE__');
+const SHELL = precacheUrls(__ANKYLOCK_PRECACHE__);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
-      .then((cache) => cache.addAll(SHELL))
-      .then(() => self.skipWaiting()),
+      .then((cache) => cache.addAll(SHELL)),
   );
+});
+
+// A new version waits until the user chooses to reload (UpdateBanner), so an open tab never
+// runs old code against a new cache.
+self.addEventListener('message', (event) => {
+  if (event.data === SKIP_WAITING) void self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

@@ -1,0 +1,115 @@
+import { createSignal } from 'solid-js';
+import { render } from 'solid-js/web';
+import { describe, expect, it } from 'vitest';
+import { UpdateBanner } from '../src/pwa/UpdateBanner.jsx';
+import { watchForUpdates, type ContainerLike, type RegistrationLike, type WorkerLike } from '../src/pwa/updates.js';
+import { SKIP_WAITING } from '../src/sw/cachePolicy.js';
+
+class FakeTarget {
+  readonly #listeners = new Map<string, (() => void)[]>();
+  addEventListener(type: string, listener: () => void): void {
+    this.#listeners.set(type, [...(this.#listeners.get(type) ?? []), listener]);
+  }
+  emit(type: string): void {
+    for (const listener of this.#listeners.get(type) ?? []) listener();
+  }
+}
+
+class FakeWorker extends FakeTarget implements WorkerLike {
+  state = 'installing';
+  readonly messages: unknown[] = [];
+  postMessage(message: unknown): void {
+    this.messages.push(message);
+  }
+}
+
+class FakeRegistration extends FakeTarget implements RegistrationLike {
+  waiting: WorkerLike | null = null;
+  installing: WorkerLike | null = null;
+}
+
+class FakeContainer extends FakeTarget implements ContainerLike {
+  constructor(readonly controller: unknown) {
+    super();
+  }
+}
+
+describe('watchForUpdates', () => {
+  it('offers an update once a new worker is installed behind the current one', () => {
+    const container = new FakeContainer({});
+    const registration = new FakeRegistration();
+    const offers: (() => void)[] = [];
+    watchForUpdates(container, registration, (activate) => offers.push(activate), () => undefined);
+
+    const next = new FakeWorker();
+    registration.installing = next;
+    registration.emit('updatefound');
+    expect(offers).toHaveLength(0);
+    next.state = 'installed';
+    next.emit('statechange');
+    expect(offers).toHaveLength(1);
+
+    offers[0]?.();
+    expect(next.messages).toEqual([SKIP_WAITING]);
+  });
+
+  it('offers an update that was already waiting at startup', () => {
+    const registration = new FakeRegistration();
+    registration.waiting = new FakeWorker();
+    const offers: unknown[] = [];
+    watchForUpdates(new FakeContainer({}), registration, (a) => offers.push(a), () => undefined);
+    expect(offers).toHaveLength(1);
+  });
+
+  it('treats the first install as not an update', () => {
+    const registration = new FakeRegistration();
+    const offers: unknown[] = [];
+    watchForUpdates(new FakeContainer(null), registration, (a) => offers.push(a), () => undefined);
+    const first = new FakeWorker();
+    registration.installing = first;
+    registration.emit('updatefound');
+    first.state = 'installed';
+    first.emit('statechange');
+    expect(offers).toHaveLength(0);
+  });
+
+  it('reloads once when the new worker takes control', () => {
+    const container = new FakeContainer({});
+    let reloads = 0;
+    watchForUpdates(container, new FakeRegistration(), () => undefined, () => {
+      reloads++;
+    });
+    container.emit('controllerchange');
+    container.emit('controllerchange');
+    expect(reloads).toBe(1);
+  });
+});
+
+describe('UpdateBanner', () => {
+  it('stays hidden until an update is ready, and saves notes before activating', async () => {
+    const order: string[] = [];
+    const [activate, setActivate] = createSignal<(() => void) | null>(null);
+    const root = document.createElement('div');
+    document.body.append(root);
+    const dispose = render(
+      () => (
+        <UpdateBanner
+          activate={activate()}
+          beforeReload={async () => {
+            order.push('flush');
+          }}
+        />
+      ),
+      root,
+    );
+    expect(root.textContent).toBe('');
+
+    setActivate(() => () => order.push('activate'));
+    expect(root.textContent).toContain('A new version of AnkyLock is available.');
+    (root.querySelector('button') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(order).toEqual(['flush', 'activate']);
+    dispose();
+    root.remove();
+  });
+});

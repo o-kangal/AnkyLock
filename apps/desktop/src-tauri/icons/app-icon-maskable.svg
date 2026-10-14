@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Maskable variant: full-bleed background, artwork kept inside the 80% safe zone. -->
+  <rect width="1024" height="1024" fill="#285aa0"/>
+  <g transform="translate(512 560) scale(0.78) translate(-512 -600)">
+  <path d="M372 470 V400 A140 140 0 0 1 652 400 V470" fill="none" stroke="#ffffff" stroke-width="72" stroke-linecap="round"/>
+  <rect x="290" y="450" width="444" height="390" rx="56" fill="#ffffff"/>
+  <path d="M372 570 H652 M372 650 H652 M372 730 H552" stroke="#285aa0" stroke-width="40" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,14 +1,12 @@
+/** Message from the page telling a waiting ServiceWorker to take over. */
+export const SKIP_WAITING = 'ankylock:skip-waiting';
+
 /** Public files outside the bundle that the offline shell needs. */
 export const PUBLIC_SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
-/**
- * Parses the comma-separated asset list the `precacheManifest` Vite plugin injects into sw.js.
- * An unreplaced placeholder (it starts with `__`; asset paths never do) means no build assets.
- * The placeholder text must appear only in serviceWorker.ts, or the plugin would replace it here too.
- */
-export function precacheUrls(injected: string): string[] {
-  const assets = injected === '' || injected.startsWith('__') ? [] : injected.split(',').map((path) => `/${path}`);
-  return [...PUBLIC_SHELL, ...assets];
+/** Public shell plus every hashed build asset compiled into sw.js (none in tests). */
+export function precacheUrls(buildAssets: readonly string[]): string[] {
+  return [...PUBLIC_SHELL, ...buildAssets.map((path) => `/${path}`)];
 }
 
 export type CacheStrategy =

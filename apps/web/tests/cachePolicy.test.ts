@@ -28,7 +28,7 @@ describe('ServiceWorker cache policy', () => {
   });
 
   it('precaches the public shell plus every injected build asset', () => {
-    expect(precacheUrls('assets/main-1.js,assets/entry-2.js')).toEqual([
+    expect(precacheUrls(['assets/main-1.js', 'assets/entry-2.js'])).toEqual([
       '/',
       '/manifest.webmanifest',
       '/icons/icon-192.png',
@@ -36,6 +36,6 @@ describe('ServiceWorker cache policy', () => {
       '/assets/main-1.js',
       '/assets/entry-2.js',
     ]);
-    expect(precacheUrls('__ANKYLOCK_PRECACHE__')).toHaveLength(4);
+    expect(precacheUrls([])).toHaveLength(4);
   });
 });

@@ -1,8 +1,10 @@
-import { onCleanup, type JSX } from 'solid-js';
+import { createSignal, onCleanup, type JSX } from 'solid-js';
 import { createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { WebIndexedDbAdapter } from '@ankylock/storage';
 import { AnkyLockApp } from './components/AnkyLockApp.jsx';
+import { UpdateBanner } from './pwa/UpdateBanner.jsx';
+import { watchForUpdates } from './pwa/updates.js';
 import { createRuntime } from './runtime/createRuntime.js';
 
 /**
@@ -21,5 +23,24 @@ export function App(): JSX.Element {
     sealer.dispose();
     worker.terminate();
   });
-  return <AnkyLockApp runtime={runtime} />;
+
+  // Offline app shell (installable PWA). Skipped in dev so stale caches never hide code changes.
+  const [activateUpdate, setActivateUpdate] = createSignal<(() => void) | null>(null);
+  if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) =>
+        watchForUpdates(navigator.serviceWorker, registration, (activate) => setActivateUpdate(() => activate), () => {
+          window.location.reload();
+        }),
+      )
+      .catch((error: unknown) => console.error('ServiceWorker registration failed', error));
+  }
+
+  return (
+    <>
+      <AnkyLockApp runtime={runtime} />
+      <UpdateBanner activate={activateUpdate()} beforeReload={() => runtime.flush()} />
+    </>
+  );
 }

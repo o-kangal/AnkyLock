@@ -47,3 +47,19 @@ Run from the repository root:
 | Lint | `pnpm -r run lint && cargo clippy --workspace --all-targets` |
 | Tests | `pnpm -r run test && cargo test --workspace` |
 | Build | `pnpm -r run build && pnpm --filter @ankylock/desktop tauri build` |
+
+## App icons
+
+The sources are `apps/desktop/src-tauri/icons/app-icon.svg` and `app-icon-maskable.svg` (full-bleed, for the PWA). To regenerate every size after editing them:
+
+```bash
+cd apps/desktop
+pnpm exec tauri icon src-tauri/icons/app-icon.svg            # desktop: .ico, .icns, PNGs
+pnpm exec tauri icon src-tauri/icons/app-icon.svg -o /tmp/web -p 192 -p 512
+pnpm exec tauri icon src-tauri/icons/app-icon-maskable.svg -o /tmp/maskable -p 512
+# then copy /tmp/web/{192x192,512x512}.png to apps/web/public/icons/icon-{192,512}.png
+# and /tmp/maskable/512x512.png to apps/web/public/icons/icon-maskable-512.png
+# (delete the generated icons/android and icons/ios: mobile is out of MVP scope)
+```
+
+On Linux (GNOME/Wayland) the dock takes an app's icon from a `.desktop` entry matching the window's `StartupWMClass`, so `tauri dev` shows a generic icon until one exists. Installed packages ship that entry (`StartupWMClass=ankylock-desktop`). For development, create `~/.local/share/applications/ankylock-desktop.desktop` (named after the window's app id) with `Icon=<absolute path to icons/128x128@2x.png>`, `StartupWMClass=ankylock-desktop` and `NoDisplay=true`.

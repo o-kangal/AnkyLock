@@ -45,6 +45,8 @@ export interface Runtime {
   openDoc(noteId: NoteId): Promise<Y.Doc>;
   /** Closes docs of notes without an open tab, saving pending edits first. */
   retainDocs(noteIds: readonly NoteId[]): Promise<void>;
+  /** Saves pending edits of every open note, e.g. before reloading into a new app version. */
+  flush(): Promise<void>;
   /** True for a scratchpad whose text is empty and was never edited this session (SPEC §3 CLOSE_TAB). */
   isEmptyAndUnmodified(noteId: NoteId): boolean;
 }
@@ -150,6 +152,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       })().finally(() => opening.delete(noteId));
       opening.set(noteId, loading);
       return loading;
+    },
+
+    async flush() {
+      await Promise.all([...persisters.values()].map((persister) => persister.flush()));
     },
 
     async retainDocs(noteIds) {
