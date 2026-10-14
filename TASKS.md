@@ -395,6 +395,74 @@ pnpm -r run typecheck && pnpm -r run test && pnpm --filter @ankylock/desktop run
 
 ---
 
+### Task 11g: Vault Identity & Multiple Local Vaults
+- **Type:** Full-Stack
+- **Read-Only Context Files:** `SPEC.md` (§2.4), `packages/crypto/src/vaultKey.ts`, `packages/storage/src/interfaces/IStorageEngine.ts`, `apps/relay/src/hub.rs`
+- **Target Files (Create/Modify):**
+  - `packages/crypto/src/vaultKey.ts`
+  - `packages/storage/src/interfaces/IStorageEngine.ts`
+  - `packages/storage/src/adapters/webIndexedDbAdapter.ts`
+  - `packages/storage/src/adapters/tauriSqliteAdapter.ts`
+  - `apps/desktop/src-tauri/src/commands/settings.rs`
+  - `apps/desktop/src-tauri/src/main.rs`
+  - `apps/web/src/components/UnlockScreen.tsx`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `packages/sync/src/client/blindWebSocketClient.ts`
+  - `apps/relay/src/hub.rs`
+  - `apps/relay/src/ws.rs`
+- **Step-by-Step Instructions:**
+  1. Give every vault a random `vaultId` (UUID) stored in its header, and an encrypted vault name chosen at creation. Vaults are fully isolated: own salt, own key, own data.
+  2. Keep one database per vault on each device (desktop `ankylock-<vaultId>.db`, web one IndexedDB database per vault) plus a small plaintext registry of the vaults on this device (id and creation time only). Adopt an existing single-vault database as the first entry of the registry.
+  3. Replace the first-run screen with a vault picker: the vaults on this device, "Create new vault" and "Use my existing vault" (the latter is implemented in Task 11h). Allow locking the current vault and switching to another one.
+  4. Scope the relay fan-out to `(account, vaultId)` (connect to `/ws/<vaultId>`), so devices on different vaults of the same Google account never receive each other's packets.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && cargo clippy --workspace --all-targets && cargo test --workspace
+``` 
+
+---
+
+### Task 11h: Open an Existing Vault from Google Drive
+- **Type:** Full-Stack
+- **Read-Only Context Files:** `SPEC.md` (§2.4, §7), `packages/sync/src/backup/snapshot.ts`, `packages/sync/src/backup/snapshotScheduler.ts`
+- **Target Files (Create/Modify):**
+  - `packages/sync/src/backup/googleDriveClient.ts`
+  - `packages/sync/src/backup/snapshot.ts`
+  - `packages/sync/src/backup/snapshotScheduler.ts`
+  - `packages/sync/src/backup/vaultCatalog.ts`
+  - `apps/web/src/components/UnlockScreen.tsx`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `packages/sync/tests/vaultCatalog.test.ts`
+- **Step-by-Step Instructions:**
+  1. Store each vault in Drive `appDataFolder` as `vault-<vaultId>.header.json` (written once, never overwritten) and one snapshot per device, `vault-<vaultId>.snapshot-<deviceId>.bin`, so devices never overwrite each other's backups. Never upload a header when Drive already holds a different one for that vault id.
+  2. "Use my existing vault": sign in with Google, list the vaults found in Drive (creation time and last backup only; names stay encrypted), let the user pick one and enter its passphrase (verified against the header's key check), then merge all of that vault's snapshots into a new local database via Yjs and start sync.
+  3. Show the decrypted vault name once unlocked. A wrong passphrase must leave nothing on disk.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test
+``` 
+
+---
+
+### Task 11i: Vault Management (Rename & Delete)
+- **Type:** Full-Stack
+- **Read-Only Context Files:** `packages/sync/src/backup/vaultCatalog.ts`, `apps/web/src/components/UnlockScreen.tsx`
+- **Target Files (Create/Modify):**
+  - `packages/sync/src/backup/vaultCatalog.ts`
+  - `apps/web/src/components/VaultSettings.tsx`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/web/tests/vaultManagement.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Rename the open vault: re-encrypt the name and update the header copy in Drive (the only header field that may change).
+  2. Remove a vault from this device only (delete its local database; Drive copy kept), or delete it everywhere (also remove its Drive header and snapshots) behind an explicit confirmation that names the consequences.
+  3. Devices that open a vault deleted elsewhere stop syncing it and offer to keep it as a local-only vault.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test
+``` 
+
+---
+
 ### Task 12: End-to-End State Machine & Cross-Device Sync Verification
 - **Type:** Testing
 - **Read-Only Context Files:** `AGENTS.md`
@@ -444,7 +512,10 @@ Task 1 (Workspace & Config)
                    ├──► Task 11b (Web SPA Entry & PWA)
                    │
                    ├──► Task 11c (Google Sign-In & Sync/Backup Activation)
-                   │       ├──► Task 11d (Web Google Sign-In)
+                   │       ├──► Task 11g (Vault Identity & Multiple Local Vaults)
+                   │       │       └──► Task 11h (Open an Existing Vault from Drive)
+                   │       │               ├──► Task 11d (Web Google Sign-In)
+                   │       │               └──► Task 11i (Vault Management)
                    │       ├──► Task 11e (Offline Catch-Up & Hierarchy Sync)
                    │       └──► Task 11f (UI Polish)
                    │

@@ -9,6 +9,7 @@
 - **Local-First Persistence:** Embedded SQLite (`rusqlite`) on Desktop and OPFS / IndexedDB on Web with full offline read/write support.
 - **Zero-Knowledge E2EE:** Client-side AES-256-GCM encryption via native Web Crypto API (`SubtleCrypto`). Server and cloud storage layers process opaque ciphertext only.
 - **Real-Time Ephemeral Sync:** Yjs CRDT binary delta streaming over WebSocket via a stateless Rust Axum Blind Relay, synchronizing both organized notes and unsaved scratchpad tabs across authenticated devices.
+- **Multiple Isolated Vaults:** A user may own several vaults, each with its own passphrase, key and data. New vaults are created locally; existing ones are opened on another device from the user's Google Drive.
 - **Cold Vault Backup:** Periodic encrypted full-database snapshots and passphrase-protected Master Key recovery blobs uploaded to Google Drive `appDataFolder`.
 - **Taxonomy & Organization:**
   - Immutable System Categories: `All Notes` (`system_all`), `Archive` (`system_archive`), `Trash` (`system_trash`).
@@ -52,6 +53,7 @@
 - **BR-SEC-01 (Blind Wire & Storage):** Plaintext note titles, note bodies, folder names, and category names must never be transmitted over WebSocket/HTTPS or written unencrypted to `sync_outbox`.
 - **BR-SEC-02 (Fresh IV Requirement):** Every AES-256-GCM encryption call must generate a fresh, cryptographically random 12-byte Initialization Vector (`iv`) via `crypto.getRandomValues`.
 - **BR-SEC-03 (Key Separation):** Google OAuth tokens are used strictly for identity verification and Google Drive API authorization. The Master Encryption Key (MEK) is derived independently via PBKDF2 / Argon2id or shared via device-to-device QR handshake.
+- **BR-SEC-04 (Vault Isolation):** Every vault has a random `vaultId` and its own salt and key. Vault names are encrypted like all other titles; Drive and the relay see only vault ids and timestamps. A device never overwrites another vault header in Drive, and relay fan-out is scoped to `(account, vaultId)`.
 
 ---
 
