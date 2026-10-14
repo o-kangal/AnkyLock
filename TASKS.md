@@ -471,6 +471,29 @@ pnpm -r run typecheck && pnpm -r run test
 
 ---
 
+### Task 11j: Editor Word Wrap
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `packages/editor/src/components/CodeMirrorView.tsx`, `apps/web/src/keyboard/shortcuts.ts`, `apps/web/src/components/SyncStatusBar.tsx`
+- **Target Files (Create/Modify):**
+  - `packages/editor/src/components/CodeMirrorView.tsx`
+  - `packages/editor/src/extensions/wordWrap.ts`
+  - `apps/web/src/preferences/devicePreferences.ts`
+  - `apps/web/src/keyboard/shortcuts.ts`
+  - `apps/web/src/components/Workspace.tsx`
+  - `apps/web/src/components/SyncStatusBar.tsx`
+  - `apps/web/tests/wordWrap.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Add a word-wrap preference stored per device for all vaults (a UI preference with no content, so neither synced nor encrypted). Until the user chooses, wrapping is off, except on narrow screens (under 600 px wide, e.g. the mobile PWA) where it starts on.
+  2. Toggle CodeMirror line wrapping through a compartment, without remounting the editor. Wrapped continuation lines align with the line's own indentation; line numbers appear only at the start of logical lines.
+  3. Toggle with Alt+Z on desktop and web (browsers leave it to the page), and with a status bar button labeled "Wrap (Alt+Z)" that shows its state (`aria-pressed`).
+  4. Test the default for wide and narrow screens, persistence across reloads, the shortcut and the button.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 12: End-to-End State Machine & Cross-Device Sync Verification
 - **Type:** Testing
 - **Read-Only Context Files:** `AGENTS.md`
@@ -551,6 +574,7 @@ Task 1 (Workspace & Config)
                    │       │               └──► Task 11i (Vault Management)
                    │       ├──► Task 11e (Offline Catch-Up & Hierarchy Sync)
                    │       └──► Task 11f (UI Polish)
+                   │               └──► Task 11j (Editor Word Wrap)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
                            └──► Task 13 (Production Release)
