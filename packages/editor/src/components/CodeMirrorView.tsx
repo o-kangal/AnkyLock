@@ -17,6 +17,8 @@ export interface CodeMirrorViewProps {
   readonly colorScheme: ColorScheme;
   /** BR-NOTE-03 title from line 1, or null when line 1 is empty. */
   readonly onTitleChange?: (title: string | null) => void;
+  /** Focus the editor when it mounts, so a new or opened note accepts typing immediately. */
+  readonly autoFocus?: boolean;
 }
 
 const readOnlyExtension = (readOnly: boolean): Extension => [
@@ -69,6 +71,8 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
         }),
     );
     onCleanup(() => view.destroy());
+    // Deferred so the view is attached and laid out before it takes focus.
+    if (untrack(() => props.autoFocus)) queueMicrotask(() => view.focus());
 
     createEffect(() => view.dispatch({ effects: theme.reconfigure(editorTheme(props.colorScheme)) }));
     createEffect(() => view.dispatch({ effects: readOnly.reconfigure(readOnlyExtension(props.readOnly ?? false)) }));

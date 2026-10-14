@@ -88,6 +88,28 @@ async function createVault(storage: IStorageEngine): Promise<Runtime> {
   return runtime;
 }
 
+describe('keyboard-first focus', () => {
+  it('focuses the passphrase field on launch and after a wrong passphrase', async () => {
+    const storage = new WebIndexedDbAdapter(new IDBFactory());
+    await createVault(storage);
+    dispose?.();
+    root.remove();
+
+    mount(storage);
+    await waitFor(() => document.activeElement?.getAttribute('aria-label') === 'Passphrase', 'focused on launch');
+    type('[aria-label="Passphrase"]', 'wrong passphrase');
+    submit();
+    await waitFor(() => text().includes('does not unlock'), 'wrong passphrase error');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Passphrase');
+  });
+
+  it('focuses the editor of a new note so typing starts right away', async () => {
+    await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    pressCtrl('n');
+    await waitFor(() => document.querySelector('.cm-editor') !== null && editor().hasFocus, 'editor focused');
+  });
+});
+
 describe('vault screens', () => {
   it('validates the new passphrase before creating the vault', async () => {
     const storage = new WebIndexedDbAdapter(new IDBFactory());

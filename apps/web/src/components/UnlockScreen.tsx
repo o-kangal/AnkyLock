@@ -1,4 +1,4 @@
-import { createSignal, Show, type JSX } from 'solid-js';
+import { createSignal, onMount, Show, type JSX } from 'solid-js';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { tokens } from './sidebar/styles.js';
 
@@ -19,6 +19,13 @@ const fieldStyle: JSX.CSSProperties = {
  * The passphrase never leaves this device and is never stored.
  */
 export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element {
+  let passphraseField!: HTMLInputElement;
+  // The app opens straight into this field so the user can type the passphrase immediately.
+  const focusPassphrase = (): void => {
+    passphraseField.focus();
+    passphraseField.select();
+  };
+  onMount(() => queueMicrotask(focusPassphrase));
   const creating = (): boolean => props.runtime.status() === 'uninitialized';
   const [passphrase, setPassphrase] = createSignal('');
   const [confirmation, setConfirmation] = createSignal('');
@@ -44,6 +51,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
     if (failure === null) {
       setPassphrase('');
       setConfirmation('');
+    } else {
+      focusPassphrase();
     }
   };
 
@@ -57,6 +66,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             : 'Enter your passphrase to decrypt your notes.'}
         </p>
         <input
+          ref={passphraseField}
           type="password"
           aria-label="Passphrase"
           placeholder="Passphrase"

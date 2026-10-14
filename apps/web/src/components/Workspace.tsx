@@ -89,6 +89,7 @@ export function Workspace(props: { readonly runtime: Runtime }): JSX.Element {
               <CodeMirrorView
                 doc={open().doc}
                 active={true}
+                autoFocus={true}
                 readOnly={store.state.notes[open().id]?.deletedAt != null}
                 colorScheme={scheme()}
                 onTitleChange={(title) => store.setTitle(open().id, title)}

@@ -290,6 +290,7 @@ cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml && pnpm --filter 
 ---
 
 ### Task 11b: Web SPA Entry, ServiceWorker & PWA Manifest
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/index.ts`, `apps/desktop/src/App.tsx`
 - **Target Files (Create/Modify):**

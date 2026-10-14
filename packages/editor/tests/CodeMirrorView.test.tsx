@@ -143,6 +143,21 @@ describe('CodeMirrorView', () => {
     expect(before.dom.classList.contains('cm-editor')).toBe(true);
   });
 
+  it('takes focus on mount only when autoFocus is set', async () => {
+    const plain = mount({ doc: docWith('a') });
+    await Promise.resolve();
+    expect(view().hasFocus).toBe(false);
+    void plain;
+    dispose?.();
+    root.remove();
+
+    root = document.createElement('div');
+    document.body.append(root);
+    dispose = render(() => <CodeMirrorView doc={docWith('b')} active={true} colorScheme="light" autoFocus={true} />, root);
+    await Promise.resolve();
+    expect(view().hasFocus).toBe(true);
+  });
+
   it('reports titles from line 1 and ignores edits on other lines', () => {
     const titles: (string | null)[] = [];
     const doc = docWith('   const secret = 42;\nbody');
