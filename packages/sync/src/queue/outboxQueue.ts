@@ -74,8 +74,13 @@ export class OutboxQueue {
       const generation = this.#enqueued;
       const batch = await this.#storage.listOutbox(DRAIN_BATCH);
       if (batch.length === 0) {
-        if (generation === this.#enqueued) this.#hasBacklog = false;
-        return;
+        if (generation === this.#enqueued) {
+          this.#hasBacklog = false;
+          return;
+        }
+        // Something was queued while this pass ran; take another pass so it isn't stranded
+        // until the next reconnect.
+        continue;
       }
       for (const entry of batch) {
         if (!this.#transport.send(encodeFrame(this.#toPacket(entry)))) return;

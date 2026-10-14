@@ -81,10 +81,14 @@ export interface WorkspaceState {
   retentionDays: number;
 }
 
+/** A hard-deleted entity, reported so other devices can purge it too (TOMBSTONE packets). */
+export type PurgedItem = { readonly entityType: 'note'; readonly id: NoteId } | { readonly entityType: 'folder'; readonly id: FolderId };
+
 export interface WorkspaceDeps {
   readonly storage: IStorageEngine;
   readonly names: NameCodec;
   readonly newId?: () => string;
+  readonly onPurged?: (items: PurgedItem[]) => void;
 }
 
 const toDomainError = (error: unknown): DomainError =>
@@ -129,6 +133,13 @@ export type WorkspaceStore = ReturnType<typeof createWorkspaceStore>;
 
 export function createWorkspaceStore(deps: WorkspaceDeps) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
+  const reportPurged = (folders: readonly FolderId[], notes: readonly NoteId[]): void => {
+    const items: PurgedItem[] = [
+      ...folders.map((id) => ({ entityType: 'folder' as const, id })),
+      ...notes.map((id) => ({ entityType: 'note' as const, id })),
+    ];
+    if (items.length > 0) deps.onPurged?.(items);
+  };
   const { storage, names } = deps;
 
   const [state, setState] = createStore<WorkspaceState>({
@@ -244,13 +255,22 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
         const topLevel = state.folders.filter(
           (f) => f.deletedAt !== null && (f.parentId === null || !trashedIds.has(f.parentId)),
         );
-        for (const folder of topLevel) await storage.purgeFolder(folder.id);
-        for (const note of await storage.listTrashedNotes()) await storage.purgeNote(note.id);
+        for (const folder of topLevel) {
+          const purged = await storage.purgeFolder(folder.id);
+          reportPurged(purged.folders, purged.notes);
+        }
+        for (const note of await storage.listTrashedNotes()) {
+          await storage.purgeNote(note.id);
+          reportPurged([], [note.id]);
+        }
       });
     },
 
     purgeFolder(id: FolderId): Promise<Result<void>> {
-      return cascade(() => storage.purgeFolder(id));
+      return cascade(async () => {
+        const purged = await storage.purgeFolder(id);
+        reportPurged(purged.folders, purged.notes);
+      });
     },
 
     renameFolder(id: FolderId, name: string): Promise<Result<void>> {
@@ -269,6 +289,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     purgeNote(noteId: NoteId): Promise<Result<void>> {
       return attempt(async () => {
         await storage.purgeNote(noteId);
+        reportPurged([], [noteId]);
         setState('notes', produce((notes) => void delete notes[noteId]));
         dropTabsOfMissingNotes();
       });

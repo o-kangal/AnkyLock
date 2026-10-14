@@ -4,6 +4,7 @@ import type { NoteId } from '@ankylock/core';
 import { CodeMirrorView, type ColorScheme } from '@ankylock/editor';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { Sidebar } from './sidebar/Sidebar.jsx';
+import { SyncStatusBar } from './SyncStatusBar.jsx';
 import { tokens } from './sidebar/styles.js';
 import { TabBar } from './tabs/TabBar.jsx';
 
@@ -72,32 +73,35 @@ export function Workspace(props: { readonly runtime: Runtime }): JSX.Element {
   });
 
   return (
-    <div style={{ display: 'grid', 'grid-template-columns': '260px 1fr', height: '100%', font: tokens.font }}>
-      <Sidebar store={store} />
-      <section style={{ display: 'flex', 'flex-direction': 'column', 'min-width': '0' }}>
-        <TabBar store={store} isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)} />
-        <div style={{ flex: '1', 'min-height': '0' }}>
-          <Show
-            when={doc()}
-            fallback={
-              <div style={{ display: 'grid', 'place-items': 'center', height: '100%', color: tokens.muted }}>
-                Press Ctrl+N to open a new scratchpad.
-              </div>
-            }
-          >
-            {(open) => (
-              <CodeMirrorView
-                doc={open().doc}
-                active={true}
-                autoFocus={true}
-                readOnly={store.state.notes[open().id]?.deletedAt != null}
-                colorScheme={scheme()}
-                onTitleChange={(title) => store.setTitle(open().id, title)}
-              />
-            )}
-          </Show>
-        </div>
-      </section>
+    <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%', font: tokens.font }}>
+      <div style={{ display: 'grid', 'grid-template-columns': '260px 1fr', flex: '1', 'min-height': '0' }}>
+        <Sidebar store={store} />
+        <section style={{ display: 'flex', 'flex-direction': 'column', 'min-width': '0' }}>
+          <TabBar store={store} isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)} />
+          <div style={{ flex: '1', 'min-height': '0' }}>
+            <Show
+              when={doc()}
+              fallback={
+                <div style={{ display: 'grid', 'place-items': 'center', height: '100%', color: tokens.muted }}>
+                  Press Ctrl+N to open a new scratchpad.
+                </div>
+              }
+            >
+              {(open) => (
+                <CodeMirrorView
+                  doc={open().doc}
+                  active={true}
+                  autoFocus={true}
+                  readOnly={store.state.notes[open().id]?.deletedAt != null}
+                  colorScheme={scheme()}
+                  onTitleChange={(title) => store.setTitle(open().id, title)}
+                />
+              )}
+            </Show>
+          </div>
+        </section>
+      </div>
+      <SyncStatusBar runtime={props.runtime} />
     </div>
   );
 }

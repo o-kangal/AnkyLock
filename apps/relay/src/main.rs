@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let state = Arc::new(RelayState {
         hub: Hub::new(config.channel_capacity),
-        authenticator: Box::new(GoogleAuthenticator::new(config.google_client_id, GoogleJwksSource::new())),
+        authenticator: Box::new(GoogleAuthenticator::new(config.google_client_ids, GoogleJwksSource::new())),
         max_frame_bytes: config.max_frame_bytes,
     });
 

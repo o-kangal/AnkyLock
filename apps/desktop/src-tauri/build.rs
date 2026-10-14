@@ -33,9 +33,37 @@ const COMMANDS: &[&str] = &[
     "settings_set_retention_days",
     "settings_get_vault_header",
     "settings_set_vault_header",
+    "oauth_sign_in",
+    "oauth_restore",
+    "oauth_refresh",
+    "oauth_sign_out",
 ];
 
+/// Compiles the Google OAuth client (a "Desktop app" client, whose secret Google does not treat
+/// as confidential) into the binary from `apps/desktop/.env.local` or the environment. It is
+/// never exposed to the frontend bundle.
+fn load_oauth_client() {
+    const KEYS: [&str; 2] = ["ANKYLOCK_GOOGLE_CLIENT_ID", "ANKYLOCK_GOOGLE_CLIENT_SECRET"];
+    println!("cargo:rerun-if-changed=../.env.local");
+    for key in KEYS {
+        println!("cargo:rerun-if-env-changed={key}");
+    }
+    let Ok(text) = std::fs::read_to_string("../.env.local") else {
+        return;
+    };
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        if KEYS.contains(&key) && std::env::var(key).is_err() {
+            println!("cargo:rustc-env={key}={}", value.trim());
+        }
+    }
+}
+
 fn main() {
+    load_oauth_client();
     tauri_build::try_build(
         tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
     )

@@ -83,10 +83,10 @@ struct CachedKeys {
 }
 
 /// Validates Google ID tokens: RS256 signature against Google's published keys, issuer,
-/// audience (our OAuth client id) and expiry. The account id is the token's `sub`.
+/// audience (one of our OAuth client ids) and expiry. The account id is the token's `sub`.
 /// The OAuth identity only routes frames; it never touches the encryption key (BR-SEC-03).
 pub struct GoogleAuthenticator<S: KeySource> {
-    client_id: String,
+    client_ids: Vec<String>,
     source: S,
     cache: RwLock<Option<CachedKeys>>,
     /// Keys are refetched after this age even when every `kid` still matches.
@@ -97,12 +97,12 @@ pub struct GoogleAuthenticator<S: KeySource> {
 }
 
 impl<S: KeySource> GoogleAuthenticator<S> {
-    pub fn new(client_id: impl Into<String>, source: S) -> Self {
-        Self::with_intervals(client_id, source, Duration::from_secs(3600), Duration::from_secs(60))
+    pub fn new(client_ids: Vec<String>, source: S) -> Self {
+        Self::with_intervals(client_ids, source, Duration::from_secs(3600), Duration::from_secs(60))
     }
 
-    pub fn with_intervals(client_id: impl Into<String>, source: S, ttl: Duration, min_refetch: Duration) -> Self {
-        Self { client_id: client_id.into(), source, cache: RwLock::new(None), ttl, min_refetch }
+    pub fn with_intervals(client_ids: Vec<String>, source: S, ttl: Duration, min_refetch: Duration) -> Self {
+        Self { client_ids, source, cache: RwLock::new(None), ttl, min_refetch }
     }
 
     async fn refresh(&self) -> Result<(), AuthError> {
@@ -152,7 +152,7 @@ impl<S: KeySource> Authenticator for GoogleAuthenticator<S> {
             let key = self.decoding_key(&kid).await?;
 
             let mut validation = Validation::new(Algorithm::RS256);
-            validation.set_audience(&[&self.client_id]);
+            validation.set_audience(&self.client_ids);
             validation.set_issuer(&GOOGLE_ISSUERS);
             validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
             let data = decode::<Claims>(token, &key, &validation).map_err(|e| AuthError::Invalid(e.to_string()))?;
@@ -217,7 +217,7 @@ mod tests {
     fn authenticator(min_refetch: Duration) -> (GoogleAuthenticator<FixtureSource>, Arc<AtomicUsize>) {
         let fetches = Arc::new(AtomicUsize::new(0));
         let source = FixtureSource { fetches: fetches.clone() };
-        (GoogleAuthenticator::with_intervals(CLIENT_ID, source, Duration::from_secs(3600), min_refetch), fetches)
+        (GoogleAuthenticator::with_intervals(vec!["other-app-id".into(), CLIENT_ID.into()], source, Duration::from_secs(3600), min_refetch), fetches)
     }
 
     fn invalid(result: Result<AccountId, AuthError>) -> bool {

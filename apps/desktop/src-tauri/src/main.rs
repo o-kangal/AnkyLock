@@ -7,11 +7,14 @@ mod error;
 
 use tauri::Manager;
 
-use crate::commands::{categories, folders, notes, outbox, settings};
+use crate::commands::oauth::{GoogleAuth, KeychainStore, OAuthClient};
+use crate::commands::{categories, folders, notes, oauth, outbox, settings};
 use crate::db::pool::DbPool;
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .manage(GoogleAuth { client: OAuthClient::from_build_env(), store: Box::new(KeychainStore) })
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -51,6 +54,10 @@ fn main() {
             settings::settings_set_retention_days,
             settings::settings_get_vault_header,
             settings::settings_set_vault_header,
+            oauth::oauth_sign_in,
+            oauth::oauth_restore,
+            oauth::oauth_refresh,
+            oauth::oauth_sign_out,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run AnkyLock");

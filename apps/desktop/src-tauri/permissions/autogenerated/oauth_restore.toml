@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-oauth-restore"
+description = "Enables the oauth_restore command without any pre-configured scope."
+commands.allow = ["oauth_restore"]
+
+[[permission]]
+identifier = "deny-oauth-restore"
+description = "Denies the oauth_restore command without any pre-configured scope."
+commands.deny = ["oauth_restore"]

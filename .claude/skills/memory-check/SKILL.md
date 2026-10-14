@@ -36,6 +36,10 @@ Menus, popovers and dialogs use the shared `Popover` component (`apps/web/src/co
 
 **Checking in a real engine without opening a window (Linux):** serve the page (`vite preview`), then load it from Python with `gi` into a `WebKit2.WebView` (4.1) inside a `Gtk.OffscreenWindow`. Set `WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1` (offscreen has no GL), and run probes with `call_async_javascript_function`. To stop the server for an offline test, kill the PID that `ss -ltnp` shows listening on the port. `pkill -f <pattern>` also matches the shell command that contains the pattern and kills it.
 
+### Cross-realm values
+
+Never type-check bytes with `instanceof Uint8Array` / `instanceof ArrayBuffer`. Values from IndexedDB, `postMessage`, WebSocket frames or test environments can come from another realm, where `instanceof` is false and data gets dropped silently. Use `Object.prototype.toString.call(v) === '[object Uint8Array]'` (or `'[object ArrayBuffer]'`). This has bitten twice: in the storage guard (Task 9) and in the relay client (Task 11c).
+
 ### Styling
 
 There are no global CSS files and no component libraries (AGENTS.md). That also rules out Tailwind, which needs a global CSS entry file. Use component-scoped styles (CSS modules or inline style objects) together with a small set of shared design tokens.

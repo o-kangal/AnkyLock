@@ -313,7 +313,8 @@ pnpm --filter @ankylock/web run typecheck && pnpm --filter @ankylock/web run tes
 
 ---
 
-### Task 11c: Google Sign-In (OAuth 2.0 + PKCE) & Sync/Backup Activation
+### Task 11c: Desktop Google Sign-In (OAuth 2.0 + PKCE) & Sync/Backup Activation
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Backend/Service & Frontend/UI
 - **Read-Only Context Files:** `SPEC.md` (§1.1, §2.4, §7), `packages/sync/src/client/blindWebSocketClient.ts`, `packages/sync/src/backup/snapshotScheduler.ts`, `apps/web/src/runtime/createRuntime.ts`
 - **Target Files (Create/Modify):**
@@ -324,13 +325,72 @@ pnpm --filter @ankylock/web run typecheck && pnpm --filter @ankylock/web run tes
   - `apps/web/src/components/SignInButton.tsx`
   - `packages/sync/tests/googleAuth.test.ts`
 - **Step-by-Step Instructions:**
-  1. Implement the OAuth 2.0 authorization-code flow with PKCE: desktop opens the system browser and receives the code on a loopback redirect handled by a Rust IPC command; web uses a redirect back to the app. Request only `openid`, `email` and `https://www.googleapis.com/auth/drive.appdata`.
+  1. Implement the OAuth 2.0 authorization-code flow with PKCE for desktop: open the system browser and receive the code on a loopback redirect handled by a Rust IPC command (web sign-in is Task 11d). Request only `openid`, `email` and `https://www.googleapis.com/auth/drive.appdata`.
   2. Keep tokens in memory (refresh token in the OS keychain on desktop) and refresh before expiry; never derive or store key material from OAuth credentials (BR-SEC-03).
   3. After sign-in, start the `BlindWebSocketClient` (fresh ID token on every connect), the `OutboxQueue` drain on reconnect, the delta packer for open docs and the snapshot scheduler; sign-out stops them while local editing keeps working.
   4. Surface auth, quota and network status as a non-intrusive status bar badge (SPEC §7).
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+``` 
+
+---
+
+### Task 11d: Web Google Sign-In (Google Identity Services)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/runtime/createRuntime.ts`, `packages/sync/src/auth/googleAuth.ts`, `apps/relay/src/auth.rs`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/auth/webGoogleAuth.ts`
+  - `apps/web/src/App.tsx`
+  - `apps/web/vite.config.ts`
+  - `apps/web/tests/webGoogleAuth.test.ts`
+- **Step-by-Step Instructions:**
+  1. Use a separate Google OAuth client of type "Web application" (Desktop clients only allow loopback redirects). Obtain the ID token with Sign In With Google and a `drive.appdata` access token with the GIS token client; no refresh token is kept in the browser.
+  2. Implement the same `AuthProvider` interface as the desktop flow so the shared runtime starts sync and backup unchanged.
+  3. Add the web client id to the relay's accepted audiences and widen the production CSP `connect-src` for Google and the relay.
+- **Verification:**
+``` bash
+pnpm --filter @ankylock/web run typecheck && pnpm --filter @ankylock/web run test && pnpm --filter @ankylock/web run build
+``` 
+
+---
+
+### Task 11e: Offline Catch-Up & Hierarchy Sync
+- **Type:** Backend/Service
+- **Read-Only Context Files:** `SPEC.md` (§5.2, §7), `packages/sync/src/queue/outboxQueue.ts`, `packages/sync/src/backup/snapshot.ts`
+- **Target Files (Create/Modify):**
+  - `migrations/V<timestamp>__add_outbox_packet_type.sql`
+  - `packages/sync/src/queue/outboxQueue.ts`
+  - `packages/sync/src/hierarchy/hierarchySync.ts`
+  - `packages/sync/src/catchup/catchUp.ts`
+  - `packages/sync/tests/catchUp.test.ts`
+- **Step-by-Step Instructions:**
+  1. The relay keeps no history, so a device that was closed misses updates sent meanwhile. On sign-in and reconnect, catch up by merging the latest Drive snapshot's Yjs states into local notes (CRDT merge, never LWW) and creating notes that only exist remotely.
+  2. Add `packet_type` to `sync_outbox` (new migration plus IndexedDB upgrade) so HIERARCHY_MUTATION packets can be queued, and sync folder/category create, rename, move, archive and trash as encrypted HIERARCHY_MUTATION packets, re-validated on apply (cyclic results are detached to the root, SPEC §7).
+  3. Cover two devices editing offline at different times, hierarchy moves on both sides and the distributed circular move case in tests.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && cargo test --workspace
+``` 
+
+---
+
+### Task 11f: UI Polish (Status Bar, Backup Progress, Title Bar Logo)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/components/SyncStatusBar.tsx`, `apps/desktop/src/TitleBar.tsx`, `packages/sync/src/backup/snapshotScheduler.ts`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/components/SyncStatusBar.tsx`
+  - `packages/sync/src/backup/snapshotScheduler.ts`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/desktop/src/TitleBar.tsx`
+  - `apps/web/tests/sync.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Make the status bar taller (about 28 px with comfortable padding) so its buttons sit clear of the frameless window's bottom resize edge; clicking "Sign in with Google" must never start a window resize.
+  2. Report backups in progress: add a `running` state to `BackupStatus` (emitted when a snapshot export/upload starts) and show a small spinner with "Backing up…" in the status bar until it finishes.
+  3. Show the app logo (from `src-tauri/icons/app-icon.svg`, about 16 px) before the "AnkyLock" title in the desktop title bar, keeping it part of the drag region.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm --filter @ankylock/desktop run build
 ``` 
 
 ---
@@ -384,6 +444,9 @@ Task 1 (Workspace & Config)
                    ├──► Task 11b (Web SPA Entry & PWA)
                    │
                    ├──► Task 11c (Google Sign-In & Sync/Backup Activation)
+                   │       ├──► Task 11d (Web Google Sign-In)
+                   │       ├──► Task 11e (Offline Catch-Up & Hierarchy Sync)
+                   │       └──► Task 11f (UI Polish)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
 ``` 

@@ -37,6 +37,10 @@ export interface BlindWebSocketClientOptions {
 }
 
 const OPEN = 1;
+
+/** Realm-independent: buffers may come from another realm (iframes, workers, test environments). */
+const isArrayBuffer = (value: unknown): value is ArrayBuffer =>
+  Object.prototype.toString.call(value) === '[object ArrayBuffer]';
 /**
  * Browsers cannot send WebSocket ping frames, so the heartbeat is an application-level text
  * frame. The relay answers `ping` with `pong` and forwards only binary frames between peers.
@@ -113,7 +117,7 @@ export class BlindWebSocketClient implements PacketTransport {
   }
 
   #onMessage(data: unknown): void {
-    if (data instanceof ArrayBuffer) this.#options.onFrame(new Uint8Array(data));
+    if (isArrayBuffer(data)) this.#options.onFrame(new Uint8Array(data));
     else if (data === HEARTBEAT_PONG) clearTimeout(this.#pongDeadline);
   }
 

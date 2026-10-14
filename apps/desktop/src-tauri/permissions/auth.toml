@@ -1,0 +1,10 @@
+# Google sign-in IPC commands. The refresh token never leaves the Rust host.
+[[set]]
+identifier = "auth"
+description = "Desktop Google sign-in: sign in, restore and refresh the session, sign out."
+permissions = [
+  "allow-oauth-sign-in",
+  "allow-oauth-restore",
+  "allow-oauth-refresh",
+  "allow-oauth-sign-out",
+]

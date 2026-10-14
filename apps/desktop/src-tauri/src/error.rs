@@ -20,6 +20,13 @@ pub enum AppError {
     NotFound(&'static str),
     #[error("Storage error: {0}")]
     Storage(#[from] rusqlite::Error),
+    #[error("{0}")]
+    Auth(String),
+    /// The stored Google session is gone or revoked; the user has to sign in again.
+    #[error("Your Google sign-in has expired. Please sign in again.")]
+    AuthExpired,
+    #[error("Network error: {0}")]
+    Network(String),
 }
 
 impl AppError {
@@ -33,6 +40,9 @@ impl AppError {
             Self::InvalidSetting(_) => "ERR_INVALID_SETTING",
             Self::NotFound(_) => "ERR_NOT_FOUND",
             Self::Storage(_) => "ERR_STORAGE",
+            Self::Auth(_) => "ERR_AUTH",
+            Self::AuthExpired => "ERR_AUTH_EXPIRED",
+            Self::Network(_) => "ERR_NETWORK",
         }
     }
 }

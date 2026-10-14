@@ -7,8 +7,9 @@ pub const DEFAULT_MAX_FRAME_BYTES: usize = 14 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub bind_addr: SocketAddr,
-    /// OAuth client id that Google ID tokens must be issued for (`aud`).
-    pub google_client_id: String,
+    /// OAuth client ids that Google ID tokens may be issued for (`aud`): one per app
+    /// (desktop, web), given comma-separated in `GOOGLE_CLIENT_ID`.
+    pub google_client_ids: Vec<String>,
     pub max_frame_bytes: usize,
     /// Frames buffered per account before a slow connection is dropped.
     pub channel_capacity: usize,
@@ -39,8 +40,9 @@ impl Config {
 
         Ok(Self {
             bind_addr: parse("RELAY_BIND", get("RELAY_BIND"), SocketAddr::from(([0, 0, 0, 0], 8787)))?,
-            google_client_id: get("GOOGLE_CLIENT_ID")
-                .filter(|v| !v.is_empty())
+            google_client_ids: get("GOOGLE_CLIENT_ID")
+                .map(|v| v.split(',').map(str::trim).filter(|id| !id.is_empty()).map(str::to_owned).collect::<Vec<_>>())
+                .filter(|ids| !ids.is_empty())
                 .ok_or(ConfigError::Missing("GOOGLE_CLIENT_ID"))?,
             max_frame_bytes: parse("RELAY_MAX_FRAME_BYTES", get("RELAY_MAX_FRAME_BYTES"), DEFAULT_MAX_FRAME_BYTES)?,
             channel_capacity: parse("RELAY_CHANNEL_CAPACITY", get("RELAY_CHANNEL_CAPACITY"), 256)?,
@@ -64,6 +66,12 @@ mod tests {
         assert_eq!(config.bind_addr.port(), 8787);
         assert_eq!(config.max_frame_bytes, DEFAULT_MAX_FRAME_BYTES);
         assert_eq!(config.channel_capacity, 256);
+    }
+
+    #[test]
+    fn accepts_several_client_ids() {
+        let config = Config::from_lookup(lookup(&[("GOOGLE_CLIENT_ID", "desktop-id, web-id,")])).unwrap();
+        assert_eq!(config.google_client_ids, ["desktop-id", "web-id"]);
     }
 
     #[test]

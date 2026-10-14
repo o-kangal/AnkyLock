@@ -14,12 +14,18 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@ankylock/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@ankylock/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
       '@ankylock/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@ankylock/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@ankylock/web':
         specifier: workspace:*
         version: link:../web
@@ -42,6 +48,9 @@ importers:
       vite-plugin-solid:
         specifier: 2.11.14
         version: 2.11.14(solid-js@1.9.17)(vite@8.3.4)
+      vitest:
+        specifier: 5.0.4
+        version: 5.0.4(jsdom@30.1.2)(vite@8.3.4)
 
   apps/web:
     dependencies:

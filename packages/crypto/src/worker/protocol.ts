@@ -20,6 +20,9 @@ export type CryptoResponse =
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
+/** Realm-independent: structured clones may come from another realm. */
+const isBytes = (v: unknown): boolean => ArrayBuffer.isView(v) && Object.prototype.toString.call(v) === '[object Uint8Array]';
+
 export function isCryptoRequest(value: unknown): value is CryptoRequest {
   if (!isObject(value) || typeof value['id'] !== 'number') return false;
   switch (value['op']) {
@@ -27,7 +30,7 @@ export function isCryptoRequest(value: unknown): value is CryptoRequest {
       return value['key'] === null || value['key'] instanceof CryptoKey;
     case 'seal':
     case 'open':
-      return value['data'] instanceof Uint8Array;
+      return isBytes(value['data']);
     default:
       return false;
   }
@@ -36,6 +39,6 @@ export function isCryptoRequest(value: unknown): value is CryptoRequest {
 export function isCryptoResponse(value: unknown): value is CryptoResponse {
   if (!isObject(value) || typeof value['id'] !== 'number') return false;
   return value['ok'] === true
-    ? value['data'] === null || value['data'] instanceof Uint8Array
+    ? value['data'] === null || isBytes(value['data'])
     : value['ok'] === false && typeof value['code'] === 'string' && typeof value['message'] === 'string';
 }

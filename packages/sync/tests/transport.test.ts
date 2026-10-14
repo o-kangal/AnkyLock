@@ -113,6 +113,15 @@ describe('OutboxQueue', () => {
     expect(markers(transport.sent)).toEqual([1, 2, 3]);
   });
 
+  it('sends packets queued while a drain is running instead of stranding them', async () => {
+    transport.online = true;
+    const draining = queue.drain();
+    const submitting = queue.submit(packet('n1', 7));
+    await Promise.all([draining, submitting]);
+    expect(markers(transport.sent)).toEqual([7]);
+    expect(await storage.listOutbox(10)).toEqual([]);
+  });
+
   it('rebuilds packets from rows with this device as sender', async () => {
     await queue.submit(packet('n1', 5));
     transport.online = true;
