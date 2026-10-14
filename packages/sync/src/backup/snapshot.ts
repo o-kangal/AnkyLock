@@ -2,8 +2,6 @@ import type { Category, EpochMs, Folder, Note, NoteContent, SealedBytes } from '
 import { base64ToBytes, bytesToBase64, type Sealer } from '@ankylock/crypto';
 import type { IStorageEngine } from '@ankylock/storage';
 
-export const SNAPSHOT_FILE_NAME = 'ankylock-snapshot.v1.bin';
-export const VAULT_HEADER_FILE_NAME = 'ankylock-vault-header.v1.json';
 const SNAPSHOT_VERSION = 1;
 
 /** Decoded snapshot. Names, titles and bodies inside are still individually encrypted. */

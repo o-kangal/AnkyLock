@@ -8,7 +8,7 @@ use super::{now_ms, reject_system_category};
 use crate::db::pool::DbPool;
 use crate::error::{AppError, AppResult};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
     pub id: String,

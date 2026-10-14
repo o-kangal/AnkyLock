@@ -1,18 +1,28 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import type { CategoryId, Ciphertext, EpochMs, FolderId, NoteId, SealedBytes } from '@ankylock/core';
+import type { Bytes, CategoryId, Ciphertext, EpochMs, FolderId, NoteId, SealedBytes, VaultId } from '@ankylock/core';
 import { createKeySealer, type Sealer } from '@ankylock/crypto';
 import { WebIndexedDbAdapter } from '@ankylock/storage';
 import {
   DriveError,
   GoogleDriveClient,
-  SNAPSHOT_FILE_NAME,
-  VAULT_HEADER_FILE_NAME,
+  TEXT_FIELD,
   createSnapshotScheduler,
+  downloadSnapshots,
   exportSnapshot,
+  listRemoteVaults,
+  loadNoteState,
+  mergeSnapshots,
   openSnapshot,
+  saveNoteState,
+  serializeVaultHeaderFile,
+  vaultHeaderFileName,
+  vaultSnapshotFileName,
   type BackupStatus,
+  type DriveFile,
+  type VaultHeaderFile,
 } from '../src/index.js';
+import * as Y from 'yjs';
 
 const NOW = 1_776_100_000_000 as EpochMs;
 
@@ -91,7 +101,7 @@ const client = (f: typeof fetch): GoogleDriveClient => new GoogleDriveClient({ g
 describe('GoogleDriveClient', () => {
   it('creates new files in appDataFolder with a multipart upload', async () => {
     const drive = fakeDrive((call) => (call.method === 'GET' ? json({ files: [] }) : json({ id: 'new' })));
-    await client(drive.fetch).upload(SNAPSHOT_FILE_NAME, new Uint8Array([9, 9]), 'application/octet-stream');
+    await client(drive.fetch).upload('file.bin', new Uint8Array([9, 9]), 'application/octet-stream');
 
     const [find, create] = drive.calls;
     expect(find?.url).toContain('spaces=appDataFolder');
@@ -100,23 +110,41 @@ describe('GoogleDriveClient', () => {
     expect(create?.url).toContain('/upload/drive/v3/files?uploadType=multipart');
     const body = await (create?.body as Blob).text();
     expect(body).toContain('"parents":["appDataFolder"]');
-    expect(body).toContain(`"name":"${SNAPSHOT_FILE_NAME}"`);
+    expect(body).toContain('"name":"file.bin"');
   });
 
   it('replaces the content of an existing file', async () => {
     const drive = fakeDrive((call) => (call.method === 'GET' ? json({ files: [{ id: 'abc' }] }) : json({ id: 'abc' })));
-    await client(drive.fetch).upload(SNAPSHOT_FILE_NAME, new Uint8Array([1]), 'application/octet-stream');
+    await client(drive.fetch).upload('file.bin', new Uint8Array([1]), 'application/octet-stream');
     expect(drive.calls[1]).toMatchObject({ method: 'PATCH' });
     expect(drive.calls[1]?.url).toContain('/upload/drive/v3/files/abc?uploadType=media');
+  });
+
+  it('lists files by name prefix across pages', async () => {
+    const drive = fakeDrive((call) =>
+      call.url.includes('pageToken=p2')
+        ? json({ files: [{ id: '2', name: 'vault-b', modifiedTime: '2026-10-14T10:00:00.000Z' }] })
+        : json({
+            nextPageToken: 'p2',
+            files: [
+              { id: '1', name: 'vault-a', modifiedTime: '2026-10-14T09:00:00.000Z' },
+              { id: '9', name: 'my-vault-x', modifiedTime: '2026-10-14T09:00:00.000Z' },
+            ],
+          }),
+    );
+    const files = await client(drive.fetch).listFiles('vault-');
+    expect(files.map((f) => f.id)).toEqual(['1', '2']);
+    expect(files[1]?.modifiedTime).toBe(Date.parse('2026-10-14T10:00:00.000Z'));
+    expect(new URL(drive.calls[0]?.url ?? '').searchParams.get('q')).toBe("name contains 'vault-' and trashed = false");
   });
 
   it('downloads file content', async () => {
     const drive = fakeDrive((call) =>
       call.url.includes('alt=media') ? new Response(new Uint8Array([7, 8])) : json({ files: [{ id: 'abc' }] }),
     );
-    expect(await client(drive.fetch).download(SNAPSHOT_FILE_NAME)).toEqual(new Uint8Array([7, 8]));
+    expect(await client(drive.fetch).download('file.bin')).toEqual(new Uint8Array([7, 8]));
     const missing = fakeDrive(() => json({ files: [] }));
-    expect(await client(missing.fetch).download(SNAPSHOT_FILE_NAME)).toBeNull();
+    expect(await client(missing.fetch).download('file.bin')).toBeNull();
   });
 
   it.each([
@@ -135,56 +163,184 @@ describe('GoogleDriveClient', () => {
   });
 });
 
+/** In-memory appDataFolder: the parts of GoogleDriveClient the catalog and scheduler use. */
+class MemoryDrive {
+  readonly files = new Map<string, { id: string; data: Bytes; modifiedTime: EpochMs }>();
+  failWith: DriveError | null = null;
+  #next = 0;
+  constructor(readonly now: () => EpochMs = () => NOW) {}
+
+  #check(): void {
+    if (this.failWith) throw this.failWith;
+  }
+
+  async upload(name: string, data: Bytes): Promise<void> {
+    this.#check();
+    const existing = this.files.get(name);
+    this.files.set(name, { id: existing?.id ?? `f${++this.#next}`, data, modifiedTime: this.now() });
+  }
+
+  async create(name: string, data: Bytes): Promise<void> {
+    this.#check();
+    if (this.files.has(name)) throw new Error('test drive keeps one file per name');
+    this.files.set(name, { id: `f${++this.#next}`, data, modifiedTime: this.now() });
+  }
+
+  async download(name: string): Promise<Bytes | null> {
+    this.#check();
+    return this.files.get(name)?.data ?? null;
+  }
+
+  async listFiles(prefix: string): Promise<DriveFile[]> {
+    return [...this.files.entries()]
+      .filter(([name]) => name.startsWith(prefix))
+      .map(([name, f]) => ({ id: f.id, name, modifiedTime: f.modifiedTime }));
+  }
+
+  async downloadFile(id: string): Promise<Bytes> {
+    const file = [...this.files.values()].find((f) => f.id === id);
+    if (!file) throw new DriveError('http', 404, 'missing');
+    return file.data;
+  }
+}
+
+const VAULT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' as VaultId;
+const DEVICE_A = 'dddddddd-dddd-4ddd-8ddd-dddddddddd0a';
+const DEVICE_B = 'dddddddd-dddd-4ddd-8ddd-dddddddddd0b';
+const headerFile = (header = '{"kdf":"a"}'): VaultHeaderFile => ({
+  vaultId: VAULT,
+  createdAt: 5 as EpochMs,
+  header,
+  nameCiphertext: 'bmFtZQ==' as Ciphertext,
+});
+
 describe('createSnapshotScheduler', () => {
-  function scheduler(upload: (name: string) => Promise<void>, createSnapshot = async () => new Uint8Array([1]) as SealedBytes) {
+  function scheduler(drive = new MemoryDrive(), createSnapshot = async () => new Uint8Array([1]) as SealedBytes, vault = headerFile()) {
     let t = NOW as number;
     const statuses: BackupStatus[] = [];
-    const uploads: string[] = [];
     const s = createSnapshotScheduler({
-      drive: {
-        upload: async (name) => {
-          uploads.push(name);
-          await upload(name);
-        },
-      },
+      drive,
       createSnapshot,
-      vaultHeader: () => '{"version":1}',
+      vault,
+      deviceId: DEVICE_A,
       onStatus: (status) => statuses.push(status),
       now: () => t as EpochMs,
       idleMinGapMs: 1_000,
     });
-    return { s, statuses, uploads, advance: (ms: number) => (t += ms) };
+    return { s, drive, statuses, advance: (ms: number) => (t += ms) };
   }
 
-  it('uploads the vault header and the snapshot and reports success', async () => {
-    const { s, statuses, uploads } = scheduler(async () => undefined);
+  it("creates the vault's header once and uploads this device's own snapshot", async () => {
+    const { s, drive, statuses } = scheduler();
     expect(await s.runNow()).toEqual({ kind: 'ok', at: NOW });
-    expect(uploads).toEqual([VAULT_HEADER_FILE_NAME, SNAPSHOT_FILE_NAME]);
+    expect([...drive.files.keys()]).toEqual([vaultHeaderFileName(VAULT), vaultSnapshotFileName(VAULT, DEVICE_A)]);
     expect(statuses).toEqual([{ kind: 'ok', at: NOW }]);
+    await s.runNow();
+    expect(drive.files.size).toBe(2);
+  });
+
+  it('never overwrites a different header for the same vault id', async () => {
+    const drive = new MemoryDrive();
+    await drive.create(vaultHeaderFileName(VAULT), new TextEncoder().encode(serializeVaultHeaderFile(headerFile('{"kdf":"other"}'))));
+    const { s } = scheduler(drive);
+    expect(await s.runNow()).toMatchObject({ kind: 'error', reason: 'conflict' });
+    expect(drive.files.has(vaultSnapshotFileName(VAULT, DEVICE_A))).toBe(false);
+    expect(new TextDecoder().decode(drive.files.get(vaultHeaderFileName(VAULT))?.data)).toContain('other');
   });
 
   it('reports Drive failures without throwing (quota, auth)', async () => {
-    const { s, statuses } = scheduler(async () => {
-      throw new DriveError('quota', 403, 'full');
-    });
+    const drive = new MemoryDrive();
+    drive.failWith = new DriveError('quota', 403, 'full');
+    const { s, statuses } = scheduler(drive);
     await expect(s.runNow()).resolves.toEqual({ kind: 'error', reason: 'quota', at: NOW });
     expect(statuses).toHaveLength(1);
   });
 
   it('reports a failed local export as a snapshot error', async () => {
-    const { s } = scheduler(async () => undefined, () => Promise.reject(new Error('vault locked')));
+    const { s } = scheduler(new MemoryDrive(), () => Promise.reject(new Error('vault locked')));
     expect(await s.runNow()).toMatchObject({ kind: 'error', reason: 'snapshot' });
   });
 
   it('only backs up on idle when the last success is old enough', async () => {
-    const { s, uploads, advance } = scheduler(async () => undefined);
+    let uploads = 0;
+    const drive = new MemoryDrive();
+    const upload = drive.upload.bind(drive);
+    drive.upload = async (name, data) => {
+      uploads++;
+      await upload(name, data);
+    };
+    const { s, advance } = scheduler(drive);
     await s.runNow();
     s.notifyIdle();
     await Promise.resolve();
-    expect(uploads).toHaveLength(2);
+    expect(uploads).toBe(1);
     advance(1_000);
     s.notifyIdle();
     await s.runNow();
-    expect(uploads).toHaveLength(4);
+    expect(uploads).toBe(2);
+  });
+});
+
+describe('vault catalog', () => {
+  async function deviceBackup(s: Sealer, drive: MemoryDrive, deviceId: string, edit: (storage: WebIndexedDbAdapter) => Promise<void>) {
+    const storage = new WebIndexedDbAdapter(new IDBFactory());
+    await edit(storage);
+    const scheduler = createSnapshotScheduler({
+      drive,
+      createSnapshot: () => exportSnapshot(storage, s, NOW),
+      vault: headerFile(),
+      deviceId,
+      onStatus: () => undefined,
+    });
+    expect(await scheduler.runNow()).toMatchObject({ kind: 'ok' });
+  }
+
+  async function writeNote(s: Sealer, storage: WebIndexedDbAdapter, id: NoteId, base: Uint8Array | null, text: string): Promise<Uint8Array> {
+    if ((await storage.getNote(id)) === null) await storage.createNote(id);
+    const doc = new Y.Doc();
+    if (base) Y.applyUpdate(doc, base);
+    doc.getText(TEXT_FIELD).insert(doc.getText(TEXT_FIELD).length, text);
+    await saveNoteState({ storage, sealer: s }, id, doc, 'title');
+    return Y.encodeStateAsUpdate(doc);
+  }
+
+  it('lists vaults with their snapshots and merges every device without losing text', async () => {
+    const s = await sealer();
+    const drive = new MemoryDrive();
+    const NOTE = 'shared-note' as NoteId;
+    let base: Uint8Array | null = null;
+    await deviceBackup(s, drive, DEVICE_A, async (storage) => {
+      base = await writeNote(s, storage, NOTE, null, 'from A');
+      await storage.createNote('only-a' as NoteId);
+    });
+    await deviceBackup(s, drive, DEVICE_B, async (storage) => {
+      await writeNote(s, storage, NOTE, base, ' and B');
+      await storage.createFolder({ id: 'b-folder' as FolderId, parentId: null, categoryId: null, nameCiphertext: 'Zg==' as Ciphertext });
+    });
+    await drive.upload('vault-garbage.header.json', new Uint8Array([1]));
+
+    const [vault, ...others] = await listRemoteVaults(drive);
+    expect(others).toEqual([]);
+    expect(vault).toMatchObject({ vaultId: VAULT, createdAt: 5, header: '{"kdf":"a"}', lastBackupAt: NOW });
+    expect(vault?.snapshots).toHaveLength(2);
+
+    const { snapshots, unreadable } = await downloadSnapshots(drive, s, vault!);
+    expect(unreadable).toBe(0);
+    const merged = await mergeSnapshots(s, snapshots);
+    expect(merged.notes.map((n) => n.id).sort()).toEqual(['only-a', 'shared-note']);
+    expect(merged.folders.map((f) => f.id)).toEqual(['b-folder']);
+
+    const restored = new WebIndexedDbAdapter(new IDBFactory());
+    await restored.importVault(merged);
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, (await loadNoteState({ storage: restored, sealer: s }, NOTE))!);
+    expect(doc.getText(TEXT_FIELD).toString()).toBe('from A and B');
+  });
+
+  it('skips snapshots another key sealed', async () => {
+    const drive = new MemoryDrive();
+    await deviceBackup(await sealer(), drive, DEVICE_A, async () => undefined);
+    const [vault] = await listRemoteVaults(drive);
+    expect(await downloadSnapshots(drive, await sealer(), vault!)).toEqual({ snapshots: [], unreadable: 1 });
   });
 });

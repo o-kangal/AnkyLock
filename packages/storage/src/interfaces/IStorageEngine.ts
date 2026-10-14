@@ -89,6 +89,22 @@ export interface IStorageEngine {
   getVaultHeader(): Promise<string | null>;
   /** The vault's encrypted name; null for vaults created before vaults had names. */
   getVaultName(): Promise<Ciphertext | null>;
+  /** This device's id within the vault, created on first use; names its own Drive snapshot. */
+  getDeviceId(): Promise<string>;
+  /**
+   * Restores a vault from Drive snapshots in one transaction. Only an empty vault accepts it
+   * (ERR_INVALID_TRANSITION otherwise). Records are stored as given: still encrypted.
+   */
+  importVault(data: VaultImport): Promise<void>;
+}
+
+/** A vault's records as restored from (merged) Drive snapshots. */
+export interface VaultImport {
+  readonly retentionDays: number;
+  readonly categories: readonly Category[];
+  readonly folders: readonly Folder[];
+  readonly notes: readonly Note[];
+  readonly contents: readonly NoteContent[];
 }
 
 /** A vault on this device: an id and timestamps, never its name (BR-SEC-04). */
@@ -104,9 +120,10 @@ export interface IVaultDirectory {
   list(): Promise<VaultEntry[]>;
   /**
    * Creates the vault's database with its header and encrypted name, registers it and opens it.
-   * The header is written once, so a vault's key can never be orphaned.
+   * The header is written once, so a vault's key can never be orphaned. `createdAt` is given
+   * for a vault that already exists elsewhere, so every device shows the same creation time.
    */
-  create(id: VaultId, header: string, nameCiphertext: Ciphertext): Promise<IStorageEngine>;
+  create(id: VaultId, header: string, nameCiphertext: Ciphertext | null, createdAt?: EpochMs): Promise<IStorageEngine>;
   /** Opens a registered vault; storage returned earlier must not be used afterwards. */
   open(id: VaultId): Promise<IStorageEngine>;
 }

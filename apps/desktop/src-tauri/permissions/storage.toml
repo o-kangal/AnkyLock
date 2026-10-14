@@ -38,4 +38,6 @@ permissions = [
   "allow-vault-list",
   "allow-vault-create",
   "allow-vault-open",
+  "allow-vault-import",
+  "allow-settings-get-device-id",
 ]

@@ -26,6 +26,7 @@ function backupLabel(backup: BackupStatus): string | null {
         network: 'Backup waiting for a connection',
         http: 'Backup failed; will retry',
         snapshot: 'Backup failed; will retry',
+        conflict: 'Google Drive holds a different vault with this id; backup stopped',
       }[backup.reason];
   }
 }

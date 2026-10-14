@@ -224,7 +224,7 @@ describe('TauriVaultDirectory', () => {
     expect(created).toBe(opened);
     expect(calls).toEqual([
       ['vault_list', {}],
-      ['vault_create', { id: entry.id, header: '{"h":1}', nameCiphertext: 'bmFtZQ==' }],
+      ['vault_create', { id: entry.id, header: '{"h":1}', nameCiphertext: 'bmFtZQ==', createdAt: null }],
       ['vault_open', { id: entry.id }],
     ]);
   });

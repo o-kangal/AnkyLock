@@ -4,8 +4,9 @@ import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
 import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
 import { AuthError, TEXT_FIELD, createAuthSession, type AuthTransport, type SocketLike } from '@ankylock/sync';
 import { SyncStatusBar } from '../src/components/SyncStatusBar.jsx';
+import { UnlockScreen } from '../src/components/UnlockScreen.jsx';
 import { createRuntime, type Runtime } from '../src/index.js';
-import { TestVaults } from './helpers.js';
+import { FakeDrive, TestVaults } from './helpers.js';
 
 /** In-memory blind relay shared by the runtimes in a test; like the real one, it fans out per URL (vault). */
 class FakeRelay {
@@ -84,7 +85,7 @@ interface Device {
   readonly vaults: TestVaults;
 }
 
-function device(relay: FakeRelay, withAuth = true): Device {
+function device(relay: FakeRelay, withAuth = true, drive?: FakeDrive): Device {
   const google = fakeGoogle();
   const sockets: FakeSocket[] = [];
   const vaults = new TestVaults();
@@ -98,7 +99,7 @@ function device(relay: FakeRelay, withAuth = true): Device {
       sockets.push(socket);
       return socket;
     },
-    driveFetch: () => Promise.reject(new TypeError('offline')),
+    driveFetch: drive?.fetch ?? (() => Promise.reject(new TypeError('offline'))),
   });
   return { runtime, google, sockets, vaults };
 }
@@ -176,6 +177,36 @@ describe('runtime sync', () => {
     await a.runtime.lock();
   });
 
+  it('backs up to Drive even while the relay is unreachable', async () => {
+    const drive = new FakeDrive();
+    const vaults = new TestVaults();
+    const runtime = createRuntime({
+      vaults,
+      sealer: localSealer(),
+      auth: createAuthSession(fakeGoogle()),
+      relayUrl: 'ws://relay.test/ws',
+      // A socket that never opens: the relay is down.
+      createSocket: () => ({
+        binaryType: 'blob',
+        readyState: 0,
+        onopen: null,
+        onclose: null,
+        onmessage: null,
+        onerror: null,
+        send: () => undefined,
+        close: () => undefined,
+      }),
+      driveFetch: drive.fetch,
+    });
+    await runtime.init();
+    expect(await runtime.createVault('Personal', PASSPHRASE)).toBeNull();
+    await runtime.signIn();
+    await until(() => runtime.syncStatus().backup.kind === 'ok', 'backup while offline');
+    expect(runtime.syncStatus().connection).not.toBe('open');
+    expect(drive.names().some((n) => n.includes('.snapshot-'))).toBe(true);
+    await runtime.lock();
+  });
+
   it('keeps other vaults of the same account out of the channel', async () => {
     const relay = new FakeRelay();
     const [a, b] = await twoDevices(relay);
@@ -246,5 +277,65 @@ describe('SyncStatusBar', () => {
     const a = await withNewVault(new FakeRelay(), 'Personal', false);
     expect(mount(a.runtime).textContent).toContain('Local only');
     await a.runtime.lock();
+  });
+});
+
+describe('opening an existing vault from Google Drive', () => {
+  function type(root: HTMLElement, label: string, value: string): void {
+    const input = root.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  }
+  const click = (root: HTMLElement, text: string): void =>
+    (Array.from(root.querySelectorAll('button')).find((b) => b.textContent === text) as HTMLElement).click();
+  const submit = (root: HTMLElement): void =>
+    void root.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+  it("restores another device's backup after checking the passphrase", async () => {
+    const relay = new FakeRelay();
+    const drive = new FakeDrive();
+    const a = device(relay, true, drive);
+    await a.runtime.init();
+    expect(await a.runtime.createVault('Personal', PASSPHRASE)).toBeNull();
+    await a.runtime.store.createTab();
+    const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
+    (await a.runtime.openDoc(noteId)).getText(TEXT_FIELD).insert(0, 'backed up text');
+    await a.runtime.flush();
+    await a.runtime.signIn();
+    await until(() => a.runtime.syncStatus().backup.kind === 'ok', 'backup on A');
+    expect(drive.names().filter((n) => n.endsWith('.header.json'))).toHaveLength(1);
+    const [createdOnA] = a.runtime.vaults();
+    await a.runtime.lock();
+
+    const b = device(relay, true, drive);
+    await b.runtime.init();
+    const root = document.createElement('div');
+    document.body.append(root);
+    const dispose = render(() => <UnlockScreen runtime={b.runtime} />, root);
+    disposers.push(() => {
+      dispose();
+      root.remove();
+    });
+    expect(root.textContent).toContain('Create a vault');
+    click(root, 'Use my existing vault');
+    await until(() => root.querySelector('[aria-label="Vault in Google Drive"]') !== null, 'remote list');
+    expect(root.textContent).toContain('last backup');
+
+    type(root, 'Passphrase', 'not the passphrase');
+    submit(root);
+    await until(() => root.textContent?.includes('does not unlock') === true, 'wrong passphrase');
+    expect(await b.vaults.list()).toEqual([]);
+
+    type(root, 'Passphrase', PASSPHRASE);
+    submit(root);
+    await until(() => b.runtime.status() === 'unlocked', 'restored');
+    expect(b.runtime.vaultName()).toBe('Personal');
+    expect(b.runtime.vaults()[0]).toMatchObject({ id: createdOnA?.id, createdAt: createdOnA?.createdAt });
+    expect((await b.runtime.openDoc(noteId)).getText(TEXT_FIELD).toString()).toBe('backed up text');
+
+    // B backs up into its own snapshot file and leaves the header alone.
+    await until(() => drive.names().filter((n) => n.includes('.snapshot-')).length === 2, 'B snapshot');
+    expect(drive.names().filter((n) => n.endsWith('.header.json'))).toHaveLength(1);
+    await b.runtime.lock();
   });
 });

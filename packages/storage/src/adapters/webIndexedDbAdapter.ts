@@ -27,7 +27,13 @@ import {
   type SyncOutboxEntry,
 } from '@ankylock/core';
 import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry } from '../guards.js';
-import { StorageError, type IStorageEngine, type NewFolder, type NewOutboxEntry } from '../interfaces/IStorageEngine.js';
+import {
+  StorageError,
+  type IStorageEngine,
+  type NewFolder,
+  type NewOutboxEntry,
+  type VaultImport,
+} from '../interfaces/IStorageEngine.js';
 
 /** The single database used before vaults had ids; adopted as the first vault. */
 export const LEGACY_DB_NAME = 'ankylock';
@@ -39,6 +45,7 @@ const DB_VERSION = 3;
 const RETENTION_KEY = 'trash_retention_days';
 const VAULT_HEADER_KEY = 'vault_header';
 const VAULT_NAME_KEY = 'vault_name';
+const DEVICE_ID_KEY = 'device_id';
 
 const STORES = {
   categories: 'categories',
@@ -650,14 +657,44 @@ export class WebIndexedDbAdapter implements IStorageEngine {
     });
   }
 
+  getDeviceId(): Promise<string> {
+    return this.#run([STORES.settings], 'readwrite', async (tx) => {
+      const record = await tx.get(STORES.settings, DEVICE_ID_KEY, isSetting);
+      if (typeof record?.value === 'string') return record.value;
+      const id = crypto.randomUUID();
+      await tx.put(STORES.settings, { key: DEVICE_ID_KEY, value: id });
+      return id;
+    });
+  }
+
+  importVault(data: VaultImport): Promise<void> {
+    const valid = unwrap(validateRetentionDays(data.retentionDays));
+    const stores = [STORES.categories, STORES.folders, STORES.notes, STORES.noteContents, STORES.settings];
+    return this.#run(stores, 'readwrite', async (tx) => {
+      const existing = await Promise.all([
+        tx.getAll(STORES.categories, isCategory),
+        tx.getAll(STORES.folders, isFolder),
+        tx.getAll(STORES.notes, isNote),
+      ]);
+      if (existing.some((records) => records.length > 0)) {
+        throw new StorageError('ERR_INVALID_TRANSITION', 'Only an empty vault can be restored from a backup.');
+      }
+      for (const category of data.categories) if (!category.isSystem) await tx.put(STORES.categories, category);
+      for (const folder of data.folders) await tx.put(STORES.folders, folder);
+      for (const note of data.notes) await tx.put(STORES.notes, note);
+      for (const content of data.contents) await tx.put(STORES.noteContents, content);
+      await tx.put(STORES.settings, { key: RETENTION_KEY, value: valid });
+    });
+  }
+
   /** Writes a new vault's header and encrypted name together; the header is written only once. */
-  initializeVault(header: string, nameCiphertext: Ciphertext): Promise<void> {
+  initializeVault(header: string, nameCiphertext: Ciphertext | null): Promise<void> {
     return this.#run([STORES.settings], 'readwrite', async (tx) => {
       if (await tx.get(STORES.settings, VAULT_HEADER_KEY, isSetting)) {
         throw new StorageError('ERR_INVALID_SETTING', 'The vault is already initialized.');
       }
       await tx.put(STORES.settings, { key: VAULT_HEADER_KEY, value: header });
-      await tx.put(STORES.settings, { key: VAULT_NAME_KEY, value: nameCiphertext });
+      if (nameCiphertext !== null) await tx.put(STORES.settings, { key: VAULT_NAME_KEY, value: nameCiphertext });
     });
   }
 

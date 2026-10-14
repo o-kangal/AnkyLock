@@ -5,6 +5,7 @@ import {
   type Category,
   type CategoryId,
   type Ciphertext,
+  type EpochMs,
   type ErrorCode,
   type Folder,
   type FolderId,
@@ -35,6 +36,7 @@ import {
   type NewFolder,
   type NewOutboxEntry,
   type VaultEntry,
+  type VaultImport,
 } from '../interfaces/IStorageEngine.js';
 
 /** Signature of Tauri's `invoke`; injectable for tests. Argument keys are camelCase. */
@@ -99,6 +101,13 @@ const fromWireContent = (wire: WireNoteContent): NoteContent =>
     yjsStateVector: base64ToBytes(wire.yjsStateVector),
     yjsUpdates: base64ToBytes(wire.yjsUpdates),
   }) as NoteContent;
+
+const toWireContent = (content: NoteContent): WireNoteContent => ({
+  ...content,
+  contentCiphertext: bytesToBase64(content.contentCiphertext),
+  yjsStateVector: bytesToBase64(content.yjsStateVector),
+  yjsUpdates: bytesToBase64(content.yjsUpdates),
+});
 
 const fromWireOutbox = (wire: WireOutboxEntry): SyncOutboxEntry =>
   ({ ...wire, encryptedPayload: base64ToBytes(wire.encryptedPayload) }) as SyncOutboxEntry;
@@ -240,13 +249,7 @@ export class TauriSqliteAdapter implements IStorageEngine {
   }
 
   async saveNoteContent(content: NoteContent): Promise<void> {
-    const wire: WireNoteContent = {
-      ...content,
-      contentCiphertext: bytesToBase64(content.contentCiphertext),
-      yjsStateVector: bytesToBase64(content.yjsStateVector),
-      yjsUpdates: bytesToBase64(content.yjsUpdates),
-    };
-    await this.#call('note_save_content', { content: wire }, isNull);
+    await this.#call('note_save_content', { content: toWireContent(content) }, isNull);
   }
 
   async enqueueOutbox(entry: NewOutboxEntry): Promise<SyncOutboxEntry> {
@@ -264,6 +267,14 @@ export class TauriSqliteAdapter implements IStorageEngine {
 
   getVaultHeader(): Promise<string | null> {
     return this.#call('settings_get_vault_header', {}, (v): v is string | null => v === null || typeof v === 'string');
+  }
+
+  getDeviceId(): Promise<string> {
+    return this.#call('settings_get_device_id', {}, (v): v is string => typeof v === 'string');
+  }
+
+  async importVault(data: VaultImport): Promise<void> {
+    await this.#call('vault_import', { data: { ...data, contents: data.contents.map(toWireContent) } }, isNull);
   }
 
   getVaultName(): Promise<Ciphertext | null> {
@@ -300,8 +311,8 @@ export class TauriVaultDirectory implements IVaultDirectory {
     return call(this.#invoke, 'vault_list', {}, arrayOf(isVaultEntry));
   }
 
-  async create(id: VaultId, header: string, nameCiphertext: Ciphertext): Promise<IStorageEngine> {
-    await call(this.#invoke, 'vault_create', { id, header, nameCiphertext }, isVaultEntry);
+  async create(id: VaultId, header: string, nameCiphertext: Ciphertext | null, createdAt?: EpochMs): Promise<IStorageEngine> {
+    await call(this.#invoke, 'vault_create', { id, header, nameCiphertext, createdAt: createdAt ?? null }, isVaultEntry);
     return this.#storage;
   }
 

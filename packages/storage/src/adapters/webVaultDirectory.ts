@@ -91,7 +91,7 @@ export class WebVaultDirectory implements IVaultDirectory {
     return (await this.#records()).sort((a, b) => b.lastOpenedAt - a.lastOpenedAt).map(toEntry);
   }
 
-  async create(id: VaultId, header: string, nameCiphertext: Ciphertext): Promise<IStorageEngine> {
+  async create(id: VaultId, header: string, nameCiphertext: Ciphertext | null, createdAt?: EpochMs): Promise<IStorageEngine> {
     await this.#adoptLegacy();
     if ((await this.#records()).some((r) => r.id === id)) {
       throw new StorageError('ERR_INVALID_SETTING', 'A vault with this id already exists.');
@@ -102,7 +102,7 @@ export class WebVaultDirectory implements IVaultDirectory {
     // that cannot be unlocked.
     await storage.initializeVault(header, nameCiphertext);
     const now = this.#now();
-    await this.#put({ id, createdAt: now, lastOpenedAt: now, database });
+    await this.#put({ id, createdAt: createdAt ?? now, lastOpenedAt: now, database });
     return this.#switchTo(storage);
   }
 

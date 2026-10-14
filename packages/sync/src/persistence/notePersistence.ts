@@ -1,5 +1,12 @@
 import * as Y from 'yjs';
-import { MAX_NOTE_PLAINTEXT_BYTES, type Bytes, type EpochMs, type NoteContent, type NoteId } from '@ankylock/core';
+import {
+  MAX_NOTE_PLAINTEXT_BYTES,
+  type Bytes,
+  type Ciphertext,
+  type EpochMs,
+  type NoteContent,
+  type NoteId,
+} from '@ankylock/core';
 import { createTextCodec, type Sealer } from '@ankylock/crypto';
 import { StorageError, type IStorageEngine } from '@ankylock/storage';
 import { TEXT_FIELD } from '../crdt/docManager.js';
@@ -19,29 +26,41 @@ export async function loadNoteState(deps: NotePersistenceDeps, noteId: NoteId): 
 }
 
 /**
- * Saves the full doc encrypted: the Yjs state (which contains the text), a plaintext snapshot
- * for export, and the title, each sealed separately. Only the state vector, which holds clock
- * metadata and no text, is stored in the clear. Rejects notes over 10 MB (BR-NOTE-04).
+ * Encrypts the full doc: the Yjs state (which contains the text), a plaintext snapshot for
+ * export, each sealed separately. Only the state vector, which holds clock metadata and no text,
+ * stays in the clear. Rejects notes over 10 MB (BR-NOTE-04).
  */
+export async function encodeNoteContent(
+  sealer: Sealer,
+  noteId: NoteId,
+  doc: Y.Doc,
+  titleCiphertext: Ciphertext,
+  updatedAt: EpochMs,
+): Promise<NoteContent> {
+  const plaintext = encoder.encode(doc.getText(TEXT_FIELD).toString());
+  if (plaintext.length > MAX_NOTE_PLAINTEXT_BYTES) {
+    throw new StorageError('ERR_NOTE_TOO_LARGE', 'Notes are limited to 10 MB.');
+  }
+  return {
+    noteId,
+    titleCiphertext,
+    contentCiphertext: await sealer.seal(plaintext),
+    yjsStateVector: new Uint8Array(Y.encodeStateVector(doc)),
+    yjsUpdates: await sealer.seal(new Uint8Array(Y.encodeStateAsUpdate(doc))),
+    updatedAt,
+  };
+}
+
+/** Saves the full doc encrypted (see `encodeNoteContent`) with its encrypted title. */
 export async function saveNoteState(
   deps: NotePersistenceDeps,
   noteId: NoteId,
   doc: Y.Doc,
   title: string | null,
 ): Promise<void> {
-  const plaintext = encoder.encode(doc.getText(TEXT_FIELD).toString());
-  if (plaintext.length > MAX_NOTE_PLAINTEXT_BYTES) {
-    throw new StorageError('ERR_NOTE_TOO_LARGE', 'Notes are limited to 10 MB.');
-  }
-  const content: NoteContent = {
-    noteId,
-    titleCiphertext: await createTextCodec(deps.sealer).encrypt(title ?? ''),
-    contentCiphertext: await deps.sealer.seal(plaintext),
-    yjsStateVector: new Uint8Array(Y.encodeStateVector(doc)),
-    yjsUpdates: await deps.sealer.seal(new Uint8Array(Y.encodeStateAsUpdate(doc))),
-    updatedAt: deps.now?.() ?? (Date.now() as EpochMs),
-  };
-  await deps.storage.saveNoteContent(content);
+  const titleCiphertext = await createTextCodec(deps.sealer).encrypt(title ?? '');
+  const updatedAt = deps.now?.() ?? (Date.now() as EpochMs);
+  await deps.storage.saveNoteContent(await encodeNoteContent(deps.sealer, noteId, doc, titleCiphertext, updatedAt));
 }
 
 export interface DocPersister {

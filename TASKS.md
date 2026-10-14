@@ -424,6 +424,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo clippy --workspace --all-targ
 ---
 
 ### Task 11h: Open an Existing Vault from Google Drive
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Full-Stack
 - **Read-Only Context Files:** `SPEC.md` (§2.4, §7), `packages/sync/src/backup/snapshot.ts`, `packages/sync/src/backup/snapshotScheduler.ts`
 - **Target Files (Create/Modify):**

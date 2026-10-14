@@ -2,12 +2,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::now_ms;
-use super::settings::{get_vault_header, initialize_vault};
+use super::categories::Category;
+use super::folders::Folder;
+use super::notes::{Note, NoteContent};
+use super::settings::{get_vault_header, initialize_vault, set_retention_days};
 use crate::db::pool::{open_database, DbPool};
 use crate::error::{AppError, AppResult};
 
@@ -93,7 +96,14 @@ pub fn list(dir: &Path) -> AppResult<Vec<VaultEntry>> {
 
 /// Creates the vault's database with its header and encrypted name, then registers it, so the
 /// registry never lists a vault that cannot be unlocked.
-pub fn create(dir: &Path, id: &str, header: &str, name_ciphertext: &str, now: i64) -> AppResult<(VaultEntry, Connection)> {
+pub fn create(
+    dir: &Path,
+    id: &str,
+    header: &str,
+    name_ciphertext: Option<&str>,
+    created_at: i64,
+    now: i64,
+) -> AppResult<(VaultEntry, Connection)> {
     validate_id(id)?;
     let mut registry = read_registry(dir)?;
     let path = database_path(dir, id);
@@ -106,7 +116,7 @@ pub fn create(dir: &Path, id: &str, header: &str, name_ciphertext: &str, now: i6
         let _ = fs::remove_file(&path);
         return Err(error);
     }
-    let entry = VaultEntry { id: id.to_owned(), created_at: now, last_opened_at: now };
+    let entry = VaultEntry { id: id.to_owned(), created_at, last_opened_at: now };
     registry.vaults.push(entry.clone());
     write_registry(dir, &registry)?;
     Ok((entry, conn))
@@ -121,15 +131,6 @@ pub fn open(dir: &Path, id: &str, now: i64) -> AppResult<(VaultEntry, Connection
     let entry = entry.clone();
     write_registry(dir, &registry)?;
     Ok((entry, conn))
-}
-
-fn new_vault_id() -> AppResult<String> {
-    let mut b = [0u8; 16];
-    getrandom::fill(&mut b).map_err(|e| AppError::Io(std::io::Error::other(e.to_string())))?;
-    b[6] = (b[6] & 0x0f) | 0x40; // version 4
-    b[8] = (b[8] & 0x3f) | 0x80; // RFC 4122 variant
-    let hex: String = b.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32]))
 }
 
 /// Registers the pre-vault-id database (`ankylock.db`) as the first vault, renaming it to its
@@ -152,7 +153,7 @@ pub fn adopt_legacy_database(dir: &Path, now: i64) -> AppResult<()> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .and_then(|d| i64::try_from(d.as_millis()).ok())
         .unwrap_or(now);
-    let id = new_vault_id()?;
+    let id = super::new_uuid()?;
     fs::rename(&legacy, database_path(dir, &id))?;
     for suffix in ["-wal", "-shm"] {
         let _ = fs::remove_file(dir.join(format!("{LEGACY_DATABASE}{suffix}")));
@@ -162,26 +163,94 @@ pub fn adopt_legacy_database(dir: &Path, now: i64) -> AppResult<()> {
     write_registry(dir, &registry)
 }
 
+/// A vault's records restored from Drive snapshots (already merged by the client). Names, titles
+/// and bodies are still encrypted; the host stores them as given.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultImport {
+    pub retention_days: u32,
+    pub categories: Vec<Category>,
+    pub folders: Vec<Folder>,
+    pub notes: Vec<Note>,
+    pub contents: Vec<NoteContent>,
+}
+
+/// Fills a newly created, still empty vault in one transaction. Foreign keys are checked at
+/// commit, so folders may arrive in any order.
+pub fn import_records(conn: &mut Connection, data: &VaultImport) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    let existing: i64 = tx.query_row(
+        "SELECT (SELECT COUNT(*) FROM notes) + (SELECT COUNT(*) FROM folders) + (SELECT COUNT(*) FROM categories)",
+        [],
+        |r| r.get(0),
+    )?;
+    if existing > 0 {
+        return Err(AppError::InvalidTransition("Only an empty vault can be restored from a backup.".into()));
+    }
+    tx.pragma_update(None, "defer_foreign_keys", true)?;
+    for c in data.categories.iter().filter(|c| !c.is_system) {
+        tx.execute(
+            "INSERT INTO categories (id, is_system, sort_order, name_ciphertext, created_at, updated_at)
+             VALUES (?1, 0, ?2, ?3, ?4, ?5)",
+            params![c.id, c.sort_order, c.name_ciphertext, c.created_at, c.updated_at],
+        )?;
+    }
+    for f in &data.folders {
+        tx.execute(
+            "INSERT INTO folders (id, category_id, parent_id, name_ciphertext, is_archived, archived_at, deleted_at, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![f.id, f.category_id, f.parent_id, f.name_ciphertext, f.is_archived, f.archived_at, f.deleted_at, f.created_at, f.updated_at],
+        )?;
+    }
+    for n in &data.notes {
+        tx.execute(
+            "INSERT INTO notes (id, folder_id, category_id, is_ephemeral, is_archived, archived_at, deleted_at, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![n.id, n.folder_id, n.category_id, n.is_ephemeral, n.is_archived, n.archived_at, n.deleted_at, n.created_at, n.updated_at],
+        )?;
+    }
+    for c in &data.contents {
+        tx.execute(
+            "INSERT INTO note_contents (note_id, title_ciphertext, content_ciphertext, yjs_state_vector, yjs_updates, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![c.note_id, c.title_ciphertext, c.content_ciphertext, c.yjs_state_vector, c.yjs_updates, c.updated_at],
+        )?;
+    }
+    set_retention_days(&tx, data.retention_days)?;
+    tx.commit()?;
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn vault_list(vaults: State<'_, Vaults>) -> AppResult<Vec<VaultEntry>> {
     vaults.locked(list)
 }
 
-/// Creates a vault and makes it the open one.
+/// Creates a vault and makes it the open one. `created_at` is given when the vault already
+/// exists elsewhere (opened from Drive), so every device shows the same creation time.
 #[tauri::command(async)]
 pub fn vault_create(
     vaults: State<'_, Vaults>,
     db: State<'_, DbPool>,
     id: String,
     header: String,
-    name_ciphertext: String,
+    name_ciphertext: Option<String>,
+    created_at: Option<i64>,
 ) -> AppResult<VaultEntry> {
-    let (entry, conn) = vaults.locked(|dir| create(dir, &id, &header, &name_ciphertext, now_ms()))?;
+    let now = now_ms();
+    let (entry, conn) =
+        vaults.locked(|dir| create(dir, &id, &header, name_ciphertext.as_deref(), created_at.unwrap_or(now), now))?;
     db.replace(conn);
     Ok(entry)
 }
 
 /// Makes a registered vault the open one; every storage command then works on its database.
+/// Restores Drive snapshots into the open vault; see `import_records`.
+#[tauri::command(async)]
+pub fn vault_import(db: State<'_, DbPool>, data: VaultImport) -> AppResult<()> {
+    import_records(&mut *db.conn()?, &data)
+}
+
 #[tauri::command(async)]
 pub fn vault_open(vaults: State<'_, Vaults>, db: State<'_, DbPool>, id: String) -> AppResult<VaultEntry> {
     let (entry, conn) = vaults.locked(|dir| open(dir, &id, now_ms()))?;
@@ -217,12 +286,13 @@ mod tests {
     #[test]
     fn creates_isolated_vaults_and_lists_the_last_opened_first() {
         let tmp = TempDir::new("create");
-        let (_, first) = create(&tmp.0, ID, "{\"h\":1}", "bmFtZQ==", 10).unwrap();
-        let (_, second) = create(&tmp.0, OTHER, "{\"h\":2}", "b3RoZXI=", 20).unwrap();
+        let (_, first) = create(&tmp.0, ID, "{\"h\":1}", Some("bmFtZQ=="), 10, 10).unwrap();
+        let (_, second) = create(&tmp.0, OTHER, "{\"h\":2}", Some("b3RoZXI="), 5, 20).unwrap();
         assert_eq!(get_vault_header(&first).unwrap().as_deref(), Some("{\"h\":1}"));
         assert_eq!(get_vault_name(&second).unwrap().as_deref(), Some("b3RoZXI="));
         assert_eq!(list(&tmp.0).unwrap().iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), [OTHER, ID]);
 
+        assert_eq!(list(&tmp.0).unwrap()[0].created_at, 5, "a given creation time is kept");
         let (entry, reopened) = open(&tmp.0, ID, 30).unwrap();
         assert_eq!((entry.created_at, entry.last_opened_at), (10, 30));
         assert_eq!(get_vault_header(&reopened).unwrap().as_deref(), Some("{\"h\":1}"));
@@ -232,12 +302,40 @@ mod tests {
     #[test]
     fn rejects_duplicate_unknown_and_malformed_ids() {
         let tmp = TempDir::new("reject");
-        create(&tmp.0, ID, "{}", "bg==", 1).unwrap();
-        assert_eq!(create(&tmp.0, ID, "{}", "bg==", 2).unwrap_err().code(), "ERR_INVALID_SETTING");
+        create(&tmp.0, ID, "{}", Some("bg=="), 1, 1).unwrap();
+        assert_eq!(create(&tmp.0, ID, "{}", Some("bg=="), 2, 2).unwrap_err().code(), "ERR_INVALID_SETTING");
         assert_eq!(open(&tmp.0, OTHER, 2).unwrap_err().code(), "ERR_NOT_FOUND");
         for bad in ["../ankylock", "0B6F5C2E-3D1A-4C8E-9F7B-2A1D4E5F6A7B", "", "0b6f5c2e3d1a4c8e9f7b2a1d4e5f6a7b0000"] {
-            assert_eq!(create(&tmp.0, bad, "{}", "bg==", 1).unwrap_err().code(), "ERR_INVALID_SETTING", "{bad}");
+            assert_eq!(create(&tmp.0, bad, "{}", Some("bg=="), 1, 1).unwrap_err().code(), "ERR_INVALID_SETTING", "{bad}");
         }
+    }
+
+    #[test]
+    fn imports_records_into_an_empty_vault_only() {
+        let tmp = TempDir::new("import");
+        let (_, mut conn) = create(&tmp.0, ID, "{}", Some("bg=="), 1, 1).unwrap();
+        let data: VaultImport = serde_json::from_value(serde_json::json!({
+            "retentionDays": 7,
+            "categories": [{ "id": "c", "isSystem": false, "sortOrder": 0, "nameCiphertext": "Yw==", "createdAt": 1, "updatedAt": 1 }],
+            "folders": [
+                { "id": "child", "categoryId": null, "parentId": "parent", "nameCiphertext": "Yg==", "isArchived": false,
+                  "archivedAt": null, "deletedAt": null, "createdAt": 2, "updatedAt": 2 },
+                { "id": "parent", "categoryId": "c", "parentId": null, "nameCiphertext": "YQ==", "isArchived": false,
+                  "archivedAt": null, "deletedAt": null, "createdAt": 1, "updatedAt": 1 }
+            ],
+            "notes": [{ "id": "n", "folderId": "child", "categoryId": null, "isEphemeral": false, "isArchived": false,
+                        "archivedAt": null, "deletedAt": 9, "createdAt": 3, "updatedAt": 3 }],
+            "contents": [{ "noteId": "n", "titleCiphertext": "dA==", "contentCiphertext": "AQ==", "yjsStateVector": "AA==",
+                           "yjsUpdates": "Ag==", "updatedAt": 3 }]
+        }))
+        .unwrap();
+        import_records(&mut conn, &data).unwrap();
+        let trashed: Option<i64> = conn.query_row("SELECT deleted_at FROM notes WHERE id = 'n'", [], |r| r.get(0)).unwrap();
+        assert_eq!(trashed, Some(9));
+        let updates: Vec<u8> = conn.query_row("SELECT yjs_updates FROM note_contents WHERE note_id = 'n'", [], |r| r.get(0)).unwrap();
+        assert_eq!(updates, [2]);
+        assert_eq!(super::super::settings::get_retention_days(&conn).unwrap(), 7);
+        assert_eq!(import_records(&mut conn, &data).unwrap_err().code(), "ERR_INVALID_TRANSITION");
     }
 
     #[test]
@@ -245,7 +343,7 @@ mod tests {
         let tmp = TempDir::new("adopt");
         let legacy = tmp.0.join(LEGACY_DATABASE);
         let mut conn = open_database(&legacy).unwrap();
-        initialize_vault(&mut conn, "{\"legacy\":true}", "bg==").unwrap();
+        initialize_vault(&mut conn, "{\"legacy\":true}", Some("bg==")).unwrap();
         conn.execute(
             "INSERT INTO notes (id, is_ephemeral, created_at, updated_at) VALUES ('n1', 1, 5, 5)",
             [],

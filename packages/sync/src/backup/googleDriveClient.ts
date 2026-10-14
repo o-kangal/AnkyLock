@@ -1,4 +1,4 @@
-import type { Bytes } from '@ankylock/core';
+import type { Bytes, EpochMs } from '@ankylock/core';
 
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
@@ -22,6 +22,22 @@ export class DriveError extends Error {
     this.status = status;
   }
 }
+
+/** A file in appDataFolder. */
+export interface DriveFile {
+  readonly id: string;
+  readonly name: string;
+  readonly modifiedTime: EpochMs;
+}
+
+const quote = (value: string): string => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+
+const isDriveFile = (value: unknown): value is { id: string; name: string; modifiedTime: string } =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { id?: unknown }).id === 'string' &&
+  typeof (value as { name?: unknown }).name === 'string' &&
+  typeof (value as { modifiedTime?: unknown }).modifiedTime === 'string';
 
 export interface GoogleDriveClientOptions {
   /**
@@ -62,7 +78,7 @@ export class GoogleDriveClient {
   async findFileId(name: string): Promise<string | null> {
     const query = new URLSearchParams({
       spaces: 'appDataFolder',
-      q: `name = '${name.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}' and trashed = false`,
+      q: `name = ${quote(name)} and trashed = false`,
       fields: 'files(id)',
       orderBy: 'modifiedTime desc',
       pageSize: '1',
@@ -74,17 +90,46 @@ export class GoogleDriveClient {
     return typeof id === 'string' ? id : null;
   }
 
+  /** Every file in appDataFolder whose name starts with `prefix`. */
+  async listFiles(prefix: string): Promise<DriveFile[]> {
+    const files: DriveFile[] = [];
+    let pageToken: string | null = null;
+    do {
+      const query = new URLSearchParams({
+        spaces: 'appDataFolder',
+        q: `name contains ${quote(prefix)} and trashed = false`,
+        fields: 'nextPageToken, files(id, name, modifiedTime)',
+        pageSize: '100',
+        ...(pageToken === null ? {} : { pageToken }),
+      });
+      const body: unknown = await (await this.#request(`${FILES_URL}?${query.toString()}`)).json();
+      const page = body as { files?: unknown; nextPageToken?: unknown };
+      for (const file of Array.isArray(page.files) ? page.files : []) {
+        if (isDriveFile(file) && file.name.startsWith(prefix)) {
+          files.push({ id: file.id, name: file.name, modifiedTime: Date.parse(file.modifiedTime) as EpochMs });
+        }
+      }
+      pageToken = typeof page.nextPageToken === 'string' ? page.nextPageToken : null;
+    } while (pageToken !== null);
+    return files;
+  }
+
   /** Creates the file in appDataFolder, or replaces the content of the existing one. */
   async upload(name: string, data: Bytes, mimeType: string): Promise<void> {
     const existing = await this.findFileId(name);
-    if (existing !== null) {
-      await this.#request(`${UPLOAD_URL}/${encodeURIComponent(existing)}?uploadType=media`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': mimeType },
-        body: data,
-      });
+    if (existing === null) {
+      await this.create(name, data, mimeType);
       return;
     }
+    await this.#request(`${UPLOAD_URL}/${encodeURIComponent(existing)}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': mimeType },
+      body: data,
+    });
+  }
+
+  /** Always adds a new file, never touching existing ones. */
+  async create(name: string, data: Bytes, mimeType: string): Promise<void> {
     const boundary = `ankylock-${crypto.randomUUID()}`;
     const metadata = JSON.stringify({ name, parents: ['appDataFolder'], mimeType });
     const body = new Blob([
@@ -102,7 +147,10 @@ export class GoogleDriveClient {
 
   async download(name: string): Promise<Bytes | null> {
     const id = await this.findFileId(name);
-    if (id === null) return null;
+    return id === null ? null : this.downloadFile(id);
+  }
+
+  async downloadFile(id: string): Promise<Bytes> {
     const response = await this.#request(`${FILES_URL}/${encodeURIComponent(id)}?alt=media`);
     return new Uint8Array(await response.arrayBuffer());
   }

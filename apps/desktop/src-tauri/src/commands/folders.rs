@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::categories::require_category;
@@ -12,7 +12,7 @@ use crate::error::{AppError, AppResult};
 /// Mirrors `MAX_FOLDER_DEPTH` in `packages/core/src/constants.ts`.
 pub const MAX_FOLDER_DEPTH: usize = 3;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Folder {
     pub id: String,

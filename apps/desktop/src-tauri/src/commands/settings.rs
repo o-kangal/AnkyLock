@@ -37,6 +37,7 @@ pub fn set_retention_days(conn: &Connection, days: u32) -> AppResult<u32> {
 
 const VAULT_HEADER_KEY: &str = "vault_header";
 const VAULT_NAME_KEY: &str = "vault_name";
+const DEVICE_ID_KEY: &str = "device_id";
 
 fn get_setting(conn: &Connection, key: &str) -> AppResult<Option<String>> {
     Ok(conn.query_row("SELECT value FROM app_settings WHERE key = ?1", [key], |r| r.get(0)).optional()?)
@@ -53,8 +54,19 @@ pub fn get_vault_name(conn: &Connection) -> AppResult<Option<String>> {
     get_setting(conn, VAULT_NAME_KEY)
 }
 
-/// Writes the header and the encrypted name of a new vault in one transaction.
-pub fn initialize_vault(conn: &mut Connection, header: &str, name_ciphertext: &str) -> AppResult<()> {
+/// This device's id within the vault, created on first use. It names the device's own Drive
+/// snapshot, so devices never overwrite each other's backups.
+pub fn device_id(conn: &Connection) -> AppResult<String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?1, ?2)",
+        params![DEVICE_ID_KEY, super::new_uuid()?],
+    )?;
+    Ok(get_setting(conn, DEVICE_ID_KEY)?.unwrap_or_default())
+}
+
+/// Writes the header and the encrypted name of a new vault in one transaction. Vaults created
+/// before vaults had names have none.
+pub fn initialize_vault(conn: &mut Connection, header: &str, name_ciphertext: Option<&str>) -> AppResult<()> {
     let tx = conn.transaction()?;
     let inserted = tx.execute(
         "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?1, ?2)",
@@ -63,11 +75,13 @@ pub fn initialize_vault(conn: &mut Connection, header: &str, name_ciphertext: &s
     if inserted == 0 {
         return Err(AppError::InvalidSetting("The vault is already initialized.".into()));
     }
-    tx.execute(
-        "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        params![VAULT_NAME_KEY, name_ciphertext],
-    )?;
+    if let Some(name) = name_ciphertext {
+        tx.execute(
+            "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![VAULT_NAME_KEY, name],
+        )?;
+    }
     tx.commit()?;
     Ok(())
 }
@@ -75,6 +89,11 @@ pub fn initialize_vault(conn: &mut Connection, header: &str, name_ciphertext: &s
 #[tauri::command(async)]
 pub fn settings_get_vault_header(db: State<'_, DbPool>) -> AppResult<Option<String>> {
     get_vault_header(&*db.conn()?)
+}
+
+#[tauri::command(async)]
+pub fn settings_get_device_id(db: State<'_, DbPool>) -> AppResult<String> {
+    device_id(&*db.conn()?)
 }
 
 #[tauri::command(async)]
@@ -126,14 +145,22 @@ mod tests {
     }
 
     #[test]
+    fn keeps_one_device_id_per_vault() {
+        let conn = test_conn();
+        let id = device_id(&conn).unwrap();
+        assert_eq!(id.len(), 36);
+        assert_eq!(device_id(&conn).unwrap(), id);
+    }
+
+    #[test]
     fn initializes_the_vault_once() {
         let mut conn = test_conn();
         assert_eq!(get_vault_header(&conn).unwrap(), None);
         assert_eq!(get_vault_name(&conn).unwrap(), None);
-        initialize_vault(&mut conn, "{\"version\":1}", "bmFtZQ==").unwrap();
+        initialize_vault(&mut conn, "{\"version\":1}", Some("bmFtZQ==")).unwrap();
         assert_eq!(get_vault_header(&conn).unwrap().as_deref(), Some("{\"version\":1}"));
         assert_eq!(get_vault_name(&conn).unwrap().as_deref(), Some("bmFtZQ=="));
-        assert_eq!(initialize_vault(&mut conn, "{}", "b3RoZXI=").unwrap_err().code(), "ERR_INVALID_SETTING");
+        assert_eq!(initialize_vault(&mut conn, "{}", Some("b3RoZXI=")).unwrap_err().code(), "ERR_INVALID_SETTING");
         assert_eq!(get_vault_header(&conn).unwrap().as_deref(), Some("{\"version\":1}"));
         assert_eq!(get_vault_name(&conn).unwrap().as_deref(), Some("bmFtZQ=="));
     }

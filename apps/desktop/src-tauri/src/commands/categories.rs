@@ -1,5 +1,5 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::{now_ms, reject_system_category};
@@ -7,7 +7,7 @@ use crate::db::pool::DbPool;
 use crate::error::{AppError, AppResult};
 
 /// A user-defined category. System categories are views and have no rows.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Category {
     pub id: String,

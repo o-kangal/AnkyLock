@@ -1,6 +1,6 @@
 import { createSignal, type Accessor } from 'solid-js';
 import type * as Y from 'yjs';
-import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
+import type { Ciphertext, EpochMs, NoteId, VaultId } from '@ankylock/core';
 import {
   CryptoError,
   createTextCodec,
@@ -17,7 +17,10 @@ import {
   TEXT_FIELD,
   createSnapshotScheduler,
   createSyncEngine,
+  downloadSnapshots,
   exportSnapshot,
+  listRemoteVaults,
+  mergeSnapshots,
   loadNoteState,
   persistDoc,
   startRetentionWorker,
@@ -27,6 +30,7 @@ import {
   type ConnectionStatus,
   type DeviceId,
   type DocPersister,
+  type RemoteVault,
   type RetentionWorker,
   type SnapshotScheduler,
   type SocketLike,
@@ -78,6 +82,16 @@ export interface Runtime {
   unlock(vaultId: VaultId, passphrase: string): Promise<string | null>;
   /** Locks the open vault and returns to the vault list. */
   lock(): Promise<void>;
+  /**
+   * Signs in to Google if needed and lists the vaults in the user's Drive that are not on this
+   * device yet. Names stay encrypted until a vault is unlocked.
+   */
+  findRemoteVaults(): Promise<{ readonly vaults: readonly RemoteVault[] } | { readonly error: string }>;
+  /**
+   * Opens a vault found by `findRemoteVaults` on this device: checks the passphrase against its
+   * header first (nothing is written on a wrong one), then restores every device's snapshot.
+   */
+  openRemoteVault(vaultId: VaultId, passphrase: string): Promise<string | null>;
   /** Opens (or returns) the headless doc of a note and starts persisting it. */
   openDoc(noteId: NoteId): Promise<Y.Doc>;
   /** Closes docs of notes without an open tab, saving pending edits first. */
@@ -116,6 +130,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   let vaultId: VaultId | null = null;
   let storage: IStorageEngine | null = null;
   let store: WorkspaceStore | null = null;
+  let vaultNameCiphertext: Ciphertext | null = null;
+  let vaultDeviceId: string | null = null;
+  /** Vaults from the last Drive listing, by id. */
+  let remoteVaults = new Map<VaultId, RemoteVault>();
+  const drive = auth
+    ? new GoogleDriveClient({
+        getAccessToken: () => auth.accessToken(),
+        ...(options.driveFetch ? { fetch: options.driveFetch } : {}),
+      })
+    : null;
   /** Identifies this app instance in frames; the relay already never echoes to the sender. */
   const deviceId = crypto.randomUUID() as DeviceId;
   const announcePurged = (items: readonly PurgedItem[]): void => {
@@ -157,7 +181,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
   function startSync(): void {
     if (engine || !auth || !relayUrl || status() !== 'unlocked' || auth.state().kind !== 'signed-in') return;
-    if (!storage || !vaultId) return;
+    const entry = vaultList().find((v) => v.id === vaultId);
+    if (!storage || !vaultId || !entry || !drive || headerJson === null || vaultDeviceId === null) return;
     const vaultStorage = storage;
     const next = createSyncEngine({
       storage: vaultStorage,
@@ -180,15 +205,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
     next.start();
     scheduler = createSnapshotScheduler({
-      drive: new GoogleDriveClient({
-        getAccessToken: () => auth.accessToken(),
-        ...(options.driveFetch ? { fetch: options.driveFetch } : {}),
-      }),
+      drive,
       createSnapshot: () => exportSnapshot(vaultStorage, sealer, Date.now() as EpochMs),
-      vaultHeader: () => headerJson,
+      vault: { vaultId: entry.id, createdAt: entry.createdAt, header: headerJson, nameCiphertext: vaultNameCiphertext },
+      deviceId: vaultDeviceId,
       onStatus: (backup) => updateSync({ backup }),
     });
     scheduler.start();
+    // Backups never wait for the relay (SPEC §7): the first one runs right away, online or not.
+    scheduler.notifyIdle();
   }
 
   async function stopSync(): Promise<void> {
@@ -209,6 +234,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   async function start(opened: IStorageEngine, id: VaultId, header: string): Promise<string | null> {
     await sealer.setKey(vault.getKey());
     const nameCiphertext = await opened.getVaultName();
+    const deviceOfVault = await opened.getDeviceId();
     const nextStore = createWorkspaceStore({ storage: opened, names, onPurged: announcePurged });
     const loaded = await nextStore.load();
     if (!loaded.ok) return loaded.error.message;
@@ -216,6 +242,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     store = nextStore;
     vaultId = id;
     headerJson = header;
+    vaultNameCiphertext = nameCiphertext;
+    vaultDeviceId = deviceOfVault;
+    setVaultList(await directory.list());
     setVaultName(nameCiphertext === null ? null : await names.decrypt(nameCiphertext));
     retention = startRetentionWorker({
       storage: opened,
@@ -303,8 +332,45 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       store = null;
       vaultId = null;
       headerJson = null;
+      vaultNameCiphertext = null;
+      vaultDeviceId = null;
       setVaultName(null);
       await refreshVaults();
+    },
+
+    async findRemoteVaults() {
+      if (!auth || !drive) return { error: 'Google sign-in is not available in this app.' };
+      if (auth.state().kind !== 'signed-in') {
+        const failure = await auth.signIn();
+        if (failure !== null) return { error: failure };
+      }
+      try {
+        const local = new Set((await directory.list()).map((v) => v.id));
+        const found = (await listRemoteVaults(drive)).filter((v) => !local.has(v.vaultId));
+        remoteVaults = new Map(found.map((v) => [v.vaultId, v]));
+        return { vaults: found };
+      } catch (error) {
+        return { error: message(error) };
+      }
+    },
+
+    async openRemoteVault(id, passphrase) {
+      const remote = remoteVaults.get(id);
+      if (!remote || !drive) return 'This vault was not found in Google Drive.';
+      try {
+        await vault.unlock(passphrase, parseVaultHeader(remote.header));
+        await sealer.setKey(vault.getKey());
+        const { snapshots, unreadable } = await downloadSnapshots(drive, sealer, remote);
+        if (unreadable > 0) report(`${unreadable} backup(s) of this vault could not be read and were skipped.`);
+        const data = await mergeSnapshots(sealer, snapshots);
+        const created = await directory.create(id, remote.header, remote.nameCiphertext, remote.createdAt);
+        await created.importVault(data);
+        remoteVaults.delete(id);
+        const failure = await start(created, id, remote.header);
+        return failure === null ? null : failed(failure);
+      } catch (error) {
+        return failed(error);
+      }
     },
 
     openDoc(noteId) {

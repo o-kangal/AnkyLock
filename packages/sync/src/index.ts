@@ -7,6 +7,7 @@ export * from './workers/retentionWorker.js';
 export * from './backup/snapshot.js';
 export * from './backup/googleDriveClient.js';
 export * from './backup/snapshotScheduler.js';
+export * from './backup/vaultCatalog.js';
 export * from './persistence/notePersistence.js';
 export * from './auth/googleAuth.js';
 export * from './engine/syncEngine.js';

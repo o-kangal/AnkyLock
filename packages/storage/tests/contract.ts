@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Bytes, CategoryId, Ciphertext, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
-import type { IStorageEngine } from '../src/index.js';
+import type { Bytes, CategoryId, Ciphertext, EpochMs, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
+import type { IStorageEngine, VaultImport } from '../src/index.js';
 
 const cat = (s: string): CategoryId => s as CategoryId;
 const folder = (s: string): FolderId => s as FolderId;
@@ -324,6 +324,39 @@ export function storageContract(label: string, makeEngine: () => IStorageEngine)
       it('rejects invalid retention values', async () => {
         for (const days of [-1, 1.5, 366]) await expectCode(engine.setTrashRetentionDays(days), 'ERR_INVALID_SETTING');
         expect(await engine.getTrashRetentionDays()).toBe(28);
+      });
+    });
+
+    describe('vault restore', () => {
+      const at = (n: number) => n as EpochMs;
+
+      it('keeps one device id', async () => {
+        const id = await engine.getDeviceId();
+        expect(id).toMatch(/^[0-9a-f-]{36}$/);
+        expect(await engine.getDeviceId()).toBe(id);
+      });
+
+      it('imports records as given into an empty vault only', async () => {
+        const data: VaultImport = {
+          retentionDays: 7,
+          categories: [{ id: cat('c'), isSystem: false, sortOrder: 0, nameCiphertext: name('Yw=='), createdAt: at(1), updatedAt: at(1) }],
+          folders: [
+            { id: folder('child'), categoryId: null, parentId: folder('parent'), nameCiphertext: name('Yg=='), isArchived: false, archivedAt: null, deletedAt: null, createdAt: at(2), updatedAt: at(2) },
+            { id: folder('parent'), categoryId: cat('c'), parentId: null, nameCiphertext: name('YQ=='), isArchived: false, archivedAt: null, deletedAt: null, createdAt: at(1), updatedAt: at(1) },
+          ],
+          notes: [
+            { id: note('n'), folderId: folder('child'), categoryId: null, isEphemeral: false, isArchived: false, archivedAt: null, deletedAt: null, createdAt: at(3), updatedAt: at(3) },
+            { id: note('t'), folderId: null, categoryId: null, isEphemeral: false, isArchived: false, archivedAt: null, deletedAt: at(9), createdAt: at(3), updatedAt: at(9) },
+          ],
+          contents: [content('n', 3), content('t', 9)],
+        };
+        await engine.importVault(data);
+        expect((await engine.listFolders()).map((f) => f.id).sort()).toEqual(['child', 'parent']);
+        expect((await engine.listNotes(folder('child'))).map((n) => n.id)).toEqual(['n']);
+        expect((await engine.listTrashedNotes()).map((n) => n.deletedAt)).toEqual([9]);
+        expect((await engine.getNoteContent(note('n')))?.yjsUpdates).toEqual(content('n', 3).yjsUpdates);
+        expect(await engine.getTrashRetentionDays()).toBe(7);
+        await expectCode(engine.importVault(data), 'ERR_INVALID_TRANSITION');
       });
     });
 
