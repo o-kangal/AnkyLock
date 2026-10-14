@@ -396,6 +396,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm --filter @ankylock/desktop run
 ---
 
 ### Task 11g: Vault Identity & Multiple Local Vaults
+- **Status:** ✅ Completed (2026-10-14)
 - **Type:** Full-Stack
 - **Read-Only Context Files:** `SPEC.md` (§2.4), `packages/crypto/src/vaultKey.ts`, `packages/storage/src/interfaces/IStorageEngine.ts`, `apps/relay/src/hub.rs`
 - **Target Files (Create/Modify):**

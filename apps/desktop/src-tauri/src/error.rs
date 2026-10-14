@@ -20,6 +20,8 @@ pub enum AppError {
     NotFound(&'static str),
     #[error("Storage error: {0}")]
     Storage(#[from] rusqlite::Error),
+    #[error("Storage error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("{0}")]
     Auth(String),
     /// The stored Google session is gone or revoked; the user has to sign in again.
@@ -27,6 +29,8 @@ pub enum AppError {
     AuthExpired,
     #[error("Network error: {0}")]
     Network(String),
+    #[error("No vault is open.")]
+    VaultLocked,
 }
 
 impl AppError {
@@ -39,10 +43,11 @@ impl AppError {
             Self::InvalidTransition(_) => "ERR_INVALID_TRANSITION",
             Self::InvalidSetting(_) => "ERR_INVALID_SETTING",
             Self::NotFound(_) => "ERR_NOT_FOUND",
-            Self::Storage(_) => "ERR_STORAGE",
+            Self::Storage(_) | Self::Io(_) => "ERR_STORAGE",
             Self::Auth(_) => "ERR_AUTH",
             Self::AuthExpired => "ERR_AUTH_EXPIRED",
             Self::Network(_) => "ERR_NETWORK",
+            Self::VaultLocked => "ERR_VAULT_LOCKED",
         }
     }
 }

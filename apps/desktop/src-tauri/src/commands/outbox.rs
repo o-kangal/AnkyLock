@@ -80,7 +80,7 @@ pub struct OutboxInput {
 #[tauri::command(async)]
 pub fn outbox_enqueue(db: State<'_, DbPool>, entry: OutboxInput) -> AppResult<OutboxEntry> {
     enqueue_outbox(
-        &db.conn(),
+        &*db.conn()?,
         &entry.entity_id,
         &entry.entity_type,
         &entry.encrypted_payload,
@@ -90,12 +90,12 @@ pub fn outbox_enqueue(db: State<'_, DbPool>, entry: OutboxInput) -> AppResult<Ou
 
 #[tauri::command(async)]
 pub fn outbox_list(db: State<'_, DbPool>, limit: u32) -> AppResult<Vec<OutboxEntry>> {
-    list_outbox(&db.conn(), limit)
+    list_outbox(&*db.conn()?, limit)
 }
 
 #[tauri::command(async)]
 pub fn outbox_delete(db: State<'_, DbPool>, ids: Vec<i64>) -> AppResult<()> {
-    delete_outbox(&mut db.conn(), &ids)
+    delete_outbox(&mut *db.conn()?, &ids)
 }
 
 #[cfg(test)]

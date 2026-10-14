@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import type { Ciphertext, EpochMs, FolderId, NoteContent, NoteId, SealedBytes } from '@ankylock/core';
-import { TauriSqliteAdapter, WebIndexedDbAdapter, type Invoke } from '../src/index.js';
+import type { Ciphertext, EpochMs, FolderId, NoteContent, NoteId, SealedBytes, VaultId } from '@ankylock/core';
+import { TauriSqliteAdapter, TauriVaultDirectory, WebIndexedDbAdapter, WebVaultDirectory, type Invoke } from '../src/index.js';
 import { storageContract } from './contract.js';
 
 /** Strictly increasing clock so ordering by timestamp is deterministic. */
@@ -205,5 +205,85 @@ describe('TauriSqliteAdapter', () => {
     expect(await adapter.getNote('n' as NoteId)).toBeNull();
     expect(await adapter.getNoteContent('n' as NoteId)).toBeNull();
     await expect(adapter.purgeNote('n' as NoteId)).resolves.toBeUndefined();
+  });
+});
+
+describe('TauriVaultDirectory', () => {
+  const entry = { id: '0b6f5c2e-3d1a-4c8e-9f7b-2a1d4e5f6a7b', createdAt: 1, lastOpenedAt: 2 };
+
+  it('creates and opens vaults through the host', async () => {
+    const calls: [string, Record<string, unknown> | undefined][] = [];
+    const invoke: Invoke = (command, args) => {
+      calls.push([command, args]);
+      return Promise.resolve(command === 'vault_list' ? [entry] : entry);
+    };
+    const vaults = new TauriVaultDirectory(invoke);
+    expect(await vaults.list()).toEqual([entry]);
+    const created = await vaults.create(entry.id as VaultId, '{"h":1}', 'bmFtZQ==' as Ciphertext);
+    const opened = await vaults.open(entry.id as VaultId);
+    expect(created).toBe(opened);
+    expect(calls).toEqual([
+      ['vault_list', {}],
+      ['vault_create', { id: entry.id, header: '{"h":1}', nameCiphertext: 'bmFtZQ==' }],
+      ['vault_open', { id: entry.id }],
+    ]);
+  });
+
+  it('maps host errors', async () => {
+    const invoke: Invoke = () => Promise.reject({ code: 'ERR_NOT_FOUND', message: 'Vault not found.' });
+    await expect(new TauriVaultDirectory(invoke).open(entry.id as VaultId)).rejects.toMatchObject({ code: 'ERR_NOT_FOUND' });
+  });
+});
+
+describe('WebVaultDirectory', () => {
+  const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' as VaultId;
+  const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as VaultId;
+
+  it('keeps every vault in its own database', async () => {
+    const factory = new IDBFactory();
+    const vaults = new WebVaultDirectory(factory, counterClock());
+    expect(await vaults.list()).toEqual([]);
+    const a = await vaults.create(A, '{"h":"a"}', 'YQ==' as Ciphertext);
+    await a.createNote('only-in-a' as NoteId);
+    const b = await vaults.create(B, '{"h":"b"}', 'Yg==' as Ciphertext);
+    expect(await b.getNote('only-in-a' as NoteId)).toBeNull();
+    expect(await b.getVaultName()).toBe('Yg==');
+
+    const reopened = await vaults.open(A);
+    expect(await reopened.getVaultHeader()).toBe('{"h":"a"}');
+    expect((await reopened.getNote('only-in-a' as NoteId))?.id).toBe('only-in-a');
+    expect((await new WebVaultDirectory(factory, counterClock(2_000_000_000_000)).list()).map((v) => v.id)).toEqual([A, B]);
+  });
+
+  it('writes the header once and rejects duplicate or unknown vaults', async () => {
+    const vaults = new WebVaultDirectory(new IDBFactory(), counterClock());
+    await vaults.create(A, '{}', 'YQ==' as Ciphertext);
+    await expect(vaults.create(A, '{}', 'YQ==' as Ciphertext)).rejects.toMatchObject({ code: 'ERR_INVALID_SETTING' });
+    await expect(vaults.open(B)).rejects.toMatchObject({ code: 'ERR_NOT_FOUND' });
+    const adapter = new WebIndexedDbAdapter(new IDBFactory(), counterClock());
+    await adapter.initializeVault('{"v":1}', 'bg==' as Ciphertext);
+    await expect(adapter.initializeVault('{}', 'bg==' as Ciphertext)).rejects.toMatchObject({ code: 'ERR_INVALID_SETTING' });
+    expect(await adapter.getVaultHeader()).toBe('{"v":1}');
+  });
+
+  it('adopts the pre-vault-id database as the first vault', async () => {
+    const factory = new IDBFactory();
+    const legacy = new WebIndexedDbAdapter(factory, counterClock());
+    await legacy.initializeVault('{"legacy":true}', 'bg==' as Ciphertext);
+    await legacy.createNote('old' as NoteId);
+    await legacy.close();
+
+    const vaults = new WebVaultDirectory(factory, counterClock());
+    const [adopted, ...rest] = await vaults.list();
+    expect(rest).toEqual([]);
+    const storage = await vaults.open(adopted!.id);
+    expect(await storage.getVaultHeader()).toBe('{"legacy":true}');
+    expect((await storage.getNote('old' as NoteId))?.id).toBe('old');
+  });
+
+  it('ignores a legacy database that never got a vault', async () => {
+    const factory = new IDBFactory();
+    await new WebIndexedDbAdapter(factory, counterClock()).close();
+    expect(await new WebVaultDirectory(factory, counterClock()).list()).toEqual([]);
   });
 });

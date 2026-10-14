@@ -1,6 +1,6 @@
 import { createSignal, type Accessor } from 'solid-js';
 import type * as Y from 'yjs';
-import type { EpochMs, NoteId } from '@ankylock/core';
+import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
 import {
   CryptoError,
   createTextCodec,
@@ -9,7 +9,7 @@ import {
   serializeVaultHeader,
   type WorkerSealer,
 } from '@ankylock/crypto';
-import { StorageError, type IStorageEngine } from '@ankylock/storage';
+import { StorageError, type IStorageEngine, type IVaultDirectory, type VaultEntry } from '@ankylock/storage';
 import {
   DocManager,
   GoogleDriveClient,
@@ -37,13 +37,14 @@ import { createWorkspaceStore, type PurgedItem, type WorkspaceStore } from '../s
 export type VaultStatus = 'loading' | 'uninitialized' | 'locked' | 'unlocked';
 
 export interface RuntimeOptions {
-  readonly storage: IStorageEngine;
+  /** The vaults on this device; each has its own database, salt and key (BR-SEC-04). */
+  readonly vaults: IVaultDirectory;
   /** Encryption runs in a Dedicated Web Worker; the app passes `createWorkerSealer(new Worker(...))`. */
   readonly sealer: WorkerSealer;
   readonly onError?: (message: string) => void;
   /** Google session; without it the app is local-only (sync and backup stay off). */
   readonly auth?: AuthSession;
-  /** Blind relay WebSocket URL, e.g. `ws://127.0.0.1:8787/ws`. */
+  /** Blind relay WebSocket base URL, e.g. `ws://127.0.0.1:8787/ws`; the vault id is appended. */
   readonly relayUrl?: string;
   /** Test seams for the relay socket and Drive's HTTP client. */
   readonly createSocket?: (url: string, protocols: string[]) => SocketLike;
@@ -58,14 +59,24 @@ export interface SyncStatus {
 }
 
 export interface Runtime {
+  /** The open vault's workspace; a fresh one per unlock, so nothing carries over between vaults. */
   readonly store: WorkspaceStore;
+  /** `uninitialized`: no vault on this device yet. `locked`: choose a vault and unlock it. */
   readonly status: Accessor<VaultStatus>;
-  /** Reads whether a vault exists; call once at startup. */
+  /** The vaults on this device, most recently opened first. */
+  readonly vaults: Accessor<readonly VaultEntry[]>;
+  /** The open vault's decrypted name; null while locked or for vaults created before names existed. */
+  readonly vaultName: Accessor<string | null>;
+  /** Lists the vaults on this device; call once at startup. */
   init(): Promise<void>;
-  /** First launch: derives the MEK from a new passphrase and stores the (non-secret) vault header. */
-  createVault(passphrase: string): Promise<string | null>;
-  /** Later launches; resolves with an error message, or null on success. */
-  unlock(passphrase: string): Promise<string | null>;
+  /**
+   * Creates a vault with its own salt and key, stores its (non-secret) header and encrypted name,
+   * and opens it. Resolves with an error message, or null on success.
+   */
+  createVault(name: string, passphrase: string): Promise<string | null>;
+  /** Resolves with an error message, or null on success. */
+  unlock(vaultId: VaultId, passphrase: string): Promise<string | null>;
+  /** Locks the open vault and returns to the vault list. */
   lock(): Promise<void>;
   /** Opens (or returns) the headless doc of a note and starts persisting it. */
   openDoc(noteId: NoteId): Promise<Y.Doc>;
@@ -81,6 +92,9 @@ export interface Runtime {
   signOut(): Promise<void>;
 }
 
+/** Long enough for any sensible label, short enough for the title bar and vault list. */
+export const MAX_VAULT_NAME_LENGTH = 64;
+
 const message = (error: unknown): string =>
   error instanceof CryptoError || error instanceof StorageError || error instanceof Error ? error.message : String(error);
 
@@ -91,23 +105,37 @@ const message = (error: unknown): string =>
  * it is never written to disk, so every launch asks for the passphrase.
  */
 export function createRuntime(options: RuntimeOptions): Runtime {
-  const { storage, sealer, auth, relayUrl } = options;
+  const { vaults: directory, sealer, auth, relayUrl } = options;
   const report = (error: unknown): void => options.onError?.(message(error));
   const vault = createVaultKey();
+  const names = createTextCodec(sealer);
   let engine: SyncEngine | null = null;
   let scheduler: SnapshotScheduler | null = null;
   let headerJson: string | null = null;
+  /** The open vault; storage and store are replaced whenever another vault is opened. */
+  let vaultId: VaultId | null = null;
+  let storage: IStorageEngine | null = null;
+  let store: WorkspaceStore | null = null;
   /** Identifies this app instance in frames; the relay already never echoes to the sender. */
   const deviceId = crypto.randomUUID() as DeviceId;
   const announcePurged = (items: readonly PurgedItem[]): void => {
     for (const item of items) void engine?.submitTombstone(item.id, item.entityType).catch(report);
   };
-  const store = createWorkspaceStore({ storage, names: createTextCodec(sealer), onPurged: announcePurged });
+  const openStorage = (): IStorageEngine => {
+    if (!storage) throw new CryptoError('ERR_VAULT_LOCKED', 'The vault is locked.');
+    return storage;
+  };
+  const openStore = (): WorkspaceStore => {
+    if (!store) throw new CryptoError('ERR_VAULT_LOCKED', 'The vault is locked.');
+    return store;
+  };
   const docs = new DocManager();
   const persisters = new Map<NoteId, DocPersister>();
   const opening = new Map<NoteId, Promise<Y.Doc>>();
   const edited = new Set<NoteId>();
   const [status, setStatus] = createSignal<VaultStatus>('loading');
+  const [vaultList, setVaultList] = createSignal<readonly VaultEntry[]>([]);
+  const [vaultName, setVaultName] = createSignal<string | null>(null);
   const [syncStatus, setSyncStatus] = createSignal<SyncStatus>({
     auth: auth ? auth.state().kind : 'unavailable',
     connection: 'off',
@@ -123,18 +151,21 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const reloadSoon = (): void => {
     reloadTimer ??= setTimeout(() => {
       reloadTimer = undefined;
-      void store.load();
+      void store?.load();
     }, 300);
   };
 
   function startSync(): void {
     if (engine || !auth || !relayUrl || status() !== 'unlocked' || auth.state().kind !== 'signed-in') return;
+    if (!storage || !vaultId) return;
+    const vaultStorage = storage;
     const next = createSyncEngine({
-      storage,
+      storage: vaultStorage,
       sealer,
       docs,
       deviceId,
-      relayUrl,
+      // Relay channels are per account and vault, so other vaults never see these packets.
+      relayUrl: `${relayUrl.replace(/\/+$/, '')}/${vaultId}`,
       getIdToken: () => auth.idToken(),
       onRemoteChange: reloadSoon,
       onStatusChange: (connection) => updateSync({ connection }),
@@ -153,7 +184,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         getAccessToken: () => auth.accessToken(),
         ...(options.driveFetch ? { fetch: options.driveFetch } : {}),
       }),
-      createSnapshot: () => exportSnapshot(storage, sealer, Date.now() as EpochMs),
+      createSnapshot: () => exportSnapshot(vaultStorage, sealer, Date.now() as EpochMs),
       vaultHeader: () => headerJson,
       onStatus: (backup) => updateSync({ backup }),
     });
@@ -175,12 +206,19 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     else void stopSync();
   });
 
-  async function start(): Promise<string | null> {
+  async function start(opened: IStorageEngine, id: VaultId, header: string): Promise<string | null> {
     await sealer.setKey(vault.getKey());
-    const loaded = await store.load();
+    const nameCiphertext = await opened.getVaultName();
+    const nextStore = createWorkspaceStore({ storage: opened, names, onPurged: announcePurged });
+    const loaded = await nextStore.load();
     if (!loaded.ok) return loaded.error.message;
+    storage = opened;
+    store = nextStore;
+    vaultId = id;
+    headerJson = header;
+    setVaultName(nameCiphertext === null ? null : await names.decrypt(nameCiphertext));
     retention = startRetentionWorker({
-      storage,
+      storage: opened,
       onError: report,
       onPurged: async (item) => {
         await engine?.submitTombstone(item.id, item.entityType);
@@ -202,36 +240,55 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     edited.delete(noteId);
   }
 
+  async function refreshVaults(): Promise<void> {
+    const list = await directory.list();
+    setVaultList(list);
+    setStatus(list.length === 0 ? 'uninitialized' : 'locked');
+  }
+
+  /** Forgets the key after a failed create or unlock; nothing was opened. */
+  async function failed(error: unknown): Promise<string> {
+    vault.lock();
+    await sealer.setKey(null);
+    return message(error);
+  }
+
   return {
-    store,
-    status,
-
-    async init() {
-      setStatus((await storage.getVaultHeader()) === null ? 'uninitialized' : 'locked');
+    get store() {
+      return openStore();
     },
+    status,
+    vaults: vaultList,
+    vaultName,
 
-    async createVault(passphrase) {
+    init: refreshVaults,
+
+    async createVault(name, passphrase) {
+      const trimmed = name.trim();
+      if (trimmed === '') return 'Give the vault a name.';
+      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return `Use at most ${MAX_VAULT_NAME_LENGTH} characters for the name.`;
       try {
-        const header = await vault.initialize(passphrase);
-        headerJson = serializeVaultHeader(header);
-        await storage.setVaultHeader(headerJson);
-        return await start();
+        const id = crypto.randomUUID() as VaultId;
+        const header = serializeVaultHeader(await vault.initialize(passphrase));
+        await sealer.setKey(vault.getKey());
+        const created = await directory.create(id, header, await names.encrypt(trimmed));
+        const failure = await start(created, id, header);
+        return failure === null ? null : failed(failure);
       } catch (error) {
-        vault.lock();
-        return message(error);
+        return failed(error);
       }
     },
 
-    async unlock(passphrase) {
+    async unlock(id, passphrase) {
       try {
-        const header = await storage.getVaultHeader();
-        if (header === null) return 'No vault exists yet.';
+        const opened = await directory.open(id);
+        const header = await opened.getVaultHeader();
+        if (header === null) return 'This vault has no header and cannot be unlocked.';
         await vault.unlock(passphrase, parseVaultHeader(header));
-        headerJson = header;
-        return await start();
+        const failure = await start(opened, id, header);
+        return failure === null ? null : failed(failure);
       } catch (error) {
-        vault.lock();
-        return message(error);
+        return failed(error);
       }
     },
 
@@ -242,7 +299,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       await Promise.all(docs.openNoteIds().map(closeDoc));
       await sealer.setKey(null);
       vault.lock();
-      setStatus('locked');
+      storage = null;
+      store = null;
+      vaultId = null;
+      headerJson = null;
+      setVaultName(null);
+      await refreshVaults();
     },
 
     openDoc(noteId) {
@@ -251,16 +313,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       const pending = opening.get(noteId);
       if (pending) return pending;
       const loading = (async () => {
-        const doc = docs.open(noteId, await loadNoteState({ storage, sealer }, noteId));
+        const vaultStorage = openStorage();
+        const doc = docs.open(noteId, await loadNoteState({ storage: vaultStorage, sealer }, noteId));
         doc.on('update', (_update: Uint8Array, origin: unknown) => {
           if (origin !== REMOTE_ORIGIN) edited.add(noteId);
         });
         persisters.set(
           noteId,
           persistDoc(noteId, doc, {
-            storage,
+            storage: vaultStorage,
             sealer,
-            title: () => store.state.notes[noteId]?.title ?? null,
+            title: () => store?.state.notes[noteId]?.title ?? null,
             onError: report,
           }),
         );

@@ -2,6 +2,7 @@ import type {
   Category,
   CategoryId,
   Ciphertext,
+  EpochMs,
   ErrorCode,
   Folder,
   FolderId,
@@ -12,6 +13,7 @@ import type {
   SealedBytes,
   SyncEntityType,
   SyncOutboxEntry,
+  VaultId,
 } from '@ankylock/core';
 
 export interface NewFolder {
@@ -83,10 +85,30 @@ export interface IStorageEngine {
   /** Stores the value; rejects invalid ones with ERR_INVALID_SETTING. Confirmation is the caller's job. */
   setTrashRetentionDays(days: number): Promise<number>;
 
-  /** Serialized vault header (see `serializeVaultHeader`), or null before the vault exists. */
+  /** Serialized vault header (see `serializeVaultHeader`); written once when the vault is created. */
   getVaultHeader(): Promise<string | null>;
-  /** Written once; a second call fails with ERR_INVALID_SETTING so the key can't be orphaned. */
-  setVaultHeader(header: string): Promise<void>;
+  /** The vault's encrypted name; null for vaults created before vaults had names. */
+  getVaultName(): Promise<Ciphertext | null>;
+}
+
+/** A vault on this device: an id and timestamps, never its name (BR-SEC-04). */
+export interface VaultEntry {
+  readonly id: VaultId;
+  readonly createdAt: EpochMs;
+  readonly lastOpenedAt: EpochMs;
+}
+
+/** The vaults on this device, each in its own database: own salt, key and data. */
+export interface IVaultDirectory {
+  /** Most recently opened first. */
+  list(): Promise<VaultEntry[]>;
+  /**
+   * Creates the vault's database with its header and encrypted name, registers it and opens it.
+   * The header is written once, so a vault's key can never be orphaned.
+   */
+  create(id: VaultId, header: string, nameCiphertext: Ciphertext): Promise<IStorageEngine>;
+  /** Opens a registered vault; storage returned earlier must not be used afterwards. */
+  open(id: VaultId): Promise<IStorageEngine>;
 }
 
 export class StorageError extends Error {

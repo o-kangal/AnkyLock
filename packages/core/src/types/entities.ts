@@ -8,6 +8,8 @@ export type NoteId = Brand<string, 'NoteId'>;
 export type FolderId = Brand<string, 'FolderId'>;
 /** A user-defined category. System categories are views and never appear as `categoryId`. */
 export type CategoryId = Brand<string, 'CategoryId'>;
+/** A vault: an isolated key and data set (BR-SEC-04). A UUID, also used in file and channel names. */
+export type VaultId = Brand<string, 'VaultId'>;
 
 export interface Category {
   readonly id: CategoryId;

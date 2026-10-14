@@ -35,6 +35,10 @@ Y.Doc update ──► debounce 150 ms (merge with Y.mergeUpdates) ──► enc
 
 Folder, category and note metadata (moves, archive, trash) are not Yjs text. They travel as `HIERARCHY_MUTATION` packets with encrypted bodies. On apply, re-validate with the `ankylock-domain` rules. A cycle created by concurrent moves is repaired (detach to the All Notes root), not rejected. `TOMBSTONE` packets come from purges. Applying one deletes the entity locally and records it in `sync_tombstones` so a late-arriving update can't resurrect it.
 
+### Vaults (Task 11g)
+
+Every vault is isolated: its own salt, key, database (`ankylock-<vaultId>.db` on desktop, IndexedDB `ankylock-<vaultId>` on web) and relay channel. `IVaultDirectory` lists, creates and opens them; the runtime builds a fresh `WorkspaceStore`, sync engine and backup scheduler per opened vault and tears them all down on `lock()`. Two test devices on the same vault must share the vault id and header (create the second one's vault with the first one's header and derive the key from the same passphrase), not just a `CryptoKey`, or relay scoping goes untested.
+
 ### Locked Vault Mode
 
 If there's no Master Key yet (new device before passphrase or QR), keep receiving: write incoming encrypted packets to local storage as-is and apply them after unlock. Never drop them, and never block on them.
@@ -62,7 +66,8 @@ If there's no Master Key yet (new device before passphrase or QR), keep receivin
 
 - Authenticate the socket at upgrade time (`auth.rs`: verify the token and extract `account_id`). Reject before upgrading. Never accept the account id as a client-supplied field.
 - **Auth as built (Task 7):** the client offers `Sec-WebSocket-Protocol: ankylock.v1, <Google ID token>`, and the relay echoes `ankylock.v1`. The token never goes in the URL, because URLs end up in logs. `GoogleAuthenticator` checks RS256 against Google's JWKS (cached 1 h; an unknown `kid` triggers at most one refetch per 60 s), the issuer, `aud = GOOGLE_CLIENT_ID` and expiry. `account_id = sub`. ID tokens expire after an hour, so `BlindWebSocketClient` calls `getToken()` on every reconnect. Tests use the `Authenticator` / `KeySource` traits with fixture keys in `apps/relay/tests/fixtures/`.
-- `hub.rs`: `HashMap<AccountId, broadcast::Sender<Bytes>>` behind a lock, or a `DashMap`. Remove the entry when the last subscriber leaves so memory doesn't grow with every account ever seen.
+- **Vault scoping (Task 11g, BR-SEC-04):** clients connect to `/ws/<vaultId>` and the hub keys channels by `Channel { account, vault }`. Devices on different vaults of one Google account must never receive each other's frames: they couldn't decrypt them and would only produce errors. The runtime appends the open vault's id to `relayUrl`; `VaultId::parse` accepts only short `[A-Za-z0-9-]` ids.
+- `hub.rs`: `HashMap<Channel, broadcast::Sender<Bytes>>` behind a lock. Remove the entry when the last subscriber leaves so memory doesn't grow with every account ever seen.
 - `ws.rs`: forward each binary frame unchanged to other sockets of the same `account_id`, and skip the sender. **Don't deserialize, inspect or log the frame body.** Log connection lifecycle and sizes at most. If routing ever needs a field, parse only the outer envelope keys and never `encrypted_envelope`.
 - Handle `broadcast::error::RecvError::Lagged` by closing that slow client so it reconnects and resyncs through state vectors, rather than silently skipping frames.
 - Enforce a max frame size: a little above the 10 MB note limit plus overhead.

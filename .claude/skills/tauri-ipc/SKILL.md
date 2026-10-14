@@ -29,6 +29,9 @@ An IPC command is a contract between two languages, so it fails at the seams: ar
    - Blocking SQLite work goes through `tauri::async_runtime::spawn_blocking` (or the pool's blocking API) so the async runtime isn't stalled.
    - Arguments arrive as ciphertext strings or bytes for encrypted fields. Rust never decrypts. The desktop host stores what it's given.
 
+   - Storage commands act on the **open vault** (`DbPool` holds `Option<Connection>`; `vault_open` / `vault_create` swap it). Take `db.conn()?`, which fails with `ERR_VAULT_LOCKED` while no vault is open. Pass it as `&*db.conn()?` / `&mut *db.conn()?`: plain `&db.conn()?` doesn't deref-coerce through `?`.
+   - Anything used in a file name (vault ids) is validated strictly before touching the disk.
+
 3. **Register** the command in `tauri::generate_handler![...]` in `main.rs` (or `lib.rs`, wherever the builder lives).
 
 4. **Permissions.** Tauri v2 denies by default. Custom app commands need an entry in the app's permission set: `src-tauri/permissions/*.toml` with `commands.allow = ["move_folder"]`, or the build-script `AppManifest` command list. Then reference that permission in `src-tauri/capabilities/default.json`. Grant the narrowest permission that works, and don't add `core:default`-style wildcards just to make it pass.

@@ -8,6 +8,7 @@ mod error;
 use tauri::Manager;
 
 use crate::commands::oauth::{GoogleAuth, KeychainStore, OAuthClient};
+use crate::commands::vaults::{self, Vaults};
 use crate::commands::{categories, folders, notes, oauth, outbox, settings};
 use crate::db::pool::DbPool;
 
@@ -15,10 +16,12 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(GoogleAuth { client: OAuthClient::from_build_env(), store: Box::new(KeychainStore) })
+        .manage(DbPool::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            app.manage(DbPool::open(&data_dir.join("ankylock.db"))?);
+            vaults::adopt_legacy_database(&data_dir, commands::now_ms())?;
+            app.manage(Vaults::new(data_dir));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,7 +56,10 @@ fn main() {
             settings::settings_get_retention_days,
             settings::settings_set_retention_days,
             settings::settings_get_vault_header,
-            settings::settings_set_vault_header,
+            settings::settings_get_vault_name,
+            vaults::vault_list,
+            vaults::vault_create,
+            vaults::vault_open,
             oauth::oauth_sign_in,
             oauth::oauth_restore,
             oauth::oauth_refresh,

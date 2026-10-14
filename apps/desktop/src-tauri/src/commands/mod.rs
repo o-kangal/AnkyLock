@@ -4,6 +4,7 @@ pub mod notes;
 pub mod oauth;
 pub mod outbox;
 pub mod settings;
+pub mod vaults;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -21,7 +22,7 @@ fn reject_system_category(category_id: Option<&str>) -> AppResult<()> {
 }
 
 /// Current UTC time in epoch milliseconds, matching `EpochMs` in `packages/core`.
-fn now_ms() -> i64 {
+pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))

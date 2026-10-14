@@ -36,44 +36,60 @@ pub fn set_retention_days(conn: &Connection, days: u32) -> AppResult<u32> {
 }
 
 const VAULT_HEADER_KEY: &str = "vault_header";
+const VAULT_NAME_KEY: &str = "vault_name";
+
+fn get_setting(conn: &Connection, key: &str) -> AppResult<Option<String>> {
+    Ok(conn.query_row("SELECT value FROM app_settings WHERE key = ?1", [key], |r| r.get(0)).optional()?)
+}
 
 /// Serialized vault header (salt, iterations, key check). Not secret, but written only once:
 /// replacing it would orphan everything encrypted under the existing key.
 pub fn get_vault_header(conn: &Connection) -> AppResult<Option<String>> {
-    Ok(conn
-        .query_row("SELECT value FROM app_settings WHERE key = ?1", [VAULT_HEADER_KEY], |r| r.get(0))
-        .optional()?)
+    get_setting(conn, VAULT_HEADER_KEY)
 }
 
-pub fn set_vault_header(conn: &Connection, header: &str) -> AppResult<()> {
-    let inserted = conn.execute(
+/// The vault's name, encrypted like every other name (BR-SEC-04).
+pub fn get_vault_name(conn: &Connection) -> AppResult<Option<String>> {
+    get_setting(conn, VAULT_NAME_KEY)
+}
+
+/// Writes the header and the encrypted name of a new vault in one transaction.
+pub fn initialize_vault(conn: &mut Connection, header: &str, name_ciphertext: &str) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    let inserted = tx.execute(
         "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?1, ?2)",
         params![VAULT_HEADER_KEY, header],
     )?;
     if inserted == 0 {
         return Err(AppError::InvalidSetting("The vault is already initialized.".into()));
     }
+    tx.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![VAULT_NAME_KEY, name_ciphertext],
+    )?;
+    tx.commit()?;
     Ok(())
 }
 
 #[tauri::command(async)]
 pub fn settings_get_vault_header(db: State<'_, DbPool>) -> AppResult<Option<String>> {
-    get_vault_header(&db.conn())
+    get_vault_header(&*db.conn()?)
 }
 
 #[tauri::command(async)]
-pub fn settings_set_vault_header(db: State<'_, DbPool>, header: String) -> AppResult<()> {
-    set_vault_header(&db.conn(), &header)
+pub fn settings_get_vault_name(db: State<'_, DbPool>) -> AppResult<Option<String>> {
+    get_vault_name(&*db.conn()?)
 }
 
 #[tauri::command(async)]
 pub fn settings_get_retention_days(db: State<'_, DbPool>) -> AppResult<u32> {
-    get_retention_days(&db.conn())
+    get_retention_days(&*db.conn()?)
 }
 
 #[tauri::command(async)]
 pub fn settings_set_retention_days(db: State<'_, DbPool>, days: u32) -> AppResult<u32> {
-    set_retention_days(&db.conn(), days)
+    set_retention_days(&*db.conn()?, days)
 }
 
 #[cfg(test)]
@@ -110,12 +126,15 @@ mod tests {
     }
 
     #[test]
-    fn stores_the_vault_header_once() {
-        let conn = test_conn();
+    fn initializes_the_vault_once() {
+        let mut conn = test_conn();
         assert_eq!(get_vault_header(&conn).unwrap(), None);
-        set_vault_header(&conn, "{\"version\":1}").unwrap();
+        assert_eq!(get_vault_name(&conn).unwrap(), None);
+        initialize_vault(&mut conn, "{\"version\":1}", "bmFtZQ==").unwrap();
         assert_eq!(get_vault_header(&conn).unwrap().as_deref(), Some("{\"version\":1}"));
-        assert_eq!(set_vault_header(&conn, "{}").unwrap_err().code(), "ERR_INVALID_SETTING");
+        assert_eq!(get_vault_name(&conn).unwrap().as_deref(), Some("bmFtZQ=="));
+        assert_eq!(initialize_vault(&mut conn, "{}", "b3RoZXI=").unwrap_err().code(), "ERR_INVALID_SETTING");
         assert_eq!(get_vault_header(&conn).unwrap().as_deref(), Some("{\"version\":1}"));
+        assert_eq!(get_vault_name(&conn).unwrap().as_deref(), Some("bmFtZQ=="));
     }
 }

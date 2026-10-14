@@ -41,8 +41,14 @@ async fn start(max_frame_bytes: usize) -> (SocketAddr, Arc<RelayState>) {
     (addr, state)
 }
 
+const VAULT: &str = "0b6f5c2e-3d1a-4c8e-9f7b-2a1d4e5f6a7b";
+
 async fn connect(addr: SocketAddr, protocol: &str) -> Result<Client, WsError> {
-    let mut request = format!("ws://{addr}/ws").into_client_request().unwrap();
+    connect_to(addr, VAULT, protocol).await
+}
+
+async fn connect_to(addr: SocketAddr, vault: &str, protocol: &str) -> Result<Client, WsError> {
+    let mut request = format!("ws://{addr}/ws/{vault}").into_client_request().unwrap();
     request.headers_mut().insert("sec-websocket-protocol", protocol.parse().unwrap());
     connect_async(request).await.map(|(stream, response)| {
         assert_eq!(response.headers().get("sec-websocket-protocol").unwrap(), "ankylock.v1");
@@ -96,6 +102,23 @@ async fn forwards_frames_byte_for_byte_to_same_account_peers_only() {
 }
 
 #[tokio::test]
+async fn keeps_vaults_of_one_account_apart() {
+    let (addr, _) = start(1024).await;
+    let mut work1 = client(addr, "alice").await;
+    let mut work2 = client(addr, "alice").await;
+    let mut personal = connect_to(addr, "1c7e9d3a-5b2f-4a6e-8d1c-3f5a7b9e2d4c", "ankylock.v1, token-alice").await.unwrap();
+    work1.send(Message::Binary(vec![7u8; 8].into())).await.unwrap();
+    assert!(matches!(next(&mut work2).await, Some(Message::Binary(_))));
+    assert_eq!(next(&mut personal).await, None, "another vault must not receive the frame");
+}
+
+#[tokio::test]
+async fn rejects_malformed_vault_ids() {
+    let (addr, _) = start(1024).await;
+    assert_eq!(status(connect_to(addr, "not%20a%20vault", "ankylock.v1, token-alice").await.unwrap_err()), 400);
+}
+
+#[tokio::test]
 async fn answers_ping_itself_and_never_forwards_text() {
     let (addr, _) = start(1024).await;
     let mut a1 = client(addr, "alice").await;
@@ -130,11 +153,11 @@ async fn releases_account_channels_when_everyone_disconnects() {
     let (addr, state) = start(1024).await;
     let mut a1 = client(addr, "alice").await;
     let mut a2 = client(addr, "alice").await;
-    assert_eq!(state.hub.account_count(), 1);
+    assert_eq!(state.hub.channel_count(), 1);
     a1.close(None).await.unwrap();
     a2.close(None).await.unwrap();
     for _ in 0..50 {
-        if state.hub.account_count() == 0 {
+        if state.hub.channel_count() == 0 {
             return;
         }
         tokio::time::sleep(Duration::from_millis(20)).await;

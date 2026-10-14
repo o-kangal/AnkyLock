@@ -1,14 +1,13 @@
-import { IDBFactory } from 'fake-indexeddb';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { EpochMs, NoteId } from '@ankylock/core';
+import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
 import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
-import { WebIndexedDbAdapter } from '@ankylock/storage';
 import { AuthError, TEXT_FIELD, createAuthSession, type AuthTransport, type SocketLike } from '@ankylock/sync';
 import { SyncStatusBar } from '../src/components/SyncStatusBar.jsx';
 import { createRuntime, type Runtime } from '../src/index.js';
+import { TestVaults } from './helpers.js';
 
-/** In-memory blind relay shared by the runtimes in a test. */
+/** In-memory blind relay shared by the runtimes in a test; like the real one, it fans out per URL (vault). */
 class FakeRelay {
   readonly sockets = new Set<FakeSocket>();
 }
@@ -23,6 +22,7 @@ class FakeSocket implements SocketLike {
 
   constructor(
     readonly relay: FakeRelay,
+    readonly url: string,
     readonly protocols: string[],
   ) {
     relay.sockets.add(this);
@@ -35,7 +35,7 @@ class FakeSocket implements SocketLike {
   send(data: Uint8Array | string): void {
     if (typeof data === 'string') return;
     for (const s of this.relay.sockets) {
-      if (s !== this && s.readyState === 1) s.onmessage?.({ data: data.slice().buffer } as MessageEvent);
+      if (s !== this && s.url === this.url && s.readyState === 1) s.onmessage?.({ data: data.slice().buffer } as MessageEvent);
     }
   }
 
@@ -58,13 +58,13 @@ function fakeGoogle(): AuthTransport & { signedOut: number } {
   return t;
 }
 
-function localSealer(key: CryptoKey): WorkerSealer {
+function localSealer(): WorkerSealer {
   let current: CryptoKey | null = null;
   const inner = createKeySealer(() => {
     if (!current) throw new CryptoError('ERR_VAULT_LOCKED', 'locked');
     return current;
   });
-  return { ...inner, setKey: async (k) => void (current = k ? key : null), dispose: () => undefined };
+  return { ...inner, setKey: async (k) => void (current = k), dispose: () => undefined };
 }
 
 async function until(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
@@ -75,32 +75,55 @@ async function until(check: () => boolean | Promise<boolean>, label: string): Pr
   throw new Error(`Timed out waiting for ${label}`);
 }
 
+const PASSPHRASE = 'correct horse battery';
+
+interface Device {
+  readonly runtime: Runtime;
+  readonly google: ReturnType<typeof fakeGoogle>;
+  readonly sockets: FakeSocket[];
+  readonly vaults: TestVaults;
+}
+
+function device(relay: FakeRelay, withAuth = true): Device {
+  const google = fakeGoogle();
+  const sockets: FakeSocket[] = [];
+  const vaults = new TestVaults();
+  const runtime = createRuntime({
+    vaults,
+    sealer: localSealer(),
+    ...(withAuth ? { auth: createAuthSession(google) } : {}),
+    relayUrl: 'ws://relay.test/ws/',
+    createSocket: (url, protocols) => {
+      const socket = new FakeSocket(relay, url, protocols);
+      sockets.push(socket);
+      return socket;
+    },
+    driveFetch: () => Promise.reject(new TypeError('offline')),
+  });
+  return { runtime, google, sockets, vaults };
+}
+
+/** A device with a new vault of its own. */
+async function withNewVault(relay: FakeRelay, name = 'Personal', withAuth = true): Promise<Device> {
+  const d = device(relay, withAuth);
+  await d.runtime.init();
+  expect(await d.runtime.createVault(name, PASSPHRASE)).toBeNull();
+  return d;
+}
+
 /**
- * Two devices of one user share the vault key (in the product via the same passphrase and
- * synced vault header). Here both sealers simply use the same CryptoKey.
+ * Two devices on the same vault. The second gets the first one's (non-secret) header, as it will
+ * from Google Drive (Task 11h), and derives the same key from the same passphrase.
  */
-async function twoDevices(relay: FakeRelay, withAuth = true) {
-  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-  const make = async (): Promise<{ runtime: Runtime; google: ReturnType<typeof fakeGoogle>; sockets: FakeSocket[] }> => {
-    const google = fakeGoogle();
-    const sockets: FakeSocket[] = [];
-    const runtime = createRuntime({
-      storage: new WebIndexedDbAdapter(new IDBFactory()),
-      sealer: localSealer(key),
-      ...(withAuth ? { auth: createAuthSession(google) } : {}),
-      relayUrl: 'ws://relay.test/ws',
-      createSocket: (_url, protocols) => {
-        const socket = new FakeSocket(relay, protocols);
-        sockets.push(socket);
-        return socket;
-      },
-      driveFetch: () => Promise.reject(new TypeError('offline')),
-    });
-    await runtime.init();
-    expect(await runtime.createVault('correct horse battery')).toBeNull();
-    return { runtime, google, sockets };
-  };
-  return [await make(), await make()] as const;
+async function twoDevices(relay: FakeRelay): Promise<readonly [Device, Device]> {
+  const a = await withNewVault(relay);
+  const id = (await a.vaults.list())[0]?.id as VaultId;
+  const b = device(relay);
+  const header = (await a.vaults.storage.getVaultHeader()) as string;
+  await b.vaults.create(id, header, (await a.vaults.storage.getVaultName())!);
+  await b.runtime.init();
+  expect(await b.runtime.unlock(id, PASSPHRASE)).toBeNull();
+  return [a, b];
 }
 
 const disposers: (() => void)[] = [];
@@ -119,6 +142,8 @@ describe('runtime sync', () => {
     expect(await b.runtime.signIn()).toBeNull();
     await until(() => a.runtime.syncStatus().connection === 'open' && b.runtime.syncStatus().connection === 'open', 'both online');
     expect(a.sockets[0]?.protocols).toEqual(['ankylock.v1', 'id-token']);
+    const id = (await a.vaults.list())[0]?.id as VaultId;
+    expect(a.sockets[0]?.url).toBe(`ws://relay.test/ws/${id}`);
 
     await a.runtime.store.createTab();
     const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
@@ -140,7 +165,7 @@ describe('runtime sync', () => {
 
   it('stops syncing on sign-out but keeps working locally', async () => {
     const relay = new FakeRelay();
-    const [a] = await twoDevices(relay);
+    const a = await withNewVault(relay);
     await a.runtime.signIn();
     await until(() => a.runtime.syncStatus().connection === 'open', 'online');
     await a.runtime.signOut();
@@ -149,6 +174,21 @@ describe('runtime sync', () => {
     expect(relay.sockets.size).toBe(0);
     expect((await a.runtime.store.createTab()).ok).toBe(true);
     await a.runtime.lock();
+  });
+
+  it('keeps other vaults of the same account out of the channel', async () => {
+    const relay = new FakeRelay();
+    const [a, b] = await twoDevices(relay);
+    const other = await withNewVault(relay, 'Work');
+    for (const d of [a, b, other]) await d.runtime.signIn();
+    await until(() => relay.sockets.size === 3 && other.runtime.syncStatus().connection === 'open', 'online');
+
+    await a.runtime.store.createTab();
+    const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
+    (await a.runtime.openDoc(noteId)).getText(TEXT_FIELD).insert(0, 'personal only');
+    await until(() => b.runtime.store.state.notes[noteId] !== undefined, 'note on B');
+    expect(await other.vaults.storage.getNote(noteId)).toBeNull();
+    for (const d of [a, b, other]) await d.runtime.lock();
   });
 
   it('announces purges to other devices', async () => {
@@ -183,7 +223,7 @@ describe('SyncStatusBar', () => {
   }
 
   it('offers sign-in, shows the synced state and sign-out', async () => {
-    const [a] = await twoDevices(new FakeRelay());
+    const a = await withNewVault(new FakeRelay());
     const bar = mount(a.runtime);
     expect(bar.textContent).toContain('Not syncing');
     (Array.from(bar.querySelectorAll('button')).find((b) => b.textContent === 'Sign in with Google') as HTMLElement).click();
@@ -192,8 +232,18 @@ describe('SyncStatusBar', () => {
     await a.runtime.lock();
   });
 
+  it('shows the vault name and locks back to the vault list', async () => {
+    const a = await withNewVault(new FakeRelay(), 'Work notes', false);
+    const bar = mount(a.runtime);
+    expect(bar.textContent).toContain('Work notes');
+    (Array.from(bar.querySelectorAll('button')).find((b) => b.textContent === 'Lock') as HTMLElement).click();
+    await until(() => a.runtime.status() === 'locked', 'locked');
+    expect(a.runtime.vaultName()).toBeNull();
+    expect(a.runtime.vaults()).toHaveLength(1);
+  });
+
   it('says Local only without a Google session', async () => {
-    const [a] = await twoDevices(new FakeRelay(), false);
+    const a = await withNewVault(new FakeRelay(), 'Personal', false);
     expect(mount(a.runtime).textContent).toContain('Local only');
     await a.runtime.lock();
   });

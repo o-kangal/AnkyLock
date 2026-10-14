@@ -14,6 +14,7 @@ export const ERROR_CODES = [
   'ERR_AUTH',
   'ERR_AUTH_EXPIRED',
   'ERR_NETWORK',
+  'ERR_VAULT_LOCKED',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

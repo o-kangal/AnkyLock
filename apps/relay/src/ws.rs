@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::auth::{AccountId, Authenticator};
-use crate::hub::{Frame, Hub};
+use crate::auth::Authenticator;
+use crate::hub::{Channel, Frame, Hub, VaultId};
 
 /// Subprotocol the client offers first; the second offered value is the bearer token, because
 /// browsers cannot set headers on WebSocket requests and URLs end up in logs.
@@ -34,8 +34,17 @@ fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     parts.next().filter(|token| !token.is_empty())
 }
 
-/// Authenticates before upgrading: unauthenticated requests never get a socket.
-pub async fn ws_handler(State(state): State<Arc<RelayState>>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {
+/// Authenticates before upgrading: unauthenticated requests never get a socket. The path names
+/// the vault (`/ws/<vaultId>`), which scopes the fanout within the account.
+pub async fn ws_handler(
+    State(state): State<Arc<RelayState>>,
+    Path(vault): Path<String>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    let Some(vault) = VaultId::parse(&vault) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
     let Some(token) = bearer_token(&headers) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
@@ -51,13 +60,13 @@ pub async fn ws_handler(State(state): State<Arc<RelayState>>, headers: HeaderMap
         .protocols([SUBPROTOCOL])
         .max_message_size(max)
         .max_frame_size(max)
-        .on_upgrade(move |socket| relay(socket, state, account))
+        .on_upgrade(move |socket| relay(socket, state, Channel { account, vault }))
 }
 
-/// Forwards every binary frame unchanged to the account's other connections. Frame bodies
+/// Forwards every binary frame unchanged to the channel's other connections. Frame bodies
 /// are never parsed or logged; only connection lifecycle and sizes are.
-async fn relay(socket: WebSocket, state: Arc<RelayState>, account: AccountId) {
-    let mut subscription = state.hub.join(&account);
+async fn relay(socket: WebSocket, state: Arc<RelayState>, channel: Channel) {
+    let mut subscription = state.hub.join(&channel);
     let id = subscription.id;
     tracing::info!(connection = id, "connected");
     let (mut outgoing, mut incoming) = socket.split();
@@ -101,7 +110,7 @@ async fn relay(socket: WebSocket, state: Arc<RelayState>, account: AccountId) {
         let close = CloseFrame { code, reason: Utf8Bytes::from_static(reason) };
         let _ = outgoing.send(Message::Close(Some(close))).await;
     }
-    state.hub.leave(&account, subscription);
+    state.hub.leave(&channel, subscription);
     tracing::info!(connection = id, "disconnected");
 }
 

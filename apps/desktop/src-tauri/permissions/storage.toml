@@ -34,5 +34,8 @@ permissions = [
   "allow-settings-get-retention-days",
   "allow-settings-set-retention-days",
   "allow-settings-get-vault-header",
-  "allow-settings-set-vault-header",
+  "allow-settings-get-vault-name",
+  "allow-vault-list",
+  "allow-vault-create",
+  "allow-vault-open",
 ]

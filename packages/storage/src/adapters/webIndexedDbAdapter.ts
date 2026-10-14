@@ -29,7 +29,8 @@ import {
 import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry } from '../guards.js';
 import { StorageError, type IStorageEngine, type NewFolder, type NewOutboxEntry } from '../interfaces/IStorageEngine.js';
 
-const DB_NAME = 'ankylock';
+/** The single database used before vaults had ids; adopted as the first vault. */
+export const LEGACY_DB_NAME = 'ankylock';
 /**
  * v1: entity stores. v2: app_settings. v3: `archivedAt` on folders and notes (mirrors the SQL
  * migration `V20261013224803__add_archived_at`). Upgrades run step by step from the stored version.
@@ -37,6 +38,7 @@ const DB_NAME = 'ankylock';
 const DB_VERSION = 3;
 const RETENTION_KEY = 'trash_retention_days';
 const VAULT_HEADER_KEY = 'vault_header';
+const VAULT_NAME_KEY = 'vault_name';
 
 const STORES = {
   categories: 'categories',
@@ -106,9 +108,9 @@ function backfillArchivedAt(store: IDBObjectStore): void {
   };
 }
 
-function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
+function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = factory.open(DB_NAME, DB_VERSION);
+    const req = factory.open(name, DB_VERSION);
     req.onupgradeneeded = (event) => {
       const db = req.result;
       if (event.oldVersion < 1) {
@@ -215,13 +217,20 @@ const rejectSystemCategory = (id: CategoryId | null): void => {
   }
 };
 
-/** Browser storage on IndexedDB, enforcing the same rules as the desktop SQLite host. */
+/**
+ * Browser storage on IndexedDB, enforcing the same rules as the desktop SQLite host. Each vault
+ * has its own database (see `WebVaultDirectory`).
+ */
 export class WebIndexedDbAdapter implements IStorageEngine {
   readonly #db: Promise<IDBDatabase>;
   readonly #now: () => EpochMs;
 
-  constructor(factory: IDBFactory = indexedDB, now: () => EpochMs = () => Date.now() as EpochMs) {
-    this.#db = openDatabase(factory);
+  constructor(
+    factory: IDBFactory = indexedDB,
+    now: () => EpochMs = () => Date.now() as EpochMs,
+    name: string = LEGACY_DB_NAME,
+  ) {
+    this.#db = openDatabase(factory, name);
     this.#now = now;
   }
 
@@ -634,12 +643,21 @@ export class WebIndexedDbAdapter implements IStorageEngine {
     });
   }
 
-  setVaultHeader(header: string): Promise<void> {
+  getVaultName(): Promise<Ciphertext | null> {
+    return this.#run([STORES.settings], 'readonly', async (tx) => {
+      const record = await tx.get(STORES.settings, VAULT_NAME_KEY, isSetting);
+      return typeof record?.value === 'string' ? (record.value as Ciphertext) : null;
+    });
+  }
+
+  /** Writes a new vault's header and encrypted name together; the header is written only once. */
+  initializeVault(header: string, nameCiphertext: Ciphertext): Promise<void> {
     return this.#run([STORES.settings], 'readwrite', async (tx) => {
       if (await tx.get(STORES.settings, VAULT_HEADER_KEY, isSetting)) {
         throw new StorageError('ERR_INVALID_SETTING', 'The vault is already initialized.');
       }
       await tx.put(STORES.settings, { key: VAULT_HEADER_KEY, value: header });
+      await tx.put(STORES.settings, { key: VAULT_NAME_KEY, value: nameCiphertext });
     });
   }
 

@@ -258,22 +258,22 @@ pub fn save_note_content(conn: &mut Connection, content: &NoteContent) -> AppRes
 
 #[tauri::command(async)]
 pub fn note_create(db: State<'_, DbPool>, id: String) -> AppResult<Note> {
-    create_note(&mut db.conn(), &id, now_ms())
+    create_note(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_get(db: State<'_, DbPool>, id: String) -> AppResult<Option<Note>> {
-    find_note(&db.conn(), &id)
+    find_note(&*db.conn()?, &id)
 }
 
 #[tauri::command(async)]
 pub fn note_list(db: State<'_, DbPool>, folder_id: Option<String>) -> AppResult<Vec<Note>> {
-    list_notes(&db.conn(), folder_id.as_deref())
+    list_notes(&*db.conn()?, folder_id.as_deref())
 }
 
 #[tauri::command(async)]
 pub fn note_list_trashed(db: State<'_, DbPool>) -> AppResult<Vec<Note>> {
-    list_trashed_notes(&db.conn())
+    list_trashed_notes(&*db.conn()?)
 }
 
 #[tauri::command(async)]
@@ -283,42 +283,42 @@ pub fn note_move(
     folder_id: Option<String>,
     category_id: Option<String>,
 ) -> AppResult<Note> {
-    move_note(&mut db.conn(), &id, folder_id.as_deref(), category_id.as_deref(), now_ms())
+    move_note(&mut *db.conn()?, &id, folder_id.as_deref(), category_id.as_deref(), now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_set_archived(db: State<'_, DbPool>, id: String, archived: bool) -> AppResult<Note> {
-    set_note_archived(&mut db.conn(), &id, archived, now_ms())
+    set_note_archived(&mut *db.conn()?, &id, archived, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_trash(db: State<'_, DbPool>, id: String) -> AppResult<Note> {
-    trash_note(&mut db.conn(), &id, now_ms())
+    trash_note(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_restore(db: State<'_, DbPool>, id: String) -> AppResult<Note> {
-    restore_note(&mut db.conn(), &id, now_ms())
+    restore_note(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_purge(db: State<'_, DbPool>, id: String) -> AppResult<()> {
-    purge_note(&mut db.conn(), &id, now_ms())
+    purge_note(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_discard_ephemeral(db: State<'_, DbPool>, id: String) -> AppResult<()> {
-    discard_ephemeral_note(&mut db.conn(), &id, now_ms())
+    discard_ephemeral_note(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn note_get_content(db: State<'_, DbPool>, note_id: String) -> AppResult<Option<NoteContent>> {
-    get_note_content(&db.conn(), &note_id)
+    get_note_content(&*db.conn()?, &note_id)
 }
 
 #[tauri::command(async)]
 pub fn note_save_content(db: State<'_, DbPool>, content: NoteContent) -> AppResult<()> {
-    save_note_content(&mut db.conn(), &content)
+    save_note_content(&mut *db.conn()?, &content)
 }
 
 #[cfg(test)]

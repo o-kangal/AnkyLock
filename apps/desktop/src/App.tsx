@@ -1,14 +1,15 @@
 import { onCleanup, type JSX } from 'solid-js';
 import { createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
-import { TauriSqliteAdapter } from '@ankylock/storage';
+import { TauriVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
 import { AnkyLockApp, createRuntime } from '@ankylock/web/workspace';
 import { createTauriAuthTransport } from './googleAuthTransport.js';
 import { TitleBar } from './TitleBar.jsx';
 
 /**
- * Desktop composition: notes persist through Tauri IPC into SQLite in the Rust host, and all
+ * Desktop composition: notes persist through Tauri IPC into one SQLite database per vault in the
+ * Rust host, and all
  * encryption runs in a Dedicated Web Worker holding the vault key.
  */
 export function App(): JSX.Element {
@@ -16,7 +17,7 @@ export function App(): JSX.Element {
   const sealer = createWorkerSealer(worker as MessagePortLike);
   const auth = createAuthSession(createTauriAuthTransport(), { onError: (error) => console.error(error) });
   const runtime = createRuntime({
-    storage: new TauriSqliteAdapter(),
+    vaults: new TauriVaultDirectory(),
     sealer,
     auth,
     relayUrl: import.meta.env.VITE_RELAY_URL ?? 'ws://127.0.0.1:8787/ws',

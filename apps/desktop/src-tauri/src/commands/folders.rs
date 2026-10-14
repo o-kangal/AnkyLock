@@ -345,7 +345,7 @@ pub fn purge_folder(conn: &mut Connection, id: &str, now: i64) -> AppResult<Purg
 
 #[tauri::command(async)]
 pub fn folder_list(db: State<'_, DbPool>) -> AppResult<Vec<Folder>> {
-    list_folders(&db.conn())
+    list_folders(&*db.conn()?)
 }
 
 #[tauri::command(async)]
@@ -357,7 +357,7 @@ pub fn folder_create(
     name_ciphertext: String,
 ) -> AppResult<Folder> {
     create_folder(
-        &mut db.conn(),
+        &mut *db.conn()?,
         &id,
         parent_id.as_deref(),
         category_id.as_deref(),
@@ -368,37 +368,37 @@ pub fn folder_create(
 
 #[tauri::command(async)]
 pub fn folder_move(db: State<'_, DbPool>, id: String, new_parent_id: Option<String>) -> AppResult<Folder> {
-    move_folder(&mut db.conn(), &id, new_parent_id.as_deref(), now_ms())
+    move_folder(&mut *db.conn()?, &id, new_parent_id.as_deref(), now_ms())
 }
 
 #[tauri::command(async)]
 pub fn folder_rename(db: State<'_, DbPool>, id: String, name_ciphertext: String) -> AppResult<Folder> {
-    rename_folder(&mut db.conn(), &id, &name_ciphertext, now_ms())
+    rename_folder(&mut *db.conn()?, &id, &name_ciphertext, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn folder_list_trashed(db: State<'_, DbPool>) -> AppResult<Vec<Folder>> {
-    list_trashed_folders(&db.conn())
+    list_trashed_folders(&*db.conn()?)
 }
 
 #[tauri::command(async)]
 pub fn folder_set_archived(db: State<'_, DbPool>, id: String, archived: bool) -> AppResult<Folder> {
-    set_folder_archived(&mut db.conn(), &id, archived, now_ms())
+    set_folder_archived(&mut *db.conn()?, &id, archived, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn folder_trash(db: State<'_, DbPool>, id: String) -> AppResult<Folder> {
-    trash_folder(&mut db.conn(), &id, now_ms())
+    trash_folder(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn folder_restore(db: State<'_, DbPool>, id: String) -> AppResult<Folder> {
-    restore_folder(&mut db.conn(), &id, now_ms())
+    restore_folder(&mut *db.conn()?, &id, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn folder_purge(db: State<'_, DbPool>, id: String) -> AppResult<PurgedEntities> {
-    purge_folder(&mut db.conn(), &id, now_ms())
+    purge_folder(&mut *db.conn()?, &id, now_ms())
 }
 
 #[cfg(test)]

@@ -4,9 +4,8 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { EpochMs, FolderId, NoteId } from '@ankylock/core';
 import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
-import { WebIndexedDbAdapter, type IStorageEngine } from '@ankylock/storage';
 import { AnkyLockApp, createRuntime, menuActions, type Runtime } from '../src/index.js';
-import { setup } from './helpers.js';
+import { setup, TestVaults } from './helpers.js';
 
 beforeAll(() => {
   // jsdom has no layout; CodeMirror only needs these to exist.
@@ -38,8 +37,8 @@ afterEach(() => {
   root?.remove();
 });
 
-function mount(storage: IStorageEngine): Runtime {
-  const runtime = createRuntime({ storage, sealer: localSealer() });
+function mount(vaults: TestVaults): Runtime {
+  const runtime = createRuntime({ vaults, sealer: localSealer() });
   root = document.createElement('div');
   document.body.append(root);
   dispose = render(() => <AnkyLockApp runtime={runtime} />, root);
@@ -78,9 +77,10 @@ const pressCtrl = (key: string): void => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true }));
 };
 
-async function createVault(storage: IStorageEngine): Promise<Runtime> {
-  const runtime = mount(storage);
-  await waitFor(() => text().includes('Create your vault'), 'create screen');
+async function createVault(vaults: TestVaults, name = 'Personal'): Promise<Runtime> {
+  const runtime = mount(vaults);
+  await waitFor(() => text().includes('Create a vault'), 'create screen');
+  type('[aria-label="Vault name"]', name);
   type('[aria-label="Passphrase"]', 'correct horse battery');
   type('[aria-label="Confirm passphrase"]', 'correct horse battery');
   submit();
@@ -90,12 +90,12 @@ async function createVault(storage: IStorageEngine): Promise<Runtime> {
 
 describe('keyboard-first focus', () => {
   it('focuses the passphrase field on launch and after a wrong passphrase', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    await createVault(storage);
+    const vaults = new TestVaults();
+    await createVault(vaults);
     dispose?.();
     root.remove();
 
-    mount(storage);
+    mount(vaults);
     await waitFor(() => document.activeElement?.getAttribute('aria-label') === 'Passphrase', 'focused on launch');
     type('[aria-label="Passphrase"]', 'wrong passphrase');
     submit();
@@ -104,7 +104,7 @@ describe('keyboard-first focus', () => {
   });
 
   it('focuses the editor of a new note so typing starts right away', async () => {
-    await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    await createVault(new TestVaults());
     pressCtrl('n');
     await waitFor(() => document.querySelector('.cm-editor') !== null && editor().hasFocus, 'editor focused');
   });
@@ -112,9 +112,12 @@ describe('keyboard-first focus', () => {
 
 describe('vault screens', () => {
   it('validates the new passphrase before creating the vault', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    mount(storage);
-    await waitFor(() => text().includes('Create your vault'), 'create screen');
+    const vaults = new TestVaults();
+    mount(vaults);
+    await waitFor(() => text().includes('Create a vault'), 'create screen');
+    submit();
+    await waitFor(() => text().includes('Give the vault a name'), 'name error');
+    type('[aria-label="Vault name"]', 'Personal');
     type('[aria-label="Passphrase"]', 'short');
     type('[aria-label="Confirm passphrase"]', 'short');
     submit();
@@ -123,17 +126,17 @@ describe('vault screens', () => {
     type('[aria-label="Confirm passphrase"]', 'different passphrase');
     submit();
     await waitFor(() => text().includes('do not match'), 'mismatch error');
-    expect(await storage.getVaultHeader()).toBeNull();
+    expect(await vaults.list()).toEqual([]);
   });
 
   it('creates the vault, then asks for the passphrase on the next launch', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    await createVault(storage);
-    expect(await storage.getVaultHeader()).not.toBeNull();
+    const vaults = new TestVaults();
+    await createVault(vaults);
+    expect(await vaults.storage.getVaultHeader()).not.toBeNull();
     dispose?.();
     root.remove();
 
-    mount(storage);
+    mount(vaults);
     await waitFor(() => text().includes('Unlock AnkyLock'), 'unlock screen');
     type('[aria-label="Passphrase"]', 'wrong passphrase');
     submit();
@@ -144,23 +147,67 @@ describe('vault screens', () => {
   });
 });
 
+describe('multiple vaults', () => {
+  function select(vaultIndex: number): void {
+    const field = document.querySelector('[aria-label="Vault"]') as HTMLSelectElement;
+    field.selectedIndex = vaultIndex;
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  it('creates isolated vaults and unlocks the chosen one', async () => {
+    const vaults = new TestVaults();
+    const runtime = await createVault(vaults, 'Personal');
+    pressCtrl('n');
+    await waitFor(() => document.querySelector('.cm-editor') !== null, 'editor');
+    editor().dispatch({ changes: { from: 0, insert: 'personal note' } });
+    await waitFor(() => text().includes('personal note'), 'tab title');
+    await runtime.flush();
+    await runtime.lock();
+
+    await waitFor(() => text().includes('Unlock AnkyLock'), 'unlock screen');
+    (Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Create a new vault') as HTMLElement).click();
+    await waitFor(() => text().includes('Create a vault'), 'create screen');
+    await waitFor(() => document.activeElement?.getAttribute('aria-label') === 'Vault name', 'name focused');
+    type('[aria-label="Vault name"]', 'Work');
+    type('[aria-label="Passphrase"]', 'another long passphrase');
+    type('[aria-label="Confirm passphrase"]', 'another long passphrase');
+    submit();
+    await waitFor(() => text().includes('Press Ctrl+N'), 'work vault open');
+    expect(runtime.vaultName()).toBe('Work');
+    expect(Object.keys(runtime.store.state.notes)).toEqual([]);
+    await runtime.lock();
+
+    // Most recently opened first: Work, then Personal.
+    await waitFor(() => document.querySelectorAll('[aria-label="Vault"] option').length === 2, 'vault list');
+    select(1);
+    type('[aria-label="Passphrase"]', 'another long passphrase');
+    submit();
+    await waitFor(() => text().includes('does not unlock'), 'Personal needs its own passphrase');
+    type('[aria-label="Passphrase"]', 'correct horse battery');
+    submit();
+    await waitFor(() => runtime.status() === 'unlocked', 'personal vault open');
+    expect(runtime.vaultName()).toBe('Personal');
+    expect(Object.keys(runtime.store.state.notes)).toHaveLength(1);
+  });
+});
+
 describe('workspace', () => {
   it('saves typed text encrypted and restores it after relaunch', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    const runtime = await createVault(storage);
+    const vaults = new TestVaults();
+    const runtime = await createVault(vaults);
     pressCtrl('n');
     await waitFor(() => document.querySelector('.cm-editor') !== null, 'editor');
     editor().dispatch({ changes: { from: 0, insert: 'const secret = 42;' } });
     await waitFor(() => text().includes('const secret = 42;'), 'tab title');
     await runtime.lock();
 
-    const noteId = (await storage.listNotes(null))[0]?.id as NoteId;
-    const stored = await storage.getNoteContent(noteId);
+    const noteId = (await vaults.storage.listNotes(null))[0]?.id as NoteId;
+    const stored = await vaults.storage.getNoteContent(noteId);
     expect(new TextDecoder('latin1').decode(stored?.yjsUpdates)).not.toContain('secret');
     dispose?.();
     root.remove();
 
-    const again = mount(storage);
+    const again = mount(vaults);
     await waitFor(() => text().includes('Unlock AnkyLock'), 'unlock screen');
     type('[aria-label="Passphrase"]', 'correct horse battery');
     submit();
@@ -171,8 +218,8 @@ describe('workspace', () => {
   });
 
   it('discards an untouched scratchpad on close but keeps an edited one', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    const runtime = await createVault(storage);
+    const vaults = new TestVaults();
+    const runtime = await createVault(vaults);
     pressCtrl('n');
     await waitFor(() => document.querySelector('.cm-editor') !== null, 'editor');
     pressCtrl('w');
@@ -189,8 +236,8 @@ describe('workspace', () => {
   });
 
   it('shows the trash notice for trashed notes and offers state-specific menu actions', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    const runtime = await createVault(storage);
+    const vaults = new TestVaults();
+    const runtime = await createVault(vaults);
     await runtime.store.createFolder('Projects', null, null);
     const folderRow = await (async () => {
       await waitFor(() => document.querySelector('[data-folder-id]') !== null, 'folder row');
@@ -226,7 +273,7 @@ describe('creating folders from the UI', () => {
   }
 
   it('creates a category from the sidebar, then a folder inside it via right-click', async () => {
-    const runtime = await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    const runtime = await createVault(new TestVaults());
     type('[aria-label="New category"]', 'Work');
     (document.querySelector('[aria-label="New category"]')?.closest('form') as HTMLFormElement).dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true }),
@@ -251,7 +298,7 @@ describe('creating folders from the UI', () => {
   });
 
   it('creates a root folder with the + button in All Notes, and hides it in Trash', async () => {
-    const runtime = await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    const runtime = await createVault(new TestVaults());
     (document.querySelector('[aria-label="New folder"]') as HTMLButtonElement).click();
     await waitFor(() => document.querySelector('[role="menu"]') !== null, 'root menu');
     await nameInMenu('New folder', 'Inbox');
@@ -263,7 +310,7 @@ describe('creating folders from the UI', () => {
   });
 
   it('creates a subfolder inside the selected folder', async () => {
-    const runtime = await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    const runtime = await createVault(new TestVaults());
     await runtime.store.createFolder('Projects', null, null);
     runtime.store.select({ kind: 'folder', id: runtime.store.state.folders[0]?.id as FolderId });
     await waitFor(() => document.querySelector('[aria-label="New folder"]') !== null, '+ button');
@@ -275,7 +322,7 @@ describe('creating folders from the UI', () => {
   });
 
   it('renames and deletes a category, keeping its folders', async () => {
-    const runtime = await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    const runtime = await createVault(new TestVaults());
     await runtime.store.createCategory('Work');
     const id = runtime.store.state.categories[0]?.id as NonNullable<(typeof runtime.store.state.categories)[0]>['id'];
     await runtime.store.createFolder('Clients', null, id);
@@ -299,7 +346,7 @@ describe('Trash toolbar', () => {
   }
 
   it('only appears in the Trash view, with Empty Trash disabled while it is empty', async () => {
-    const runtime = await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    const runtime = await createVault(new TestVaults());
     expect(button('Trash settings')).toBeNull();
     await trashView(runtime);
     expect(button('Empty Trash').disabled).toBe(true);
@@ -309,8 +356,8 @@ describe('Trash toolbar', () => {
   it('changes retention, asking first when items would be purged right away (SPEC §6)', async () => {
     // Storage clock that can run in the past, so a note can be trashed "10 days ago".
     let offset = 10 * 86_400_000;
-    const storage = new WebIndexedDbAdapter(new IDBFactory(), () => (Date.now() - offset) as EpochMs);
-    const runtime = await createVault(storage);
+    const vaults = new TestVaults(() => (Date.now() - offset) as EpochMs);
+    const runtime = await createVault(vaults);
     await runtime.store.createTab();
     const noteId = runtime.store.state.tabs[0]?.noteId as NoteId;
     await runtime.store.trashNote(noteId);
@@ -324,24 +371,24 @@ describe('Trash toolbar', () => {
     type('[aria-label="Retention days"]', '7');
     (days().form as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => text().includes('1 item in Trash will be deleted permanently now'), 'confirmation');
-    expect(await storage.getTrashRetentionDays()).toBe(28);
+    expect(await vaults.storage.getTrashRetentionDays()).toBe(28);
 
     (Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === 'Cancel') as HTMLElement).click();
     await waitFor(() => days() !== null, 'back to the form');
-    expect(await storage.getNote(noteId)).not.toBeNull();
+    expect(await vaults.storage.getNote(noteId)).not.toBeNull();
 
     (days().form as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => text().includes('will be deleted permanently now'), 'confirmation again');
     (Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === 'Delete and save') as HTMLElement).click();
     await waitFor(() => runtime.store.state.retentionDays === 7, 'retention saved');
-    expect(await storage.getTrashRetentionDays()).toBe(7);
-    expect(await storage.getNote(noteId)).toBeNull();
+    expect(await vaults.storage.getTrashRetentionDays()).toBe(7);
+    expect(await vaults.storage.getNote(noteId)).toBeNull();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('can turn automatic deletion off', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    const runtime = await createVault(storage);
+    const vaults = new TestVaults();
+    const runtime = await createVault(vaults);
     await trashView(runtime);
     button('Trash settings').click();
     await waitFor(() => document.querySelector('[aria-label="Never delete automatically"]') !== null, 'settings popover');
@@ -350,12 +397,12 @@ describe('Trash toolbar', () => {
     checkbox.dispatchEvent(new Event('change', { bubbles: true }));
     (checkbox.form as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => runtime.store.state.retentionDays === 0, 'manual mode saved');
-    expect(await storage.getTrashRetentionDays()).toBe(0);
+    expect(await vaults.storage.getTrashRetentionDays()).toBe(0);
   });
 
   it('empties the Trash after confirmation, leaving live items alone', async () => {
-    const storage = new WebIndexedDbAdapter(new IDBFactory());
-    const runtime = await createVault(storage);
+    const vaults = new TestVaults();
+    const runtime = await createVault(vaults);
     await runtime.store.createFolder('Old', null, null);
     await runtime.store.createFolder('Old child', runtime.store.state.folders[0]?.id as FolderId, null);
     await runtime.store.createFolder('Keep', null, null);
@@ -370,23 +417,23 @@ describe('Trash toolbar', () => {
     await waitFor(() => text().includes('Permanently delete all 3 items in Trash?'), 'confirmation');
     (Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === 'Cancel') as HTMLElement).click();
     await waitFor(() => document.querySelector('[role="dialog"]') === null, 'cancelled');
-    expect(await storage.listTrashedFolders()).toHaveLength(2);
+    expect(await vaults.storage.listTrashedFolders()).toHaveLength(2);
 
     button('Empty Trash').click();
     await waitFor(() => document.querySelector('[role="dialog"]') !== null, 'confirmation again');
     (Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === 'Delete permanently') as HTMLElement).click();
     await waitFor(() => document.querySelector('[role="dialog"]') === null, 'emptied');
-    expect(await storage.listTrashedFolders()).toEqual([]);
-    expect(await storage.listTrashedNotes()).toEqual([]);
-    expect((await storage.listFolders()).map((f) => f.id)).toEqual([runtime.store.state.folders[0]?.id]);
-    expect(await storage.getNote(liveNote)).not.toBeNull();
+    expect(await vaults.storage.listTrashedFolders()).toEqual([]);
+    expect(await vaults.storage.listTrashedNotes()).toEqual([]);
+    expect((await vaults.storage.listFolders()).map((f) => f.id)).toEqual([runtime.store.state.folders[0]?.id]);
+    expect(await vaults.storage.getNote(liveNote)).not.toBeNull();
     expect(button('Empty Trash').disabled).toBe(true);
   });
 });
 
 describe('confirmation styling', () => {
   it('shows the purge confirmation in red', async () => {
-    const runtime = await createVault(new WebIndexedDbAdapter(new IDBFactory()));
+    const runtime = await createVault(new TestVaults());
     await runtime.store.createFolder('Old', null, null);
     await runtime.store.trashFolder(runtime.store.state.folders[0]?.id as FolderId);
     runtime.store.select({ kind: 'system', id: 'system_trash' });

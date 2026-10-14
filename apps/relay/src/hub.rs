@@ -9,22 +9,41 @@ use crate::auth::AccountId;
 
 pub type ConnectionId = u64;
 
-/// One opaque frame fanned out to an account's other connections.
+/// A vault id as sent by clients (a UUID). Only its shape is checked; it is never interpreted.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VaultId(String);
+
+impl VaultId {
+    pub fn parse(raw: &str) -> Option<Self> {
+        let valid = (1..=64).contains(&raw.len()) && raw.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+        valid.then(|| Self(raw.to_owned()))
+    }
+}
+
+/// Frames fan out per vault of an account (BR-SEC-04): devices on different vaults of the same
+/// Google account never receive each other's packets.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Channel {
+    pub account: AccountId,
+    pub vault: VaultId,
+}
+
+/// One opaque frame fanned out to a channel's other connections.
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub sender: ConnectionId,
     pub data: Bytes,
 }
 
-/// In-memory fanout keyed by account. Holds no history: a restart loses nothing because
+/// In-memory fanout keyed by channel (account and vault). Holds no history: a restart loses nothing because
 /// clients resync by state vector.
 pub struct Hub {
-    channels: Mutex<HashMap<AccountId, broadcast::Sender<Frame>>>,
+    channels: Mutex<HashMap<Channel, broadcast::Sender<Frame>>>,
     capacity: usize,
     next_connection: AtomicU64,
 }
 
-/// A connection's membership in its account channel; leaving cleans up the channel.
+/// A connection's membership in its channel; leaving cleans up the channel.
 pub struct Subscription {
     pub id: ConnectionId,
     pub sender: broadcast::Sender<Frame>,
@@ -36,32 +55,32 @@ impl Hub {
         Self { channels: Mutex::new(HashMap::new()), capacity: capacity.max(1), next_connection: AtomicU64::new(1) }
     }
 
-    fn channels(&self) -> std::sync::MutexGuard<'_, HashMap<AccountId, broadcast::Sender<Frame>>> {
+    fn channels(&self) -> std::sync::MutexGuard<'_, HashMap<Channel, broadcast::Sender<Frame>>> {
         // The map stays consistent even if a holder panicked: every critical section is one call.
         self.channels.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    pub fn join(&self, account: &AccountId) -> Subscription {
+    pub fn join(&self, channel: &Channel) -> Subscription {
         let mut channels = self.channels();
         let sender = channels
-            .entry(account.clone())
+            .entry(channel.clone())
             .or_insert_with(|| broadcast::channel(self.capacity).0)
             .clone();
         let receiver = sender.subscribe();
         Subscription { id: self.next_connection.fetch_add(1, Ordering::Relaxed), sender, receiver }
     }
 
-    /// Drops the subscription and removes the account's channel once nobody listens,
+    /// Drops the subscription and removes the channel once nobody listens,
     /// so memory doesn't grow with every account ever seen.
-    pub fn leave(&self, account: &AccountId, subscription: Subscription) {
+    pub fn leave(&self, channel: &Channel, subscription: Subscription) {
         drop(subscription.receiver);
         let mut channels = self.channels();
-        if channels.get(account).is_some_and(|s| s.receiver_count() == 0) {
-            channels.remove(account);
+        if channels.get(channel).is_some_and(|s| s.receiver_count() == 0) {
+            channels.remove(channel);
         }
     }
 
-    pub fn account_count(&self) -> usize {
+    pub fn channel_count(&self) -> usize {
         self.channels().len()
     }
 }
@@ -70,8 +89,12 @@ impl Hub {
 mod tests {
     use super::*;
 
-    fn account(id: &str) -> AccountId {
-        AccountId(id.into())
+    fn account(id: &str) -> Channel {
+        vault(id, "v1")
+    }
+
+    fn vault(account: &str, vault: &str) -> Channel {
+        Channel { account: AccountId(account.into()), vault: VaultId::parse(vault).unwrap() }
     }
 
     #[tokio::test]
@@ -86,6 +109,23 @@ mod tests {
         assert!(b1.receiver.try_recv().is_err());
     }
 
+    #[tokio::test]
+    async fn separates_vaults_of_the_same_account() {
+        let hub = Hub::new(8);
+        let work = hub.join(&vault("a", "work"));
+        let mut personal = hub.join(&vault("a", "personal"));
+        work.sender.send(Frame { sender: work.id, data: Bytes::from_static(b"x") }).unwrap();
+        assert!(personal.receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn accepts_only_short_uuid_like_vault_ids() {
+        assert!(VaultId::parse("0b6f5c2e-3d1a-4c8e-9f7b-2a1d4e5f6a7b").is_some());
+        for bad in ["", "../etc", "a b", "x".repeat(65).as_str()] {
+            assert!(VaultId::parse(bad).is_none(), "{bad}");
+        }
+    }
+
     #[test]
     fn removes_empty_channels() {
         let hub = Hub::new(8);
@@ -93,8 +133,8 @@ mod tests {
         let second = hub.join(&account("a"));
         assert_ne!(first.id, second.id);
         hub.leave(&account("a"), first);
-        assert_eq!(hub.account_count(), 1);
+        assert_eq!(hub.channel_count(), 1);
         hub.leave(&account("a"), second);
-        assert_eq!(hub.account_count(), 0);
+        assert_eq!(hub.channel_count(), 0);
     }
 }

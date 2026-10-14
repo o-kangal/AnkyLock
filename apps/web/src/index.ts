@@ -8,6 +8,12 @@ export { TabBar } from './components/tabs/TabBar.jsx';
 export { VirtualList } from './components/VirtualList.jsx';
 export { ContextMenu, menuActions, type MenuAction, type MenuTarget } from './components/sidebar/ContextMenu.jsx';
 export { AnkyLockApp } from './components/AnkyLockApp.jsx';
-export { UnlockScreen, MIN_PASSPHRASE_LENGTH } from './components/UnlockScreen.jsx';
+export { UnlockScreen, MIN_PASSPHRASE_LENGTH, vaultLabel } from './components/UnlockScreen.jsx';
 export { Workspace } from './components/Workspace.jsx';
-export { createRuntime, type Runtime, type RuntimeOptions, type VaultStatus } from './runtime/createRuntime.js';
+export {
+  createRuntime,
+  MAX_VAULT_NAME_LENGTH,
+  type Runtime,
+  type RuntimeOptions,
+  type VaultStatus,
+} from './runtime/createRuntime.js';

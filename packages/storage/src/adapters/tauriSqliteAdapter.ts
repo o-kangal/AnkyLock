@@ -13,10 +13,29 @@ import {
   type NoteId,
   type PurgedEntities,
   type SyncOutboxEntry,
+  type VaultId,
 } from '@ankylock/core';
 import { base64ToBytes, bytesToBase64 } from '@ankylock/crypto';
-import { arrayOf, isCategory, isFolder, isNote, isNull, isNumber, isString, isSyncEntityType, shape } from '../guards.js';
-import { StorageError, type IStorageEngine, type NewFolder, type NewOutboxEntry } from '../interfaces/IStorageEngine.js';
+import {
+  arrayOf,
+  isCategory,
+  isFolder,
+  isNote,
+  isNull,
+  isNumber,
+  isString,
+  isSyncEntityType,
+  isVaultEntry,
+  shape,
+} from '../guards.js';
+import {
+  StorageError,
+  type IStorageEngine,
+  type IVaultDirectory,
+  type NewFolder,
+  type NewOutboxEntry,
+  type VaultEntry,
+} from '../interfaces/IStorageEngine.js';
 
 /** Signature of Tauri's `invoke`; injectable for tests. Argument keys are camelCase. */
 export type Invoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -84,7 +103,26 @@ const fromWireContent = (wire: WireNoteContent): NoteContent =>
 const fromWireOutbox = (wire: WireOutboxEntry): SyncOutboxEntry =>
   ({ ...wire, encryptedPayload: base64ToBytes(wire.encryptedPayload) }) as SyncOutboxEntry;
 
-/** Desktop storage: every call is an IPC command backed by SQLite in the Rust host. */
+async function call<T>(
+  invoke: Invoke,
+  command: string,
+  args: Record<string, unknown>,
+  guard: (value: unknown) => value is T,
+): Promise<T> {
+  let raw: unknown;
+  try {
+    raw = await invoke(command, args);
+  } catch (error) {
+    throw toStorageError(error);
+  }
+  if (!guard(raw)) throw new StorageError('ERR_STORAGE', `Unexpected response from ${command}.`);
+  return raw;
+}
+
+/**
+ * Desktop storage: every call is an IPC command backed by SQLite in the Rust host, acting on the
+ * vault opened through `TauriVaultDirectory`.
+ */
 export class TauriSqliteAdapter implements IStorageEngine {
   readonly #invoke: Invoke;
 
@@ -92,15 +130,8 @@ export class TauriSqliteAdapter implements IStorageEngine {
     this.#invoke = invoke;
   }
 
-  async #call<T>(command: string, args: Record<string, unknown>, guard: (value: unknown) => value is T): Promise<T> {
-    let raw: unknown;
-    try {
-      raw = await this.#invoke(command, args);
-    } catch (error) {
-      throw toStorageError(error);
-    }
-    if (!guard(raw)) throw new StorageError('ERR_STORAGE', `Unexpected response from ${command}.`);
-    return raw;
+  #call<T>(command: string, args: Record<string, unknown>, guard: (value: unknown) => value is T): Promise<T> {
+    return call(this.#invoke, command, args, guard);
   }
 
   listCategories(): Promise<Category[]> {
@@ -235,8 +266,8 @@ export class TauriSqliteAdapter implements IStorageEngine {
     return this.#call('settings_get_vault_header', {}, (v): v is string | null => v === null || typeof v === 'string');
   }
 
-  async setVaultHeader(header: string): Promise<void> {
-    await this.#call('settings_set_vault_header', { header }, isNull);
+  getVaultName(): Promise<Ciphertext | null> {
+    return this.#call('settings_get_vault_name', {}, (v): v is Ciphertext | null => v === null || typeof v === 'string');
   }
 
   getTrashRetentionDays(): Promise<number> {
@@ -251,3 +282,31 @@ export class TauriSqliteAdapter implements IStorageEngine {
   }
 }
 
+
+/**
+ * Desktop vaults: the Rust host keeps `vaults.json` and one SQLite file per vault, and swaps the
+ * database every storage command acts on when a vault is opened.
+ */
+export class TauriVaultDirectory implements IVaultDirectory {
+  readonly #invoke: Invoke;
+  readonly #storage: TauriSqliteAdapter;
+
+  constructor(invoke: Invoke = tauriInvoke) {
+    this.#invoke = invoke;
+    this.#storage = new TauriSqliteAdapter(invoke);
+  }
+
+  list(): Promise<VaultEntry[]> {
+    return call(this.#invoke, 'vault_list', {}, arrayOf(isVaultEntry));
+  }
+
+  async create(id: VaultId, header: string, nameCiphertext: Ciphertext): Promise<IStorageEngine> {
+    await call(this.#invoke, 'vault_create', { id, header, nameCiphertext }, isVaultEntry);
+    return this.#storage;
+  }
+
+  async open(id: VaultId): Promise<IStorageEngine> {
+    await call(this.#invoke, 'vault_open', { id }, isVaultEntry);
+    return this.#storage;
+  }
+}

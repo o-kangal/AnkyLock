@@ -89,22 +89,22 @@ pub fn delete_category(conn: &mut Connection, id: &str, now: i64) -> AppResult<(
 
 #[tauri::command(async)]
 pub fn category_list(db: State<'_, DbPool>) -> AppResult<Vec<Category>> {
-    list_categories(&db.conn())
+    list_categories(&*db.conn()?)
 }
 
 #[tauri::command(async)]
 pub fn category_create(db: State<'_, DbPool>, id: String, name_ciphertext: String) -> AppResult<Category> {
-    create_category(&mut db.conn(), &id, &name_ciphertext, now_ms())
+    create_category(&mut *db.conn()?, &id, &name_ciphertext, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn category_rename(db: State<'_, DbPool>, id: String, name_ciphertext: String) -> AppResult<Category> {
-    rename_category(&mut db.conn(), &id, &name_ciphertext, now_ms())
+    rename_category(&mut *db.conn()?, &id, &name_ciphertext, now_ms())
 }
 
 #[tauri::command(async)]
 pub fn category_delete(db: State<'_, DbPool>, id: String) -> AppResult<()> {
-    delete_category(&mut db.conn(), &id, now_ms())
+    delete_category(&mut *db.conn()?, &id, now_ms())
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 import type { Category, Folder, Note, NoteContent, SyncOutboxEntry } from '@ankylock/core';
+import type { VaultEntry } from './interfaces/IStorageEngine.js';
 
 type Check = (value: unknown) => boolean;
 
@@ -28,6 +29,8 @@ export const arrayOf =
     Array.isArray(value) && value.every(guard);
 
 export const isNull = (value: unknown): value is null => value === null;
+
+export const isVaultEntry = shape<VaultEntry>({ id: isString, createdAt: isNumber, lastOpenedAt: isNumber });
 
 export const isSyncEntityType: Check = (v) => v === 'note' || v === 'folder' || v === 'category' || v === 'tombstone';
 

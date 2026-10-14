@@ -31,8 +31,8 @@ function backupLabel(backup: BackupStatus): string | null {
 }
 
 /**
- * Non-intrusive status line (SPEC §7): sign-in, relay connection and Drive backup state.
- * Sync problems never block local editing; they only show up here.
+ * Non-intrusive status line (SPEC §7): the open vault, sign-in, relay connection and Drive backup
+ * state. Sync problems never block local editing; they only show up here.
  */
 export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element {
   const status = (): ReturnType<Runtime['syncStatus']> => props.runtime.syncStatus();
@@ -58,6 +58,16 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
       }}
     >
       <span style={{ display: 'flex', gap: '8px', 'align-items': 'center' }}>
+        <span style={{ color: 'CanvasText' }}>{props.runtime.vaultName() ?? 'Unnamed vault'}</span>
+        <button
+          type="button"
+          style={linkButton}
+          title="Lock this vault and return to the vault list"
+          onClick={() => void props.runtime.lock()}
+        >
+          Lock
+        </button>
+        <span aria-hidden="true">|</span>
         <Switch>
           <Match when={status().auth === 'unavailable'}>Local only</Match>
           <Match when={status().auth === 'signed-out'}>
