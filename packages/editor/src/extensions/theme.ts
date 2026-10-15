@@ -45,18 +45,24 @@ const PALETTES: Record<ColorScheme, Palette> = {
   },
 };
 
+/** Left padding of every line; wrapped rows of indented lines build on it (see `wordWrap`). */
+export const LINE_PADDING_LEFT = '8px';
+
 const FONT_STACK = '"JetBrains Mono", "Cascadia Code", "Fira Code", Menlo, Consolas, "DejaVu Sans Mono", monospace';
 
-/** Scoped CodeMirror theme (no global CSS): colors, monospace font and line padding. */
-export function editorTheme(scheme: ColorScheme): Extension {
+/**
+ * Scoped CodeMirror theme (no global CSS): colors, monospace font and line padding. Narrow
+ * screens pass 16 px: iOS zooms into any focused text smaller than that.
+ */
+export function editorTheme(scheme: ColorScheme, fontSizePx = 13): Extension {
   const p = PALETTES[scheme];
   return EditorView.theme(
     {
-      '&': { height: '100%', color: p.foreground, backgroundColor: p.background, fontSize: '13px' },
+      '&': { height: '100%', color: p.foreground, backgroundColor: p.background, fontSize: `${fontSizePx}px` },
       '&.cm-focused': { outline: 'none' },
       '.cm-scroller': { fontFamily: FONT_STACK, lineHeight: '1.5' },
       '.cm-content': { padding: '6px 0', caretColor: p.cursor },
-      '.cm-line': { padding: '0 12px 0 8px' },
+      '.cm-line': { padding: `0 12px 0 ${LINE_PADDING_LEFT}` },
       '.cm-cursor, .cm-dropCursor': { borderLeftColor: p.cursor },
       '.cm-gutters': { backgroundColor: p.gutterBackground, color: p.gutterForeground, border: 'none' },
       '.cm-activeLine': { backgroundColor: p.activeLine },

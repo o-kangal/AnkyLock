@@ -1,10 +1,11 @@
 import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
+import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { tokens } from './sidebar/styles.js';
 
 export type VaultSettingsView = 'menu' | 'remove' | 'delete';
 
-const field: JSX.CSSProperties = {
+const baseField: JSX.CSSProperties = {
   display: 'block',
   width: '100%',
   'box-sizing': 'border-box',
@@ -13,8 +14,7 @@ const field: JSX.CSSProperties = {
   font: tokens.font,
 };
 
-const button: JSX.CSSProperties = { ...field, cursor: 'pointer', 'text-align': 'left' };
-const danger: JSX.CSSProperties = { ...button, color: tokens.danger };
+
 
 /**
  * The open vault's settings: rename it, remove it from this device, or delete it everywhere.
@@ -26,6 +26,10 @@ export function VaultSettings(props: {
   readonly initialView?: VaultSettingsView;
   readonly onClose: () => void;
 }): JSX.Element {
+  const narrow = useNarrowScreen();
+  const field = (): JSX.CSSProperties => touchSized(baseField, narrow());
+  const button = (): JSX.CSSProperties => ({ ...field(), cursor: 'pointer', 'text-align': 'left' });
+  const danger = (): JSX.CSSProperties => ({ ...button(), color: tokens.danger });
   const displayName = (): string => props.runtime.vaultName() ?? 'Unnamed vault';
   const [view, setView] = createSignal<VaultSettingsView>(props.initialView ?? 'menu');
   const [name, setName] = createSignal(props.runtime.vaultName() ?? '');
@@ -70,25 +74,41 @@ export function VaultSettings(props: {
                 maxLength={MAX_VAULT_NAME_LENGTH}
                 value={name()}
                 onInput={(e) => setName(e.currentTarget.value)}
-                style={field}
+                style={field()}
               />
             </label>
-            <button type="submit" disabled={busy() || name().trim() === (props.runtime.vaultName() ?? '')} style={button}>
+            <button type="submit" disabled={busy() || name().trim() === (props.runtime.vaultName() ?? '')} style={button()}>
               Rename
             </button>
           </form>
+          <Show when={status().vaultDrive === 'deleted'}>
+            <p role="note" style={{ margin: '8px 0 0', color: tokens.danger }}>
+              This vault was deleted from Google Drive on another device. Sync is off.
+            </p>
+            <button type="button" disabled={busy()} style={button()} onClick={() => void props.runtime.keepLocalOnly().then(props.onClose)}>
+              Keep local only
+            </button>
+          </Show>
+          <button type="button" disabled={busy()} style={button()} onClick={() => void props.runtime.lock().then(props.onClose)}>
+            Lock
+          </button>
+          <Show when={signedIn() || status().auth === 'stale'}>
+            <button type="button" disabled={busy()} style={button()} onClick={() => void props.runtime.signOut().then(props.onClose)}>
+              Sign out of Google
+            </button>
+          </Show>
           <Show when={status().vaultDrive === 'local-only'}>
-            <button type="button" disabled={busy() || !signedIn()} style={button} onClick={() => void props.runtime.backUpAgain().then(props.onClose)}>
+            <button type="button" disabled={busy() || !signedIn()} style={button()} onClick={() => void props.runtime.backUpAgain().then(props.onClose)}>
               Back up to Google Drive again
             </button>
           </Show>
           <hr style={{ border: 'none', 'border-top': `1px solid ${tokens.border}`, margin: '10px 0 4px' }} />
-          <button type="button" style={danger} onClick={() => open('remove')}>
+          <button type="button" style={danger()} onClick={() => open('remove')}>
             Remove from this device…
           </button>
           <button
             type="button"
-            style={danger}
+            style={danger()}
             disabled={!signedIn() || !status().onDrive}
             title={signedIn() ? undefined : 'Sign in with Google to delete the vault from Google Drive too.'}
             onClick={() => open('delete')}
@@ -125,13 +145,13 @@ export function VaultSettings(props: {
                 placeholder={displayName()}
                 value={typed()}
                 onInput={(e) => setTyped(e.currentTarget.value)}
-                style={field}
+                style={field()}
               />
             </Show>
-            <button type="submit" disabled={busy() || !confirmed()} style={danger}>
+            <button type="submit" disabled={busy() || !confirmed()} style={danger()}>
               {busy() ? 'Removing…' : view() === 'delete' ? 'Delete everywhere' : 'Remove from this device'}
             </button>
-            <button type="button" disabled={busy()} style={button} onClick={() => open('menu')}>
+            <button type="button" disabled={busy()} style={button()} onClick={() => open('menu')}>
               Cancel
             </button>
           </form>

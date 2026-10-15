@@ -3,12 +3,13 @@ import type { EpochMs, VaultId } from '@ankylock/core';
 import type { VaultEntry } from '@ankylock/storage';
 import type { RemoteVault } from '@ankylock/sync';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
+import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { tokens } from './sidebar/styles.js';
 
 /** Passphrases are the only thing protecting the vault; short ones fall to offline guessing. */
 export const MIN_PASSPHRASE_LENGTH = 8;
 
-const fieldStyle: JSX.CSSProperties = {
+const baseFieldStyle: JSX.CSSProperties = {
   display: 'block',
   width: '100%',
   'box-sizing': 'border-box',
@@ -56,6 +57,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   };
   onMount(() => queueMicrotask(focusFirst));
 
+  const narrow = useNarrowScreen();
+  const fieldStyle = (): JSX.CSSProperties => touchSized(baseFieldStyle, narrow());
   const [chosenMode, setMode] = createSignal<Mode>('unlock');
   const mode = (): Mode =>
     chosenMode() === 'unlock' && props.runtime.status() === 'uninitialized' ? 'create' : chosenMode();
@@ -151,7 +154,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
       autocomplete={mode() === 'create' ? 'new-password' : 'current-password'}
       value={passphrase()}
       onInput={(e) => setPassphrase(e.currentTarget.value)}
-      style={fieldStyle}
+      style={fieldStyle()}
     />
   );
 
@@ -163,7 +166,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
 
   return (
     <main style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>
-      <form onSubmit={(e) => void submit(e)} style={{ width: '340px' }}>
+      <form onSubmit={(e) => void submit(e)} style={{ width: '340px', 'max-width': 'calc(100% - 32px)' }}>
         <Switch>
           <Match when={mode() === 'unlock'}>
             <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Unlock AnkyLock</h1>
@@ -178,7 +181,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
                   setSelected(e.currentTarget.value as VaultId);
                   setError(null);
                 }}
-                style={fieldStyle}
+                style={fieldStyle()}
               >
                 <For each={props.runtime.vaults()}>{(entry) => <option value={entry.id}>{vaultLabel(entry)}</option>}</For>
               </select>
@@ -197,7 +200,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
               maxLength={MAX_VAULT_NAME_LENGTH}
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
-              style={fieldStyle}
+              style={fieldStyle()}
             />
             {passphraseInput(false)}
             <input
@@ -207,7 +210,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
               autocomplete="new-password"
               value={confirmation()}
               onInput={(e) => setConfirmation(e.currentTarget.value)}
-              style={fieldStyle}
+              style={fieldStyle()}
             />
           </Match>
           <Match when={mode() === 'remote'}>
@@ -240,7 +243,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
                     setSelectedRemote(e.currentTarget.value as VaultId);
                     setError(null);
                   }}
-                  style={fieldStyle}
+                  style={fieldStyle()}
                 >
                   <For each={(remote() as { vaults: readonly RemoteVault[] }).vaults}>
                     {(vault) => <option value={vault.vaultId}>{remoteVaultLabel(vault)}</option>}
@@ -257,7 +260,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
           </div>
         </Show>
         <Show when={showSubmit()}>
-          <button type="submit" disabled={busy()} style={{ ...fieldStyle, cursor: 'pointer' }}>
+          <button type="submit" disabled={busy()} style={{ ...fieldStyle(), cursor: 'pointer' }}>
             {submitLabel()}
           </button>
         </Show>

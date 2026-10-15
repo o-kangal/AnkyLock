@@ -43,7 +43,14 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       />
       <Show when={menu()}>
         {(open) => (
-          <ContextMenu store={props.store} item={open().item} x={open().x} y={open().y} onClose={() => setMenu(null)} />
+          <ContextMenu
+            store={props.store}
+            item={open().item}
+            x={open().x}
+            y={open().y}
+            move={(item, target) => dnd.drop(item, target)}
+            onClose={() => setMenu(null)}
+          />
         )}
       </Show>
     </aside>

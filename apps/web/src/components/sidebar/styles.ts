@@ -11,12 +11,12 @@ export const tokens = {
   danger: '#b3261e',
 } as const;
 
-export function rowStyle(depth: number, active = false): JSX.CSSProperties {
+export function rowStyle(depth: number, active = false, height: number = tokens.rowHeight): JSX.CSSProperties {
   return {
     display: 'flex',
     'align-items': 'center',
     gap: '4px',
-    height: `${tokens.rowHeight}px`,
+    height: `${height}px`,
     'padding-left': `${8 + depth * tokens.indent}px`,
     'padding-right': '8px',
     font: tokens.font,

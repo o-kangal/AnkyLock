@@ -1,7 +1,8 @@
 import { createSignal, For, Show, type JSX } from 'solid-js';
-import type { CategoryId, Result } from '@ankylock/core';
-import type { DragItem } from '../../dnd/dragDropManager.js';
+import { ok, type CategoryId, type FolderId, type Result } from '@ankylock/core';
+import { canDrop, type DragItem, type DropTarget } from '../../dnd/dragDropManager.js';
 import type { WorkspaceState, WorkspaceStore } from '../../stores/workspaceStore.js';
+import { TOUCH_TARGET_PX, touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { Popover } from '../Popover.jsx';
 import { tokens } from './styles.js';
 
@@ -12,7 +13,60 @@ export interface MenuAction {
   /** Irreversible actions need a second click. */
   readonly confirm?: boolean;
   readonly run: (value: string) => Promise<Result<void>>;
+  /** Actions that pick a destination ("Move to…") list their choices first. */
+  readonly choices?: readonly MoveChoice[];
 }
+
+/** A destination in the "Move to…" list; `depth` indents folders under their parents. */
+export interface MoveChoice {
+  readonly label: string;
+  readonly depth: number;
+  readonly run: () => Promise<Result<void>>;
+}
+
+/** Moves an item the way dropping it there would (see `DragDropManager.drop`). */
+export type MoveItem = (item: DragItem, target: DropTarget) => Promise<Result<void>>;
+
+/**
+ * Destinations for "Move to…", the touch and keyboard alternative to drag-and-drop: the top level,
+ * every user category, and every live folder (tree order) that the drop rules allow.
+ */
+function moveChoices(state: WorkspaceState, store: WorkspaceStore, item: DragItem, move: MoveItem): MoveChoice[] {
+  const links = new Map(state.folders.map((f) => [f.id, { id: f.id, parentId: f.parentId }]));
+  const top: MoveChoice = {
+    label: 'Top level (no folder)',
+    depth: 0,
+    run: () => {
+      if (item.kind === 'folder') return store.moveFolder(item.id, null);
+      const note = state.notes[item.id];
+      return store.moveNote(item.id, null, note?.categoryId ?? null);
+    },
+  };
+  const categories = state.categories.map((c) => ({
+    label: `Category: ${c.name}`,
+    depth: 0,
+    target: { kind: 'category', id: c.id } as const,
+  }));
+  const live = state.folders.filter((f) => f.deletedAt === null && !f.isArchived);
+  const folders: { label: string; depth: number; target: DropTarget }[] = [];
+  const visit = (parentId: FolderId | null, depth: number): void => {
+    for (const f of live.filter((x) => x.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name))) {
+      folders.push({ label: f.name, depth, target: { kind: 'folder', id: f.id } });
+      visit(f.id, depth + 1);
+    }
+  };
+  visit(null, 0);
+  const allowed = [...categories, ...folders].filter(
+    (c) => canDrop(item, c.target, links).ok && !(item.kind === 'folder' && c.target.kind === 'folder' && c.target.id === item.id),
+  );
+  return [top, ...allowed.map((c) => ({ label: c.label, depth: c.depth, run: () => move(item, c.target) }))];
+}
+
+const moveTo = (choices: MoveChoice[]): MenuAction => ({
+  label: 'Move to…',
+  choices,
+  run: () => Promise.resolve(ok(undefined)),
+});
 
 /** What a menu was opened on: a tree row, a custom category, or the empty tree area / its "+" button. */
 export type MenuTarget = DragItem | { readonly kind: 'category'; readonly id: CategoryId } | { readonly kind: 'root' };
@@ -24,7 +78,7 @@ const newFolder = (run: (name: string) => Promise<Result<void>>): MenuAction => 
 });
 
 /** The actions valid for a target in its current state (live, archived or trashed). */
-export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: MenuTarget): MenuAction[] {
+export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: MenuTarget, move?: MoveItem): MenuAction[] {
   if (item.kind === 'root') {
     // New folders go where the user is looking: into the selected folder or category, else the root.
     const { selection } = state;
@@ -63,6 +117,7 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
         run: (name) => store.createFolder(name, folder.id, null),
       },
       { label: 'Rename', input: { placeholder: 'Folder name', initial: folder.name }, run: (name) => store.renameFolder(folder.id, name) },
+      ...(move ? [moveTo(moveChoices(state, store, { kind: 'folder', id: folder.id }, move))] : []),
       { label: 'Archive', run: () => store.archiveFolder(folder.id) },
       trash,
     ];
@@ -78,8 +133,11 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
   }
   const trash: MenuAction = { label: 'Move to Trash', run: () => store.trashNote(note.id) };
   if (note.isArchived) return [{ label: 'Unarchive', run: () => store.setNoteArchived(note.id, false) }, trash];
+  const moves = move ? [moveTo(moveChoices(state, store, { kind: 'note', id: note.id }, move))] : [];
   // Scratchpads must be filed into a folder or category before they can be archived (SPEC §3).
-  return note.isEphemeral ? [trash] : [{ label: 'Archive', run: () => store.setNoteArchived(note.id, true) }, trash];
+  return note.isEphemeral
+    ? [...moves, trash]
+    : [...moves, { label: 'Archive', run: () => store.setNoteArchived(note.id, true) }, trash];
 }
 
 export interface ContextMenuProps {
@@ -88,9 +146,11 @@ export interface ContextMenuProps {
   readonly x: number;
   readonly y: number;
   readonly onClose: () => void;
+  /** Enables "Move to…" for notes and folders. */
+  readonly move?: MoveItem;
 }
 
-const itemStyle: JSX.CSSProperties = {
+const baseItemStyle: JSX.CSSProperties = {
   display: 'block',
   width: '100%',
   'text-align': 'left',
@@ -106,6 +166,9 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
   const [pending, setPending] = createSignal<MenuAction | null>(null);
   const [value, setValue] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
+  const narrow = useNarrowScreen();
+  const itemStyle = (): JSX.CSSProperties =>
+    narrow() ? { ...baseItemStyle, 'min-height': `${TOUCH_TARGET_PX}px`, 'font-size': '16px' } : baseItemStyle;
 
   const execute = async (action: MenuAction, input: string): Promise<void> => {
     const result = await action.run(input);
@@ -115,7 +178,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
 
   const choose = (action: MenuAction): void => {
     setError(null);
-    if (action.input || (action.confirm && pending() !== action)) {
+    if (action.input || action.choices || (action.confirm && pending() !== action)) {
       setPending(action);
       setValue(action.input?.initial ?? '');
       return;
@@ -131,17 +194,33 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
       width={200}
       style={{ padding: '4px 0' }}
     >
-      <For each={menuActions(props.store.state, props.store, props.item)}>
+      <For each={menuActions(props.store.state, props.store, props.item, props.move)}>
         {(action) => (
           <>
             <button
               type="button"
               role="menuitem"
-              style={{ ...itemStyle, color: action.confirm && pending() === action ? tokens.danger : 'inherit' }}
+              style={{ ...itemStyle(), color: action.confirm && pending() === action ? tokens.danger : 'inherit' }}
               onClick={() => choose(action)}
             >
               {action.confirm && pending() === action ? `${action.label}? Click again to confirm` : action.label}
             </button>
+            <Show when={action.choices && pending() === action}>
+              <div role="group" aria-label="Destinations" style={{ 'max-height': '240px', overflow: 'auto', padding: '0 0 4px' }}>
+                <For each={action.choices}>
+                  {(choice) => (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      style={{ ...itemStyle(), 'padding-left': `${24 + choice.depth * tokens.indent}px` }}
+                      onClick={() => void choice.run().then((r) => (r.ok ? props.onClose() : setError(r.error.message)))}
+                    >
+                      {choice.label}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
             <Show when={action.input && pending() === action}>
               <form
                 style={{ padding: '2px 12px 6px' }}
@@ -156,7 +235,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
                   value={value()}
                   onInput={(e) => setValue(e.currentTarget.value)}
                   ref={(el) => queueMicrotask(() => el.focus())}
-                  style={{ width: '100%', font: tokens.font, 'box-sizing': 'border-box' }}
+                  style={touchSized({ width: '100%', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}
                 />
               </form>
             </Show>

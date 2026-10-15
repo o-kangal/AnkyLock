@@ -15,15 +15,18 @@ const linkButton: JSX.CSSProperties = {
   'text-decoration': 'underline',
 };
 
-function backupLabel(backup: BackupStatus): string | null {
+function backupLabel(backup: BackupStatus, compact: boolean): string | null {
   switch (backup.kind) {
     case 'never':
       return null;
     case 'running':
-      return 'Backing up…';
-    case 'ok':
-      return `Backed up ${new Date(backup.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+      return compact ? null : 'Backing up…';
+    case 'ok': {
+      const time = new Date(backup.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return compact ? time : `Backed up ${time}`;
+    }
     case 'error':
+      if (compact) return 'Backup paused';
       return {
         quota: 'Google Drive is full; backup paused',
         auth: 'Drive access denied; sign in again',
@@ -71,7 +74,12 @@ export interface WordWrapToggle {
   readonly shortcut: string;
 }
 
-export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordWrap?: WordWrapToggle }): JSX.Element {
+export function SyncStatusBar(props: {
+  readonly runtime: Runtime;
+  readonly wordWrap?: WordWrapToggle;
+  /** Narrow screens: short labels and icon buttons; Lock and Sign out live in the vault menu. */
+  readonly compact?: boolean;
+}): JSX.Element {
   const status = (): ReturnType<Runtime['syncStatus']> => props.runtime.syncStatus();
   const [error, setError] = createSignal<string | null>(null);
   const [settings, setSettings] = createSignal<{ at: PopoverPosition; view: VaultSettingsView } | null>(null);
@@ -110,7 +118,16 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
           type="button"
           aria-haspopup="dialog"
           title="Vault settings: rename, remove or delete"
-          style={{ ...linkButton, color: 'CanvasText', 'text-decoration': 'none' }}
+          style={{
+            ...linkButton,
+            color: 'CanvasText',
+            'text-decoration': 'none',
+            'white-space': 'nowrap',
+            overflow: 'hidden',
+            'text-overflow': 'ellipsis',
+            'max-width': props.compact ? '40vw' : 'none',
+            ...(props.compact ? { 'min-height': '40px' } : {}),
+          }}
           onClick={() => openSettings('menu')}
         >
           {props.runtime.vaultName() ?? 'Unnamed vault'} ▾
@@ -122,6 +139,7 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
             </Popover>
           )}
         </Show>
+        <Show when={props.compact} fallback={<>
         <button
           type="button"
           style={linkButton}
@@ -180,6 +198,37 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
             </button>
           </Match>
         </Switch>
+        </>}>
+          <span style={{ 'white-space': 'nowrap' }}>
+            <Switch>
+              <Match when={status().vaultDrive === 'deleted'}>
+                <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => openSettings('menu')}>
+                  Deleted elsewhere
+                </button>
+              </Match>
+              <Match when={status().vaultDrive === 'local-only' || status().auth === 'unavailable'}>Local only</Match>
+              <Match when={status().auth === 'signed-out'}>
+                <button type="button" style={linkButton} onClick={() => void signIn()}>
+                  Sign in
+                </button>
+              </Match>
+              <Match when={status().auth === 'signing-in'}>Signing in…</Match>
+              <Match when={status().auth === 'expired'}>
+                <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => void signIn()}>
+                  Sign in again
+                </button>
+              </Match>
+              <Match when={status().auth === 'stale'}>
+                <button type="button" style={linkButton} onClick={() => void signIn()}>
+                  Renew
+                </button>
+              </Match>
+              <Match when={status().auth === 'signed-in'}>
+                {status().connection === 'open' ? 'Synced' : status().connection === 'connecting' ? 'Connecting…' : 'Offline'}
+              </Match>
+            </Switch>
+          </span>
+        </Show>
         <Show when={error()}>
           <span style={{ color: tokens.danger }}>{error()}</span>
         </Show>
@@ -190,9 +239,11 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
             <button
               type="button"
               aria-pressed={wrap().on()}
+              {...(props.compact ? { 'aria-label': `Word wrap (${wrap().shortcut})` } : {})}
               title="Wrap long lines in the editor"
               style={{
                 ...iconButton,
+                ...(props.compact ? { 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' } : {}),
                 padding: '1px 6px',
                 'border-radius': '3px',
                 font: tokens.font,
@@ -202,7 +253,10 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
               }}
               onClick={() => wrap().toggle()}
             >
-              Wrap ({wrap().shortcut})
+              <span aria-hidden="true">↵</span>
+              <Show when={!props.compact}>
+                <span style={{ 'margin-left': '4px' }}>Wrap ({wrap().shortcut})</span>
+              </Show>
             </button>
           )}
         </Show>
@@ -214,7 +268,11 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
                 type="button"
                 aria-label="Sync now"
                 title="Sync now: merge other devices' backups from Google Drive and back up"
-                style={iconButton}
+                style={
+                  props.compact
+                    ? { ...iconButton, 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' }
+                    : iconButton
+                }
                 onClick={() => void props.runtime.syncNow()}
               >
                 <SyncIcon spinning={false} />
@@ -226,7 +284,9 @@ export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordW
             <SyncIcon spinning={true} />
           </span>
         </Show>
-        <span>{status().catchingUp ? 'Syncing…' : backupLabel(status().backup)}</span>
+        <span style={{ 'white-space': 'nowrap' }}>
+          {status().catchingUp ? (props.compact ? '' : 'Syncing…') : backupLabel(status().backup, props.compact ?? false)}
+        </span>
       </span>
     </footer>
   );

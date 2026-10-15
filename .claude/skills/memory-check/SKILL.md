@@ -40,6 +40,10 @@ Menus, popovers and dialogs use the shared `Popover` component (`apps/web/src/co
 
 A grid or flex child that hosts the editor must be bounded, or its content height wins and it paints over what comes after (Task 11f: the editor covered the status bar). Give grid rows `minmax(0, 1fr)` (and `minmax(0, 1fr)` columns where content can be wide) and flex children `min-height: 0`. jsdom has no layout, so check it in the real engine (the offscreen WebKitGTK probe) by comparing `getBoundingClientRect()` of the editor and the status bar and calling `elementFromPoint` on the bar.
 
+### Narrow screens and touch (Task 11k)
+
+Read `useNarrowScreen()` (context from `AnkyLockApp`, `matchMedia` under 600 px; tests pass `narrow`). On narrow screens: the sidebar is a drawer that stays mounted (it slides out with `transform`/`visibility`, so tree state survives), touch targets are at least 40 px (`TOUCH_TARGET_PX`), and fields use 16 px text via `touchSized` or iOS zooms on focus. HTML5 drag-and-drop does not work on touch: every drag action needs a menu path ("Move to…"), reachable by long press (`longPress`; iOS sends no `contextmenu`) and a visible row button. Containers whose height comes from their children (the tab bar) need a `min-height`, or they collapse when empty.
+
 ### Cross-realm values
 
 Never type-check bytes with `instanceof Uint8Array` / `instanceof ArrayBuffer`. Values from IndexedDB, `postMessage`, WebSocket frames or test environments can come from another realm, where `instanceof` is false and data gets dropped silently. Use `Object.prototype.toString.call(v) === '[object Uint8Array]'` (or `'[object ArrayBuffer]'`). This has bitten twice: in the storage guard (Task 9) and in the relay client (Task 11c).

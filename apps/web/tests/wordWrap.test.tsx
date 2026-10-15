@@ -69,7 +69,7 @@ describe('word wrap in the workspace', () => {
     await runtime.store.createTab();
     await until(() => root.querySelector('.cm-content') !== null, 'editor');
     const content = root.querySelector('.cm-content') as HTMLElement;
-    const button = Array.from(root.querySelectorAll('button')).find((b) => b.textContent === 'Wrap (Alt+Z)') as HTMLButtonElement;
+    const button = Array.from(root.querySelectorAll('button')).find((b) => b.textContent === '↵Wrap (Alt+Z)') as HTMLButtonElement;
     expect(button.getAttribute('aria-pressed')).toBe('false');
     expect(content.classList.contains('cm-lineWrapping')).toBe(false);
 

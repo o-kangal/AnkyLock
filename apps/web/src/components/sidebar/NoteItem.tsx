@@ -1,6 +1,8 @@
-import { onMount, type JSX } from 'solid-js';
+import { onMount, Show, type JSX } from 'solid-js';
 import type { DragDropManager, DragItem } from '../../dnd/dragDropManager.js';
 import type { NoteView, WorkspaceStore } from '../../stores/workspaceStore.js';
+import { TOUCH_TARGET_PX, useNarrowScreen } from '../../layout/screen.js';
+import { longPress, RowMenuButton } from './rowMenu.jsx';
 import { rowStyle } from './styles.js';
 
 export interface NoteItemProps {
@@ -22,11 +24,15 @@ export function NoteItem(props: NoteItemProps): JSX.Element {
     return tabs[activeTabIndex]?.noteId === props.note.id;
   };
 
+  const narrow = useNarrowScreen();
+  const openMenu = (event: MouseEvent): void => props.onItemMenu?.(event, { kind: 'note', id: props.note.id });
+
   return (
     <div
       {...props.dnd.dragSource(() => ({ kind: 'note', id: props.note.id }))}
+      {...longPress(openMenu)}
       data-note-id={props.note.id}
-      style={rowStyle(props.depth, active())}
+      style={rowStyle(props.depth, active(), narrow() ? TOUCH_TARGET_PX : undefined)}
       title={props.note.title ?? 'Untitled'}
       onClick={() => props.store.openNote(props.note.id)}
       onContextMenu={(event) => {
@@ -35,7 +41,12 @@ export function NoteItem(props: NoteItemProps): JSX.Element {
         props.onItemMenu?.(event, { kind: 'note', id: props.note.id });
       }}
     >
-      <span style={{ opacity: props.note.title ? '1' : '0.6' }}>{props.note.title ?? 'Untitled'}</span>
+      <span style={{ opacity: props.note.title ? '1' : '0.6', overflow: 'hidden', 'text-overflow': 'ellipsis' }}>
+        {props.note.title ?? 'Untitled'}
+      </span>
+      <Show when={narrow() && props.onItemMenu}>
+        <RowMenuButton label={props.note.title ?? 'Untitled'} onOpen={openMenu} />
+      </Show>
     </div>
   );
 }

@@ -498,6 +498,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 11k: Narrow Screens & Touch (Mobile PWA Layout)
+- **Status:** ✅ Completed (2026-10-15)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/Workspace.tsx`, `apps/web/src/components/sidebar/ContextMenu.tsx`, `apps/web/src/components/SyncStatusBar.tsx`, `apps/web/src/preferences/devicePreferences.ts`
 - **Target Files (Create/Modify):**

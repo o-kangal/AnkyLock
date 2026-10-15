@@ -3,6 +3,8 @@ import { SYSTEM_ALL, SYSTEM_ARCHIVE, SYSTEM_TRASH, type SystemCategoryId } from 
 import type { DragDropManager } from '../../dnd/dragDropManager.js';
 import type { MenuTarget } from './ContextMenu.jsx';
 import type { Selection, WorkspaceStore } from '../../stores/workspaceStore.js';
+import { TOUCH_TARGET_PX, touchSized, useNarrowScreen } from '../../layout/screen.js';
+import { longPress } from './rowMenu.jsx';
 import { rowStyle, tokens } from './styles.js';
 
 /** Immutable system categories (BR-HIER-01): fixed labels, views rather than containers. */
@@ -39,6 +41,9 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
     }
   };
 
+  const narrow = useNarrowScreen();
+  const rowHeight = (): number => (narrow() ? TOUCH_TARGET_PX : tokens.rowHeight);
+
   return (
     <nav aria-label="Categories" style={{ 'border-bottom': `1px solid ${tokens.border}`, 'padding-bottom': '4px' }}>
       <For each={SYSTEM_ORDER}>
@@ -46,7 +51,7 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
           <div
             role="button"
             aria-pressed={isSelected(props.store.state.selection, 'system', id)}
-            style={rowStyle(0, isSelected(props.store.state.selection, 'system', id))}
+            style={rowStyle(0, isSelected(props.store.state.selection, 'system', id), rowHeight())}
             onClick={() => props.store.select({ kind: 'system', id })}
           >
             {SYSTEM_CATEGORY_LABELS[id]}
@@ -57,9 +62,10 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
         {(category) => (
           <div
             {...props.dnd.dropTarget({ kind: 'category', id: category.id })}
+            {...longPress((event) => props.onItemMenu?.(event, { kind: 'category', id: category.id }))}
             role="button"
             aria-pressed={isSelected(props.store.state.selection, 'category', category.id)}
-            style={rowStyle(0, isSelected(props.store.state.selection, 'category', category.id))}
+            style={rowStyle(0, isSelected(props.store.state.selection, 'category', category.id), rowHeight())}
             onClick={() => props.store.select({ kind: 'category', id: category.id })}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -76,7 +82,7 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
           placeholder="New category"
           value={draft()}
           onInput={(e) => setDraft(e.currentTarget.value)}
-          style={{ width: '100%', font: tokens.font, 'box-sizing': 'border-box' }}
+          style={touchSized({ width: '100%', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}
         />
         <Show when={error()}>
           <div role="alert" style={{ color: tokens.danger, font: tokens.font, 'margin-top': '2px' }}>

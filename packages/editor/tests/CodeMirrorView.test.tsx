@@ -155,7 +155,7 @@ describe('CodeMirrorView', () => {
     expect(wrapping()).toBe(true);
     const styles = Array.from(before.contentDOM.querySelectorAll('.cm-line')).map((line) => line.getAttribute('style'));
     expect(styles[0]).toBeNull();
-    expect(styles[1]).toContain('text-indent: -4ch');
+    expect(styles[1]).toContain('padding-left: calc(4ch + 8px); text-indent: -4ch');
     expect(styles[2]).toContain('text-indent: -4ch');
     setWrap(false);
     expect(wrapping()).toBe(false);

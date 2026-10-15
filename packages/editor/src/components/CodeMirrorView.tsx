@@ -22,6 +22,8 @@ export interface CodeMirrorViewProps {
   readonly autoFocus?: boolean;
   /** Soft-wrap long lines; toggling it reconfigures the open editor without remounting it. */
   readonly wordWrap?: boolean;
+  /** Text size in px (default 13); narrow screens use 16 so iOS does not zoom on focus. */
+  readonly fontSize?: number;
 }
 
 const readOnlyExtension = (readOnly: boolean): Extension => [
@@ -66,7 +68,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
             doc: noteText(doc).toString(),
             extensions: [
               editorBasics,
-              theme.of(editorTheme(props.colorScheme)),
+              theme.of(editorTheme(props.colorScheme, props.fontSize)),
               readOnly.of(readOnlyExtension(props.readOnly ?? false)),
               wrap.of(wordWrap(props.wordWrap ?? false)),
               yjsBinding(doc),
@@ -79,7 +81,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
     // Deferred so the view is attached and laid out before it takes focus.
     if (untrack(() => props.autoFocus)) queueMicrotask(() => view.focus());
 
-    createEffect(() => view.dispatch({ effects: theme.reconfigure(editorTheme(props.colorScheme)) }));
+    createEffect(() => view.dispatch({ effects: theme.reconfigure(editorTheme(props.colorScheme, props.fontSize)) }));
     createEffect(() => view.dispatch({ effects: readOnly.reconfigure(readOnlyExtension(props.readOnly ?? false)) }));
     createEffect(() => view.dispatch({ effects: wrap.reconfigure(wordWrap(props.wordWrap ?? false)) }));
   });

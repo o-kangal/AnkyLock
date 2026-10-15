@@ -3,6 +3,7 @@ import type * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
 import { CodeMirrorView, type ColorScheme } from '@ankylock/editor';
 import { shortcutLabel, workspaceCommand, type Platform } from '../keyboard/shortcuts.js';
+import { useNarrowScreen } from '../layout/screen.js';
 import { createWordWrapPreference } from '../preferences/devicePreferences.js';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { Sidebar } from './sidebar/Sidebar.jsx';
@@ -32,6 +33,9 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
   const { store } = props.runtime;
   const scheme = useColorScheme();
   const wrap = createWordWrapPreference();
+  const narrow = useNarrowScreen();
+  /** On narrow screens the sidebar is a drawer over the editor. */
+  const [drawer, setDrawer] = createSignal(false);
   const activeId = (): NoteId | undefined => store.state.tabs[store.state.activeTabIndex]?.noteId;
   const [doc, setDoc] = createSignal<{ readonly id: NoteId; readonly doc: Y.Doc } | null>(null);
 
@@ -61,6 +65,10 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
 
   onMount(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && drawer()) {
+        setDrawer(false);
+        return;
+      }
       const command = workspaceCommand(event, props.platform);
       const { tabs, activeTabIndex } = store.state;
       if (command === 'toggle-wrap') wrap.toggle();
@@ -75,27 +83,67 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
     onCleanup(() => window.removeEventListener('keydown', onKeyDown));
   });
 
+  // Opening a note is what the drawer is for; it also closes when the screen widens.
+  createEffect(on(activeId, () => setDrawer(false), { defer: true }));
+  createEffect(on(narrow, (isNarrow) => !isNarrow && setDrawer(false), { defer: true }));
+
+  /** The sidebar stays mounted (its tree keeps its state); on narrow screens it slides in and out. */
+  const sidebarStyle = (): JSX.CSSProperties =>
+    narrow()
+      ? {
+          position: 'absolute',
+          top: '0',
+          bottom: '0',
+          left: '0',
+          width: 'min(85%, 320px)',
+          'z-index': '2',
+          background: 'Canvas',
+          'box-shadow': drawer() ? '2px 0 12px rgba(0, 0, 0, 0.25)' : 'none',
+          transform: drawer() ? 'none' : 'translateX(-100%)',
+          visibility: drawer() ? 'visible' : 'hidden',
+          transition: 'transform 160ms ease-out, visibility 160ms',
+        }
+      : { 'min-width': '0' };
+
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%', font: tokens.font }}>
       {/* The single row takes exactly the space above the status bar; content scrolls inside it. */}
       <div
         style={{
+          position: 'relative',
           display: 'grid',
-          'grid-template-columns': '260px minmax(0, 1fr)',
+          'grid-template-columns': narrow() ? 'minmax(0, 1fr)' : '260px minmax(0, 1fr)',
           'grid-template-rows': 'minmax(0, 1fr)',
           flex: '1',
           'min-height': '0',
         }}
       >
-        <Sidebar store={store} />
+        <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? 'Navigation' : undefined} style={sidebarStyle()}>
+          <Sidebar store={store} />
+        </div>
+        <Show when={narrow() && drawer()}>
+          <div
+            data-testid="drawer-backdrop"
+            aria-hidden="true"
+            style={{ position: 'absolute', inset: '0', 'z-index': '1', background: 'rgba(0, 0, 0, 0.3)' }}
+            onClick={() => setDrawer(false)}
+          />
+        </Show>
         <section style={{ display: 'flex', 'flex-direction': 'column', 'min-width': '0' }}>
-          <TabBar store={store} isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)} />
+          <TabBar
+            store={store}
+            isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)}
+            compact={narrow()}
+            {...(narrow() ? { onOpenNavigation: () => setDrawer(true) } : {})}
+          />
           <div style={{ flex: '1', 'min-height': '0' }}>
             <Show
               when={doc()}
               fallback={
                 <div style={{ display: 'grid', 'place-items': 'center', height: '100%', color: tokens.muted }}>
-                  Press {shortcutLabel('new-tab', props.platform)} to open a new scratchpad.
+                  {narrow()
+                    ? 'Tap + to open a new scratchpad.'
+                    : `Press ${shortcutLabel('new-tab', props.platform)} to open a new scratchpad.`}
                 </div>
               }
             >
@@ -107,6 +155,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
                   readOnly={store.state.notes[open().id]?.deletedAt != null}
                   colorScheme={scheme()}
                   wordWrap={wrap.wordWrap()}
+                  fontSize={narrow() ? 16 : 13}
                   onTitleChange={(title) => store.setTitle(open().id, title)}
                 />
               )}
@@ -117,6 +166,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
       <SyncStatusBar
         runtime={props.runtime}
         wordWrap={{ on: wrap.wordWrap, toggle: wrap.toggle, shortcut: shortcutLabel('toggle-wrap', props.platform) }}
+        compact={narrow()}
       />
     </div>
   );
