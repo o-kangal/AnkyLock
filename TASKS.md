@@ -497,6 +497,32 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
+### Task 11k: Narrow Screens & Touch (Mobile PWA Layout)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/components/Workspace.tsx`, `apps/web/src/components/sidebar/ContextMenu.tsx`, `apps/web/src/components/SyncStatusBar.tsx`, `apps/web/src/preferences/devicePreferences.ts`
+- **Target Files (Create/Modify):**
+  - `apps/web/index.html`
+  - `apps/web/src/components/Workspace.tsx`
+  - `apps/web/src/components/sidebar/Sidebar.tsx`
+  - `apps/web/src/components/sidebar/ContextMenu.tsx`
+  - `apps/web/src/components/sidebar/MoveToPicker.tsx`
+  - `apps/web/src/components/tabs/TabBar.tsx`
+  - `apps/web/src/components/SyncStatusBar.tsx`
+  - `packages/editor/src/extensions/theme.ts`
+  - `apps/web/tests/narrowLayout.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Below 600 px (the breakpoint word wrap uses), the sidebar becomes a drawer: hidden by default, opened with a ☰ button at the start of the tab bar, sliding over the editor. It closes when a note or folder is chosen, on a tap outside it and on Escape. Wider layouts stay as they are.
+  2. Add "Move to…" to the note and folder menus on every screen size: a picker of folders and categories that applies the same rules as drag-and-drop (depth, cycles, categories). On touch screens the menu opens with a long press and with a "⋯" button on each row, since HTML5 drag-and-drop does not work there.
+  3. Shorten the status bar on narrow screens: the vault menu stays, the sync state becomes a short label, Sign out moves into the vault menu, Wrap and Sync now become icon buttons (with accessible names), and the backup shows only its time. Nothing may overflow.
+  4. Make the layout fit phones: `100dvh` instead of `100vh`, safe-area insets (`viewport-fit=cover`) for notched screens, touch targets of at least 40 px, a horizontally scrolling tab bar, and 16 px text in the editor and inputs on narrow screens so iOS does not zoom on focus.
+  5. Test the drawer, "Move to…" and the shortened status bar in jsdom, and check the layout in WebKitGTK at 375 × 700 (no horizontal overflow, editor and status bar both visible).
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 12: End-to-End State Machine & Cross-Device Sync Verification
 - **Type:** Testing
 - **Read-Only Context Files:** `AGENTS.md`
@@ -577,7 +603,8 @@ Task 1 (Workspace & Config)
                    │       │               └──► Task 11i (Vault Management)
                    │       ├──► Task 11e (Offline Catch-Up & Hierarchy Sync)
                    │       └──► Task 11f (UI Polish)
-                   │               └──► Task 11j (Editor Word Wrap)
+                   │               ├──► Task 11j (Editor Word Wrap)
+                   │               └──► Task 11k (Narrow Screens & Touch)
                    │
                    └──► Task 12 (E2E Verification & Hardening)
                            └──► Task 13 (Production Release)
