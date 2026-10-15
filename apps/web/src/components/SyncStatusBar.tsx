@@ -1,6 +1,8 @@
 import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import type { BackupStatus } from '@ankylock/sync';
 import type { Runtime } from '../runtime/createRuntime.js';
+import { Popover, type PopoverPosition } from './Popover.jsx';
+import { VaultSettings, type VaultSettingsView } from './VaultSettings.jsx';
 import { tokens } from './sidebar/styles.js';
 
 const linkButton: JSX.CSSProperties = {
@@ -29,6 +31,7 @@ function backupLabel(backup: BackupStatus): string | null {
         http: 'Backup failed; will retry',
         snapshot: 'Backup failed; will retry',
         conflict: 'Google Drive holds a different vault with this id; backup stopped',
+        deleted: 'Deleted from Google Drive on another device',
       }[backup.reason];
   }
 }
@@ -64,6 +67,12 @@ const iconButton: JSX.CSSProperties = {
 export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element {
   const status = (): ReturnType<Runtime['syncStatus']> => props.runtime.syncStatus();
   const [error, setError] = createSignal<string | null>(null);
+  const [settings, setSettings] = createSignal<{ at: PopoverPosition; view: VaultSettingsView } | null>(null);
+  let vaultButton!: HTMLButtonElement;
+  const openSettings = (view: VaultSettingsView): void => {
+    const rect = vaultButton.getBoundingClientRect();
+    setSettings({ at: { x: rect.left, y: rect.top - 4 }, view });
+  };
 
   const signIn = async (): Promise<void> => {
     setError(null);
@@ -89,7 +98,23 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
       }}
     >
       <span style={{ display: 'flex', gap: '8px', 'align-items': 'center' }}>
-        <span style={{ color: 'CanvasText' }}>{props.runtime.vaultName() ?? 'Unnamed vault'}</span>
+        <button
+          ref={vaultButton}
+          type="button"
+          aria-haspopup="dialog"
+          title="Vault settings: rename, remove or delete"
+          style={{ ...linkButton, color: 'CanvasText', 'text-decoration': 'none' }}
+          onClick={() => openSettings('menu')}
+        >
+          {props.runtime.vaultName() ?? 'Unnamed vault'} ▾
+        </button>
+        <Show when={settings()}>
+          {(open) => (
+            <Popover at={open().at} placement="above" width={300} label="Vault settings" onClose={() => setSettings(null)}>
+              <VaultSettings runtime={props.runtime} initialView={open().view} onClose={() => setSettings(null)} />
+            </Popover>
+          )}
+        </Show>
         <button
           type="button"
           style={linkButton}
@@ -100,6 +125,17 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
         </button>
         <span aria-hidden="true">|</span>
         <Switch>
+          <Match when={status().vaultDrive === 'deleted'}>
+            <span style={{ color: tokens.danger }}>Deleted from Google Drive on another device</span> ·
+            <button type="button" style={linkButton} onClick={() => void props.runtime.keepLocalOnly()}>
+              Keep local only
+            </button>
+            ·
+            <button type="button" style={linkButton} onClick={() => openSettings('remove')}>
+              Remove from this device
+            </button>
+          </Match>
+          <Match when={status().vaultDrive === 'local-only'}>Local only (this vault)</Match>
           <Match when={status().auth === 'unavailable'}>Local only</Match>
           <Match when={status().auth === 'signed-out'}>
             Not syncing ·

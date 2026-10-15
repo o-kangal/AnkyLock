@@ -108,6 +108,10 @@ export interface IStorageEngine {
   getVaultHeader(): Promise<string | null>;
   /** The vault's encrypted name; null for vaults created before vaults had names. */
   getVaultName(): Promise<Ciphertext | null>;
+  /** Renames the vault: the new encrypted name and when it changed (the newer name wins across devices). */
+  setVaultName(nameCiphertext: Ciphertext, updatedAt: EpochMs): Promise<void>;
+  getSyncState(): Promise<VaultSyncState>;
+  setSyncState(state: VaultSyncState): Promise<void>;
   /** This device's id within the vault, created on first use; names its own Drive snapshot. */
   getDeviceId(): Promise<string>;
   /**
@@ -139,6 +143,16 @@ export interface VaultImport {
   readonly contents: readonly NoteContent[];
 }
 
+/** How this device relates to the vault's copy in Google Drive. */
+export interface VaultSyncState {
+  /** When the name last changed (0: never renamed). */
+  readonly nameUpdatedAt: EpochMs;
+  /** The vault's header was in Drive once; if it disappears, another device deleted the vault. */
+  readonly headerOnDrive: boolean;
+  /** Kept on this device only, by the user's choice: no sync, no backup. */
+  readonly localOnly: boolean;
+}
+
 /** A vault on this device: an id and timestamps, never its name (BR-SEC-04). */
 export interface VaultEntry {
   readonly id: VaultId;
@@ -158,6 +172,8 @@ export interface IVaultDirectory {
   create(id: VaultId, header: string, nameCiphertext: Ciphertext | null, createdAt?: EpochMs): Promise<IStorageEngine>;
   /** Opens a registered vault; storage returned earlier must not be used afterwards. */
   open(id: VaultId): Promise<IStorageEngine>;
+  /** Removes a vault and its local data from this device (closing it if open). Drive is untouched. */
+  remove(id: VaultId): Promise<void>;
 }
 
 export class StorageError extends Error {

@@ -36,17 +36,18 @@ struct Registry {
 /// The mutex serializes the registry's read-modify-write cycles.
 pub struct Vaults {
     dir: PathBuf,
-    lock: Mutex<()>,
+    /// Also remembers which vault `DbPool` holds, so removing it can close it first.
+    open: Mutex<Option<String>>,
 }
 
 impl Vaults {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, lock: Mutex::new(()) }
+        Self { dir, open: Mutex::new(None) }
     }
 
-    fn locked<T>(&self, work: impl FnOnce(&Path) -> AppResult<T>) -> AppResult<T> {
-        let _guard = self.lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        work(&self.dir)
+    fn locked<T>(&self, work: impl FnOnce(&Path, &mut Option<String>) -> AppResult<T>) -> AppResult<T> {
+        let mut open = self.open.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        work(&self.dir, &mut open)
     }
 }
 
@@ -221,9 +222,42 @@ pub fn import_records(conn: &mut Connection, data: &VaultImport) -> AppResult<()
     Ok(())
 }
 
+/// Removes a vault from this device: its registry entry and its database files. Its copy in
+/// Drive, if any, is untouched.
+pub fn remove(dir: &Path, id: &str) -> AppResult<()> {
+    validate_id(id)?;
+    let mut registry = read_registry(dir)?;
+    let before = registry.vaults.len();
+    registry.vaults.retain(|v| v.id != id);
+    if registry.vaults.len() == before {
+        return Err(AppError::NotFound("Vault"));
+    }
+    write_registry(dir, &registry)?;
+    let path = database_path(dir, id);
+    for suffix in ["", "-wal", "-shm"] {
+        let file = PathBuf::from(format!("{}{suffix}", path.display()));
+        if file.exists() {
+            fs::remove_file(file)?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn vault_list(vaults: State<'_, Vaults>) -> AppResult<Vec<VaultEntry>> {
-    vaults.locked(list)
+    vaults.locked(|dir, _| list(dir))
+}
+
+/// Removes a vault from this device, closing it first if it is the open one.
+#[tauri::command(async)]
+pub fn vault_remove(vaults: State<'_, Vaults>, db: State<'_, DbPool>, id: String) -> AppResult<()> {
+    vaults.locked(|dir, open| {
+        if open.as_deref() == Some(id.as_str()) {
+            db.close();
+            *open = None;
+        }
+        remove(dir, &id)
+    })
 }
 
 /// Creates a vault and makes it the open one. `created_at` is given when the vault already
@@ -238,10 +272,12 @@ pub fn vault_create(
     created_at: Option<i64>,
 ) -> AppResult<VaultEntry> {
     let now = now_ms();
-    let (entry, conn) =
-        vaults.locked(|dir| create(dir, &id, &header, name_ciphertext.as_deref(), created_at.unwrap_or(now), now))?;
-    db.replace(conn);
-    Ok(entry)
+    vaults.locked(|dir, open| {
+        let (entry, conn) = create(dir, &id, &header, name_ciphertext.as_deref(), created_at.unwrap_or(now), now)?;
+        db.replace(conn);
+        *open = Some(id.clone());
+        Ok(entry)
+    })
 }
 
 /// Makes a registered vault the open one; every storage command then works on its database.
@@ -253,9 +289,12 @@ pub fn vault_import(db: State<'_, DbPool>, data: VaultImport) -> AppResult<()> {
 
 #[tauri::command(async)]
 pub fn vault_open(vaults: State<'_, Vaults>, db: State<'_, DbPool>, id: String) -> AppResult<VaultEntry> {
-    let (entry, conn) = vaults.locked(|dir| open(dir, &id, now_ms()))?;
-    db.replace(conn);
-    Ok(entry)
+    vaults.locked(|dir, current| {
+        let (entry, conn) = open(dir, &id, now_ms())?;
+        db.replace(conn);
+        *current = Some(id.clone());
+        Ok(entry)
+    })
 }
 
 #[cfg(test)]
@@ -336,6 +375,19 @@ mod tests {
         assert_eq!(updates, [2]);
         assert_eq!(super::super::settings::get_retention_days(&conn).unwrap(), 7);
         assert_eq!(import_records(&mut conn, &data).unwrap_err().code(), "ERR_INVALID_TRANSITION");
+    }
+
+    #[test]
+    fn removes_a_vault_and_its_files() {
+        let tmp = TempDir::new("remove");
+        let (_, conn) = create(&tmp.0, ID, "{}", Some("bg=="), 1, 1).unwrap();
+        create(&tmp.0, OTHER, "{}", Some("bg=="), 2, 2).unwrap();
+        drop(conn);
+        remove(&tmp.0, ID).unwrap();
+        assert_eq!(list(&tmp.0).unwrap().iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), [OTHER]);
+        assert!(!database_path(&tmp.0, ID).exists());
+        assert!(database_path(&tmp.0, OTHER).exists());
+        assert_eq!(remove(&tmp.0, ID).unwrap_err().code(), "ERR_NOT_FOUND");
     }
 
     #[test]

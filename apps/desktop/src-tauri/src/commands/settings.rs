@@ -1,4 +1,5 @@
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::db::pool::DbPool;
@@ -38,6 +39,21 @@ pub fn set_retention_days(conn: &Connection, days: u32) -> AppResult<u32> {
 const VAULT_HEADER_KEY: &str = "vault_header";
 const VAULT_NAME_KEY: &str = "vault_name";
 const DEVICE_ID_KEY: &str = "device_id";
+const NAME_UPDATED_AT_KEY: &str = "vault_name_updated_at";
+const HEADER_ON_DRIVE_KEY: &str = "header_on_drive";
+const LOCAL_ONLY_KEY: &str = "local_only";
+
+/// How this device relates to the vault's copy in Google Drive.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultSyncState {
+    /// When the name last changed (0: never renamed); the newer name wins across devices.
+    pub name_updated_at: i64,
+    /// The vault's header was in Drive once. If it disappears, another device deleted the vault.
+    pub header_on_drive: bool,
+    /// The user chose to keep this vault on this device only: no sync, no backup.
+    pub local_only: bool,
+}
 
 fn get_setting(conn: &Connection, key: &str) -> AppResult<Option<String>> {
     Ok(conn.query_row("SELECT value FROM app_settings WHERE key = ?1", [key], |r| r.get(0)).optional()?)
@@ -62,6 +78,42 @@ pub fn device_id(conn: &Connection) -> AppResult<String> {
         params![DEVICE_ID_KEY, super::new_uuid()?],
     )?;
     Ok(get_setting(conn, DEVICE_ID_KEY)?.unwrap_or_default())
+}
+
+fn set_setting(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )?;
+    Ok(())
+}
+
+pub fn get_sync_state(conn: &Connection) -> AppResult<VaultSyncState> {
+    let flag = |key| -> AppResult<bool> { Ok(get_setting(conn, key)?.as_deref() == Some("1")) };
+    Ok(VaultSyncState {
+        name_updated_at: get_setting(conn, NAME_UPDATED_AT_KEY)?.and_then(|v| v.parse().ok()).unwrap_or(0),
+        header_on_drive: flag(HEADER_ON_DRIVE_KEY)?,
+        local_only: flag(LOCAL_ONLY_KEY)?,
+    })
+}
+
+pub fn set_sync_state(conn: &mut Connection, state: VaultSyncState) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    set_setting(&tx, NAME_UPDATED_AT_KEY, &state.name_updated_at.to_string())?;
+    set_setting(&tx, HEADER_ON_DRIVE_KEY, if state.header_on_drive { "1" } else { "0" })?;
+    set_setting(&tx, LOCAL_ONLY_KEY, if state.local_only { "1" } else { "0" })?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Renames the vault: the new encrypted name and when it changed, together.
+pub fn set_vault_name(conn: &mut Connection, name_ciphertext: &str, updated_at: i64) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    set_setting(&tx, VAULT_NAME_KEY, name_ciphertext)?;
+    set_setting(&tx, NAME_UPDATED_AT_KEY, &updated_at.to_string())?;
+    tx.commit()?;
+    Ok(())
 }
 
 /// Writes the header and the encrypted name of a new vault in one transaction. Vaults created
@@ -99,6 +151,21 @@ pub fn settings_get_device_id(db: State<'_, DbPool>) -> AppResult<String> {
 #[tauri::command(async)]
 pub fn settings_get_vault_name(db: State<'_, DbPool>) -> AppResult<Option<String>> {
     get_vault_name(&*db.conn()?)
+}
+
+#[tauri::command(async)]
+pub fn settings_set_vault_name(db: State<'_, DbPool>, name_ciphertext: String, updated_at: i64) -> AppResult<()> {
+    set_vault_name(&mut *db.conn()?, &name_ciphertext, updated_at)
+}
+
+#[tauri::command(async)]
+pub fn settings_get_sync_state(db: State<'_, DbPool>) -> AppResult<VaultSyncState> {
+    get_sync_state(&*db.conn()?)
+}
+
+#[tauri::command(async)]
+pub fn settings_set_sync_state(db: State<'_, DbPool>, state: VaultSyncState) -> AppResult<()> {
+    set_sync_state(&mut *db.conn()?, state)
 }
 
 #[tauri::command(async)]
@@ -142,6 +209,18 @@ mod tests {
         let conn = test_conn();
         conn.execute("UPDATE app_settings SET value = 'soon' WHERE key = ?1", [RETENTION_KEY]).unwrap();
         assert_eq!(get_retention_days(&conn).unwrap(), 28);
+    }
+
+    #[test]
+    fn renames_and_keeps_the_sync_state() {
+        let mut conn = test_conn();
+        assert_eq!(get_sync_state(&conn).unwrap(), VaultSyncState::default());
+        set_vault_name(&mut conn, "bmV3", 42).unwrap();
+        assert_eq!(get_vault_name(&conn).unwrap().as_deref(), Some("bmV3"));
+        assert_eq!(get_sync_state(&conn).unwrap().name_updated_at, 42);
+        let state = VaultSyncState { name_updated_at: 42, header_on_drive: true, local_only: true };
+        set_sync_state(&mut conn, state).unwrap();
+        assert_eq!(get_sync_state(&conn).unwrap(), state);
     }
 
     #[test]

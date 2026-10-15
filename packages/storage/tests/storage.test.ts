@@ -270,6 +270,15 @@ describe('TauriVaultDirectory', () => {
     ]);
   });
 
+  it('removes vaults through the host', async () => {
+    const calls: string[] = [];
+    await new TauriVaultDirectory(async (command) => {
+      calls.push(command);
+      return null;
+    }).remove(entry.id as VaultId);
+    expect(calls).toEqual(['vault_remove']);
+  });
+
   it('maps host errors', async () => {
     const invoke: Invoke = () => Promise.reject({ code: 'ERR_NOT_FOUND', message: 'Vault not found.' });
     await expect(new TauriVaultDirectory(invoke).open(entry.id as VaultId)).rejects.toMatchObject({ code: 'ERR_NOT_FOUND' });
@@ -320,6 +329,28 @@ describe('WebVaultDirectory', () => {
     const storage = await vaults.open(adopted!.id);
     expect(await storage.getVaultHeader()).toBe('{"legacy":true}');
     expect((await storage.getNote('old' as NoteId))?.id).toBe('old');
+  });
+
+  it('removes a vault and its database, keeping the others', async () => {
+    const factory = new IDBFactory();
+    const vaults = new WebVaultDirectory(factory, counterClock());
+    const a = await vaults.create(A, '{}', 'YQ==' as Ciphertext);
+    await a.createNote('n' as NoteId);
+    await vaults.create(B, '{}', 'Yg==' as Ciphertext);
+    await vaults.open(A);
+    await vaults.remove(A);
+    expect((await vaults.list()).map((v) => v.id)).toEqual([B]);
+    expect((await factory.databases()).map((d) => d.name)).not.toContain(`ankylock-${A}`);
+    await expect(vaults.remove(A)).rejects.toMatchObject({ code: 'ERR_NOT_FOUND' });
+  });
+
+  it('renames and keeps the sync state per vault', async () => {
+    const storage = await new WebVaultDirectory(new IDBFactory(), counterClock()).create(A, '{}', 'YQ==' as Ciphertext);
+    expect(await storage.getSyncState()).toEqual({ nameUpdatedAt: 0, headerOnDrive: false, localOnly: false });
+    await storage.setSyncState({ nameUpdatedAt: 0 as EpochMs, headerOnDrive: true, localOnly: false });
+    await storage.setVaultName('bmV3' as Ciphertext, 42 as EpochMs);
+    expect(await storage.getVaultName()).toBe('bmV3');
+    expect(await storage.getSyncState()).toEqual({ nameUpdatedAt: 42, headerOnDrive: true, localOnly: false });
   });
 
   it('ignores a legacy database that never got a vault', async () => {

@@ -1,5 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import type { Ciphertext, EpochMs, NoteContent, NoteId, SealedBytes, VaultId } from '@ankylock/core';
+import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
+import { AuthError, type AuthTransport } from '@ankylock/sync';
 import {
   WebIndexedDbAdapter,
   WebVaultDirectory,
@@ -64,6 +66,10 @@ export class TestVaults implements IVaultDirectory {
     this.#storage = await this.#inner.open(id);
     return this.#storage;
   }
+
+  remove(id: VaultId): Promise<void> {
+    return this.#inner.remove(id);
+  }
 }
 
 /**
@@ -98,6 +104,9 @@ export class FakeDrive {
         .map(([id, f]) => ({ id, name: f.name, modifiedTime: new Date(f.modifiedTime).toISOString() }));
       return json({ files: matches });
     }
+    if (method === 'DELETE' && fileId !== undefined) {
+      return this.files.delete(decodeURIComponent(fileId)) ? new Response(null, { status: 204 }) : new Response('not found', { status: 404 });
+    }
     if (method === 'PATCH' && fileId !== undefined) {
       const file = this.files.get(decodeURIComponent(fileId));
       if (!file) return new Response('not found', { status: 404 });
@@ -120,4 +129,39 @@ export class FakeDrive {
     }
     return new Response('unsupported', { status: 400 });
   };
+}
+
+export const PASSPHRASE = 'correct horse battery';
+
+/** Google sign-in that always succeeds, without a network. */
+export function fakeGoogle(): AuthTransport & { signedOut: number } {
+  const t = {
+    signedOut: 0,
+    signIn: async () => ({ idToken: 'id-token', accessToken: 'access-token', expiresAt: (Date.now() + 3_600_000) as EpochMs }),
+    restore: async () => null,
+    refresh: () => Promise.reject(new AuthError('ERR_AUTH_EXPIRED', 'expired')),
+    signOut: async () => {
+      t.signedOut++;
+    },
+  };
+  return t;
+}
+
+/** Same-thread stand-in for the crypto worker. */
+export function localSealer(): WorkerSealer {
+  let current: CryptoKey | null = null;
+  const inner = createKeySealer(() => {
+    if (!current) throw new CryptoError('ERR_VAULT_LOCKED', 'locked');
+    return current;
+  });
+  return { ...inner, setKey: async (k) => void (current = k), dispose: () => undefined };
+}
+
+/** Polls until `check` holds, failing with `label` after about four seconds. */
+export async function until(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
+  for (let i = 0; i < 400; i++) {
+    if (await check()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`Timed out waiting for ${label}`);
 }

@@ -44,4 +44,8 @@ permissions = [
   "allow-sync-merge-records",
   "allow-sync-detach-folders",
   "allow-settings-get-device-id",
+  "allow-settings-set-vault-name",
+  "allow-settings-get-sync-state",
+  "allow-settings-set-sync-state",
+  "allow-vault-remove",
 ]

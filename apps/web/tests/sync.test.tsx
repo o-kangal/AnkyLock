@@ -1,12 +1,11 @@
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
-import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
-import { AuthError, TEXT_FIELD, createAuthSession, type AuthTransport, type SocketLike } from '@ankylock/sync';
+import { TEXT_FIELD, createAuthSession, type SocketLike } from '@ankylock/sync';
 import { SyncStatusBar } from '../src/components/SyncStatusBar.jsx';
 import { UnlockScreen } from '../src/components/UnlockScreen.jsx';
 import { createRuntime, type Runtime } from '../src/index.js';
-import { FakeDrive, TestVaults } from './helpers.js';
+import { FakeDrive, PASSPHRASE, TestVaults, fakeGoogle, localSealer, until } from './helpers.js';
 
 /** In-memory blind relay shared by the runtimes in a test; like the real one, it fans out per URL (vault). */
 class FakeRelay {
@@ -46,37 +45,6 @@ class FakeSocket implements SocketLike {
   }
 }
 
-function fakeGoogle(): AuthTransport & { signedOut: number } {
-  const t = {
-    signedOut: 0,
-    signIn: async () => ({ idToken: 'id-token', accessToken: 'access-token', expiresAt: (Date.now() + 3_600_000) as EpochMs }),
-    restore: async () => null,
-    refresh: () => Promise.reject(new AuthError('ERR_AUTH_EXPIRED', 'expired')),
-    signOut: async () => {
-      t.signedOut++;
-    },
-  };
-  return t;
-}
-
-function localSealer(): WorkerSealer {
-  let current: CryptoKey | null = null;
-  const inner = createKeySealer(() => {
-    if (!current) throw new CryptoError('ERR_VAULT_LOCKED', 'locked');
-    return current;
-  });
-  return { ...inner, setKey: async (k) => void (current = k), dispose: () => undefined };
-}
-
-async function until(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
-  for (let i = 0; i < 400; i++) {
-    if (await check()) return;
-    await new Promise((r) => setTimeout(r, 10));
-  }
-  throw new Error(`Timed out waiting for ${label}`);
-}
-
-const PASSPHRASE = 'correct horse battery';
 
 interface Device {
   readonly runtime: Runtime;

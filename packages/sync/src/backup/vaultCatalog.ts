@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import {
   DEFAULT_RETENTION_DAYS,
+  type Bytes,
   type Category,
   type Ciphertext,
   type EpochMs,
@@ -43,6 +44,11 @@ export interface VaultHeaderFile {
   /** Serialized vault header (see `serializeVaultHeader`). */
   readonly header: string;
   readonly nameCiphertext: Ciphertext | null;
+  /**
+   * When the name last changed (0: never renamed). The name is the only field that may change
+   * after the file is created; the newer name wins across devices.
+   */
+  readonly nameUpdatedAt: EpochMs;
 }
 
 export function serializeVaultHeaderFile(file: VaultHeaderFile): string {
@@ -51,7 +57,7 @@ export function serializeVaultHeaderFile(file: VaultHeaderFile): string {
 
 export function parseVaultHeaderFile(json: string): VaultHeaderFile {
   const value: unknown = JSON.parse(json);
-  const { version, vaultId, createdAt, header, nameCiphertext } = (typeof value === 'object' && value !== null
+  const { version, vaultId, createdAt, header, nameCiphertext, nameUpdatedAt } = (typeof value === 'object' && value !== null
     ? value
     : {}) as Record<string, unknown>;
   if (
@@ -68,7 +74,75 @@ export function parseVaultHeaderFile(json: string): VaultHeaderFile {
     createdAt: createdAt as EpochMs,
     header,
     nameCiphertext: nameCiphertext as Ciphertext | null,
+    nameUpdatedAt: (typeof nameUpdatedAt === 'number' ? nameUpdatedAt : 0) as EpochMs,
   };
+}
+
+/**
+ * Outcome of comparing this device's view of a vault with its header file in Drive.
+ * - `ready`: Drive has this vault's header (created now if it never had one); `name` is set when
+ *   Drive's name is newer and should replace the local one.
+ * - `conflict`: Drive holds a different key header under this vault id; nothing is changed.
+ * - `deleted`: the header was in Drive before and is gone: another device deleted the vault.
+ */
+export type HeaderSync =
+  | { readonly kind: 'ready'; readonly name: { readonly ciphertext: Ciphertext | null; readonly updatedAt: EpochMs } | null }
+  | { readonly kind: 'conflict' }
+  | { readonly kind: 'deleted' };
+
+/**
+ * Brings the vault's header file in Drive and this device in line. The key header is written
+ * once and never replaced; only the name moves, newest first.
+ */
+export async function syncHeaderFile(
+  drive: Pick<GoogleDriveClient, 'download' | 'create' | 'upload'>,
+  local: VaultHeaderFile,
+  headerOnDrive: boolean,
+): Promise<HeaderSync> {
+  const name = vaultHeaderFileName(local.vaultId);
+  const bytes = await drive.download(name);
+  const write = (file: VaultHeaderFile): Bytes => new TextEncoder().encode(serializeVaultHeaderFile(file)) as Bytes;
+  if (bytes === null) {
+    if (headerOnDrive) return { kind: 'deleted' };
+    await drive.create(name, write(local), 'application/json');
+    return { kind: 'ready', name: null };
+  }
+  let remote: VaultHeaderFile;
+  try {
+    remote = parseVaultHeaderFile(new TextDecoder().decode(bytes));
+  } catch {
+    // A header we cannot read is not ours to replace.
+    return { kind: 'conflict' };
+  }
+  if (remote.header !== local.header) return { kind: 'conflict' };
+  if (remote.nameUpdatedAt > local.nameUpdatedAt) {
+    return { kind: 'ready', name: { ciphertext: remote.nameCiphertext, updatedAt: remote.nameUpdatedAt } };
+  }
+  if (local.nameUpdatedAt > remote.nameUpdatedAt) {
+    await drive.upload(name, write({ ...remote, nameCiphertext: local.nameCiphertext, nameUpdatedAt: local.nameUpdatedAt }), 'application/json');
+  }
+  return { kind: 'ready', name: null };
+}
+
+/** Deletes a vault's header and every device's snapshot from Drive. */
+export async function deleteVaultFromDrive(
+  drive: Pick<GoogleDriveClient, 'listFiles' | 'deleteFile'>,
+  vaultId: VaultId,
+): Promise<void> {
+  // The header goes last: while snapshots remain, the vault still shows up and can be retried.
+  const files = await drive.listFiles(`${PREFIX}${vaultId}.`);
+  const header = vaultHeaderFileName(vaultId);
+  for (const file of files.filter((f) => f.name !== header)) await drive.deleteFile(file.id);
+  for (const file of files.filter((f) => f.name === header)) await drive.deleteFile(file.id);
+}
+
+/** Files from before vaults had ids (Task 11c); nothing reads them any more. */
+const LEGACY_FILES = ['ankylock-snapshot.v1.bin', 'ankylock-vault-header.v1.json'];
+
+export async function removeLegacyDriveFiles(drive: Pick<GoogleDriveClient, 'listFiles' | 'deleteFile'>): Promise<number> {
+  const legacy = (await drive.listFiles('ankylock-')).filter((f) => LEGACY_FILES.includes(f.name));
+  for (const file of legacy) await drive.deleteFile(file.id);
+  return legacy.length;
 }
 
 /** A vault found in Drive, with the snapshots its devices uploaded. */

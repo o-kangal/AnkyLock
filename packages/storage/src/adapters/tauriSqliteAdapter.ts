@@ -29,6 +29,7 @@ import {
   isSyncEntityType,
   isTombstone,
   isVaultEntry,
+  isVaultSyncState,
   shape,
 } from '../guards.js';
 import {
@@ -41,6 +42,7 @@ import {
   type Tombstone,
   type VaultEntry,
   type VaultImport,
+  type VaultSyncState,
 } from '../interfaces/IStorageEngine.js';
 
 /** Signature of Tauri's `invoke`; injectable for tests. Argument keys are camelCase. */
@@ -291,6 +293,18 @@ export class TauriSqliteAdapter implements IStorageEngine {
     await this.#call('sync_detach_folders', { ids: [...ids] }, isNull);
   }
 
+  async setVaultName(nameCiphertext: Ciphertext, updatedAt: EpochMs): Promise<void> {
+    await this.#call('settings_set_vault_name', { nameCiphertext, updatedAt }, isNull);
+  }
+
+  getSyncState(): Promise<VaultSyncState> {
+    return this.#call('settings_get_sync_state', {}, isVaultSyncState);
+  }
+
+  async setSyncState(state: VaultSyncState): Promise<void> {
+    await this.#call('settings_set_sync_state', { state }, isNull);
+  }
+
   getDeviceId(): Promise<string> {
     return this.#call('settings_get_device_id', {}, (v): v is string => typeof v === 'string');
   }
@@ -341,5 +355,9 @@ export class TauriVaultDirectory implements IVaultDirectory {
   async open(id: VaultId): Promise<IStorageEngine> {
     await call(this.#invoke, 'vault_open', { id }, isVaultEntry);
     return this.#storage;
+  }
+
+  async remove(id: VaultId): Promise<void> {
+    await call(this.#invoke, 'vault_remove', { id }, isNull);
   }
 }

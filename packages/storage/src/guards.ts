@@ -1,5 +1,5 @@
 import type { Category, Folder, Note, NoteContent, SyncOutboxEntry } from '@ankylock/core';
-import type { Tombstone, VaultEntry } from './interfaces/IStorageEngine.js';
+import type { Tombstone, VaultEntry, VaultSyncState } from './interfaces/IStorageEngine.js';
 
 type Check = (value: unknown) => boolean;
 
@@ -85,6 +85,12 @@ export const isOutboxEntry = shape<SyncOutboxEntry>({
   packetType: isPacketType,
   encryptedPayload: isBytes,
   createdAt: isNumber,
+});
+
+export const isVaultSyncState = shape<VaultSyncState>({
+  nameUpdatedAt: isNumber,
+  headerOnDrive: isBoolean,
+  localOnly: isBoolean,
 });
 
 export const isTombstone = shape<Tombstone>({

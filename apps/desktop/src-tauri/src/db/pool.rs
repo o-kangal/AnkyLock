@@ -54,6 +54,11 @@ impl DbPool {
         Ok(Conn(guard))
     }
 
+    /// Closes the open vault, if any; storage commands fail with `ERR_VAULT_LOCKED` until the next open.
+    pub fn close(&self) {
+        *self.guard() = None;
+    }
+
     /// Makes `conn` the open vault, closing the previous one.
     pub fn replace(&self, conn: Connection) {
         *self.guard() = Some(conn);

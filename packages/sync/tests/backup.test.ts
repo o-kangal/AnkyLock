@@ -15,7 +15,9 @@ import {
   mergeSnapshots,
   openSnapshot,
   saveNoteState,
-  serializeVaultHeaderFile,
+  deleteVaultFromDrive,
+  removeLegacyDriveFiles,
+  syncHeaderFile,
   vaultHeaderFileName,
   vaultSnapshotFileName,
   type BackupStatus,
@@ -197,6 +199,10 @@ class MemoryDrive {
       .map(([name, f]) => ({ id: f.id, name, modifiedTime: f.modifiedTime }));
   }
 
+  async deleteFile(id: string): Promise<void> {
+    for (const [name, f] of this.files) if (f.id === id) this.files.delete(name);
+  }
+
   async downloadFile(id: string): Promise<Bytes> {
     const file = [...this.files.values()].find((f) => f.id === id);
     if (!file) throw new DriveError('http', 404, 'missing');
@@ -212,17 +218,22 @@ const headerFile = (header = '{"kdf":"a"}'): VaultHeaderFile => ({
   createdAt: 5 as EpochMs,
   header,
   nameCiphertext: 'bmFtZQ==' as Ciphertext,
+  nameUpdatedAt: 0 as EpochMs,
 });
 
 describe('createSnapshotScheduler', () => {
-  function scheduler(drive = new MemoryDrive(), createSnapshot = async () => new Uint8Array([1]) as SealedBytes, vault = headerFile()) {
+  function scheduler(
+    drive = new MemoryDrive(),
+    createSnapshot = async () => new Uint8Array([1]) as SealedBytes,
+    prepare: () => Promise<'conflict' | 'deleted' | null> = async () => null,
+  ) {
     let t = NOW as number;
     const statuses: BackupStatus[] = [];
     const s = createSnapshotScheduler({
       drive,
       createSnapshot,
-      vault,
-      deviceId: DEVICE_A,
+      snapshotFile: vaultSnapshotFileName(VAULT, DEVICE_A),
+      prepare,
       onStatus: (status) => statuses.push(status),
       now: () => t as EpochMs,
       idleMinGapMs: 1_000,
@@ -230,22 +241,19 @@ describe('createSnapshotScheduler', () => {
     return { s, drive, statuses, advance: (ms: number) => (t += ms) };
   }
 
-  it("creates the vault's header once and uploads this device's own snapshot", async () => {
+  it("uploads this device's own snapshot after preparing the header", async () => {
     const { s, drive, statuses } = scheduler();
     expect(await s.runNow()).toEqual({ kind: 'ok', at: NOW });
-    expect([...drive.files.keys()]).toEqual([vaultHeaderFileName(VAULT), vaultSnapshotFileName(VAULT, DEVICE_A)]);
+    expect([...drive.files.keys()]).toEqual([vaultSnapshotFileName(VAULT, DEVICE_A)]);
     expect(statuses).toEqual([{ kind: 'running' }, { kind: 'ok', at: NOW }]);
-    await s.runNow();
-    expect(drive.files.size).toBe(2);
   });
 
-  it('never overwrites a different header for the same vault id', async () => {
-    const drive = new MemoryDrive();
-    await drive.create(vaultHeaderFileName(VAULT), new TextEncoder().encode(serializeVaultHeaderFile(headerFile('{"kdf":"other"}'))));
-    const { s } = scheduler(drive);
-    expect(await s.runNow()).toMatchObject({ kind: 'error', reason: 'conflict' });
-    expect(drive.files.has(vaultSnapshotFileName(VAULT, DEVICE_A))).toBe(false);
-    expect(new TextDecoder().decode(drive.files.get(vaultHeaderFileName(VAULT))?.data)).toContain('other');
+  it('uploads nothing while the header is in conflict or the vault was deleted', async () => {
+    for (const reason of ['conflict', 'deleted'] as const) {
+      const { s, drive } = scheduler(new MemoryDrive(), undefined, async () => reason);
+      expect(await s.runNow()).toMatchObject({ kind: 'error', reason });
+      expect(drive.files.size).toBe(0);
+    }
   });
 
   it('reports Drive failures without throwing (quota, auth)', async () => {
@@ -281,6 +289,50 @@ describe('createSnapshotScheduler', () => {
   });
 });
 
+describe('syncHeaderFile', () => {
+  const header = (overrides: Partial<VaultHeaderFile> = {}): VaultHeaderFile => ({ ...headerFile(), nameUpdatedAt: 0 as EpochMs, ...overrides });
+  const stored = (drive: MemoryDrive) => JSON.parse(new TextDecoder().decode(drive.files.get(vaultHeaderFileName(VAULT))?.data)) as VaultHeaderFile;
+
+  it('creates the header once, and never replaces a different key header', async () => {
+    const drive = new MemoryDrive();
+    expect(await syncHeaderFile(drive, header(), false)).toEqual({ kind: 'ready', name: null });
+    expect(await syncHeaderFile(drive, header(), true)).toEqual({ kind: 'ready', name: null });
+    expect(await syncHeaderFile(drive, header({ header: '{"kdf":"other"}' }), true)).toEqual({ kind: 'conflict' });
+    expect(stored(drive).header).toBe('{"kdf":"a"}');
+  });
+
+  it('moves the newer name either way', async () => {
+    const drive = new MemoryDrive();
+    await syncHeaderFile(drive, header(), false);
+    await syncHeaderFile(drive, header({ nameCiphertext: 'bmV3' as Ciphertext, nameUpdatedAt: 10 as EpochMs }), true);
+    expect(stored(drive)).toMatchObject({ nameCiphertext: 'bmV3', nameUpdatedAt: 10 });
+    // Another device with an older name adopts the newer one instead of overwriting it.
+    expect(await syncHeaderFile(drive, header({ nameUpdatedAt: 5 as EpochMs }), true)).toEqual({
+      kind: 'ready',
+      name: { ciphertext: 'bmV3', updatedAt: 10 },
+    });
+  });
+
+  it('reports a vault deleted elsewhere instead of uploading it again', async () => {
+    const drive = new MemoryDrive();
+    expect(await syncHeaderFile(drive, header(), true)).toEqual({ kind: 'deleted' });
+    expect(drive.files.size).toBe(0);
+  });
+});
+
+describe('Drive cleanup', () => {
+  it("deletes a vault's header and every snapshot, and the pre-vault-id files", async () => {
+    const drive = new MemoryDrive();
+    await syncHeaderFile(drive, { ...headerFile(), nameUpdatedAt: 0 as EpochMs }, false);
+    for (const name of [vaultSnapshotFileName(VAULT, DEVICE_A), vaultSnapshotFileName(VAULT, DEVICE_B), 'ankylock-snapshot.v1.bin', 'ankylock-vault-header.v1.json', 'vault-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.header.json']) {
+      await drive.upload(name, new Uint8Array([1]) as Bytes);
+    }
+    await deleteVaultFromDrive(drive, VAULT);
+    expect(await removeLegacyDriveFiles(drive)).toBe(2);
+    expect([...drive.files.keys()]).toEqual(['vault-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.header.json']);
+  });
+});
+
 describe('vault catalog', () => {
   async function deviceBackup(s: Sealer, drive: MemoryDrive, deviceId: string, edit: (storage: WebIndexedDbAdapter) => Promise<void>) {
     const storage = new WebIndexedDbAdapter(new IDBFactory());
@@ -288,8 +340,8 @@ describe('vault catalog', () => {
     const scheduler = createSnapshotScheduler({
       drive,
       createSnapshot: () => exportSnapshot(storage, s, NOW),
-      vault: headerFile(),
-      deviceId,
+      snapshotFile: vaultSnapshotFileName(VAULT, deviceId),
+      prepare: async () => ((await syncHeaderFile(drive, headerFile(), false)).kind === 'ready' ? null : 'conflict'),
       onStatus: () => undefined,
     });
     expect(await scheduler.runNow()).toMatchObject({ kind: 'ok' });

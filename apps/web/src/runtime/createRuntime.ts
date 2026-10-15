@@ -9,7 +9,13 @@ import {
   serializeVaultHeader,
   type WorkerSealer,
 } from '@ankylock/crypto';
-import { StorageError, type IStorageEngine, type IVaultDirectory, type VaultEntry } from '@ankylock/storage';
+import {
+  StorageError,
+  type IStorageEngine,
+  type IVaultDirectory,
+  type VaultEntry,
+  type VaultSyncState,
+} from '@ankylock/storage';
 import {
   DocManager,
   GoogleDriveClient,
@@ -19,11 +25,15 @@ import {
   createCatchUp,
   createSnapshotScheduler,
   createSyncEngine,
+  deleteVaultFromDrive,
   downloadSnapshots,
   exportSnapshot,
   listRemoteVaults,
   mergeSnapshots,
   publishingStorage,
+  removeLegacyDriveFiles,
+  syncHeaderFile,
+  vaultSnapshotFileName,
   loadNoteState,
   persistDoc,
   startRetentionWorker,
@@ -66,6 +76,13 @@ export interface SyncStatus {
   readonly backup: BackupStatus;
   /** Merging other devices' Drive backups right now. */
   readonly catchingUp: boolean;
+  /**
+   * The open vault's copy in Google Drive. `deleted`: another device deleted it, so sync stopped.
+   * `local-only`: the user keeps this vault on this device only.
+   */
+  readonly vaultDrive: 'ok' | 'deleted' | 'local-only';
+  /** The open vault has a copy in Google Drive (its header was uploaded and is still there). */
+  readonly onDrive: boolean;
 }
 
 export interface Runtime {
@@ -112,6 +129,17 @@ export interface Runtime {
   signOut(): Promise<void>;
   /** Catches up from Drive and backs up now ("Sync now"); a no-op while sync is off. */
   syncNow(): Promise<void>;
+  /** Renames the open vault; other devices take the newer name when they next sync. */
+  renameVault(name: string): Promise<string | null>;
+  /**
+   * Removes the open vault from this device, and with `everywhere` also its copy in Google Drive
+   * (header and every device's backup). Returns to the vault list.
+   */
+  removeVault(options: { readonly everywhere: boolean }): Promise<string | null>;
+  /** Keeps a vault deleted elsewhere on this device only: sync and backup stay off for it. */
+  keepLocalOnly(): Promise<void>;
+  /** Backs up a local-only vault to Google Drive again, as a vault of its own. */
+  backUpAgain(): Promise<void>;
 }
 
 const LOCK_BACKUP_WAIT_MS = 5_000;
@@ -142,6 +170,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   let storage: IStorageEngine | null = null;
   let store: WorkspaceStore | null = null;
   let vaultNameCiphertext: Ciphertext | null = null;
+  let syncState: VaultSyncState | null = null;
+  /** The header file was checked against Drive since sync (re)started; reset by every catch-up. */
+  let headerChecked = false;
+  let legacyCleaned = false;
   let vaultDeviceId: string | null = null;
   /** Vaults from the last Drive listing, by id. */
   let remoteVaults = new Map<VaultId, RemoteVault>();
@@ -176,6 +208,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     connection: 'off',
     backup: { kind: 'never' },
     catchingUp: false,
+    vaultDrive: 'ok',
+    onDrive: false,
   });
   const updateSync = (patch: Partial<SyncStatus>): void => {
     setSyncStatus((current) => ({ ...current, ...patch }));
@@ -196,11 +230,64 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }, 300);
   };
 
+  async function saveSyncState(patch: Partial<VaultSyncState>): Promise<void> {
+    if (!storage || !syncState) return;
+    syncState = { ...syncState, ...patch };
+    updateSync({ onDrive: syncState.headerOnDrive && !syncState.localOnly });
+    await storage.setSyncState(syncState);
+  }
+
+  /**
+   * Brings the vault's header file in Drive in line with this device (see `syncHeaderFile`):
+   * creates it once, takes or publishes the newer name, and notices a vault deleted elsewhere.
+   */
+  let preparing: Promise<'conflict' | 'deleted' | null> | null = null;
+  function prepareHeader(): Promise<'conflict' | 'deleted' | null> {
+    // Catch-up and backup both ask at sync start; one check must never create the file twice.
+    preparing ??= checkHeader().finally(() => {
+      preparing = null;
+    });
+    return preparing;
+  }
+
+  async function checkHeader(): Promise<'conflict' | 'deleted' | null> {
+    if (headerChecked) return null;
+    const entry = vaultList().find((v) => v.id === vaultId);
+    if (!drive || !entry || headerJson === null || !syncState) return 'conflict';
+    const result = await syncHeaderFile(
+      drive,
+      { vaultId: entry.id, createdAt: entry.createdAt, header: headerJson, nameCiphertext: vaultNameCiphertext, nameUpdatedAt: syncState.nameUpdatedAt },
+      syncState.headerOnDrive,
+    );
+    if (result.kind === 'conflict') return 'conflict';
+    if (result.kind === 'deleted') {
+      updateSync({ vaultDrive: 'deleted', onDrive: false });
+      void stopSync();
+      return 'deleted';
+    }
+    if (!syncState.headerOnDrive) await saveSyncState({ headerOnDrive: true });
+    // Another device renamed the vault more recently.
+    if (result.name?.ciphertext && storage) {
+      await storage.setVaultName(result.name.ciphertext, result.name.updatedAt);
+      syncState = { ...syncState, nameUpdatedAt: result.name.updatedAt };
+      vaultNameCiphertext = result.name.ciphertext;
+      setVaultName(await names.decrypt(result.name.ciphertext));
+    }
+    headerChecked = true;
+    return null;
+  }
+
   /** Merges what other devices backed up while this one was away (the relay keeps no history). */
   async function runCatchUp(): Promise<void> {
     if (!catchUp) return;
     updateSync({ catchingUp: true });
     try {
+      headerChecked = false;
+      if ((await prepareHeader()) === 'deleted') return;
+      if (!legacyCleaned && drive) {
+        legacyCleaned = true;
+        await removeLegacyDriveFiles(drive);
+      }
       const result = await catchUp.run();
       if (result.unreadable > 0) report(`${result.unreadable} backup(s) of this vault could not be read and were skipped.`);
       if (result.changed) reloadSoon(result.changedNotes);
@@ -216,6 +303,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     if (engine || !auth || !relayUrl || status() !== 'unlocked' || auth.state().kind !== 'signed-in') return;
     const entry = vaultList().find((v) => v.id === vaultId);
     if (!storage || !vaultId || !entry || !drive || headerJson === null || vaultDeviceId === null) return;
+    if (!syncState || syncState.localOnly || syncStatus().vaultDrive === 'deleted') return;
     const vaultStorage = storage;
     const next = createSyncEngine({
       storage: vaultStorage,
@@ -244,8 +332,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     scheduler = createSnapshotScheduler({
       drive,
       createSnapshot: () => exportSnapshot(vaultStorage, sealer, Date.now() as EpochMs),
-      vault: { vaultId: entry.id, createdAt: entry.createdAt, header: headerJson, nameCiphertext: vaultNameCiphertext },
-      deviceId: vaultDeviceId,
+      snapshotFile: vaultSnapshotFileName(vaultId, vaultDeviceId),
+      prepare: prepareHeader,
       onStatus: (backup) => updateSync({ backup }),
     });
     scheduler.start();
@@ -280,6 +368,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     await sealer.setKey(vault.getKey());
     const nameCiphertext = await opened.getVaultName();
     const deviceOfVault = await opened.getDeviceId();
+    const stateOfVault = await opened.getSyncState();
     // Changes made through the store reach other devices; remote changes bypass this wrapper.
     const published = publishingStorage(opened, {
       onRecords: (records) => void engine?.submitHierarchy(records).catch(report),
@@ -295,6 +384,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     headerJson = header;
     vaultNameCiphertext = nameCiphertext;
     vaultDeviceId = deviceOfVault;
+    syncState = stateOfVault;
+    headerChecked = false;
+    updateSync({
+      vaultDrive: stateOfVault.localOnly ? 'local-only' : 'ok',
+      onDrive: stateOfVault.headerOnDrive && !stateOfVault.localOnly,
+    });
     setVaultList(await directory.list());
     setVaultName(nameCiphertext === null ? null : await names.decrypt(nameCiphertext));
     retention = startRetentionWorker({
@@ -324,6 +419,30 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     const list = await directory.list();
     setVaultList(list);
     setStatus(list.length === 0 ? 'uninitialized' : 'locked');
+  }
+
+  /** Locks the open vault and returns to the vault list; `backup` takes a last backup first. */
+  async function closeVault(backup: boolean): Promise<void> {
+    retention?.stop();
+    retention = null;
+    await Promise.all(docs.openNoteIds().map(closeDoc));
+    // A last backup, so other devices can catch up on this session; never blocks locking long.
+    if (backup && scheduler) {
+      await Promise.race([scheduler.runNow(), new Promise((resolve) => setTimeout(resolve, LOCK_BACKUP_WAIT_MS))]);
+    }
+    await stopSync();
+    await sealer.setKey(null);
+    vault.lock();
+    storage = null;
+    store = null;
+    vaultId = null;
+    headerJson = null;
+    vaultNameCiphertext = null;
+    vaultDeviceId = null;
+    syncState = null;
+    updateSync({ vaultDrive: 'ok', onDrive: false, backup: { kind: 'never' } });
+    setVaultName(null);
+    await refreshVaults();
   }
 
   /** Forgets the key after a failed create or unlock; nothing was opened. */
@@ -372,23 +491,59 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       }
     },
 
-    async lock() {
-      retention?.stop();
-      retention = null;
-      await Promise.all(docs.openNoteIds().map(closeDoc));
-      // A last backup, so other devices can catch up on this session; never blocks locking long.
-      if (scheduler) await Promise.race([scheduler.runNow(), new Promise((resolve) => setTimeout(resolve, LOCK_BACKUP_WAIT_MS))]);
+    lock: () => closeVault(true),
+
+    async renameVault(name) {
+      const trimmed = name.trim();
+      if (trimmed === '') return 'Give the vault a name.';
+      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return `Use at most ${MAX_VAULT_NAME_LENGTH} characters for the name.`;
+      if (!storage || !syncState) return 'No vault is open.';
+      try {
+        const ciphertext = await names.encrypt(trimmed);
+        const updatedAt = Date.now() as EpochMs;
+        await storage.setVaultName(ciphertext, updatedAt);
+        syncState = { ...syncState, nameUpdatedAt: updatedAt };
+        vaultNameCiphertext = ciphertext;
+        setVaultName(trimmed);
+        // Publish the new name now if syncing; otherwise the next sync does.
+        if (engine) {
+          headerChecked = false;
+          await prepareHeader();
+        }
+        return null;
+      } catch (error) {
+        return message(error);
+      }
+    },
+
+    async removeVault({ everywhere }) {
+      const id = vaultId;
+      if (id === null) return 'No vault is open.';
+      try {
+        if (everywhere) {
+          if (!drive || auth?.state().kind !== 'signed-in') return 'Sign in with Google to delete the vault from Google Drive too.';
+          await deleteVaultFromDrive(drive, id);
+        }
+        // Kept in Drive: back up the last changes first. Deleted everywhere: nothing to keep.
+        await closeVault(!everywhere && syncStatus().onDrive);
+        await directory.remove(id);
+        await refreshVaults();
+        return null;
+      } catch (error) {
+        return message(error);
+      }
+    },
+
+    async keepLocalOnly() {
+      await saveSyncState({ localOnly: true, headerOnDrive: false });
+      updateSync({ vaultDrive: 'local-only', backup: { kind: 'never' } });
       await stopSync();
-      await sealer.setKey(null);
-      vault.lock();
-      storage = null;
-      store = null;
-      vaultId = null;
-      headerJson = null;
-      vaultNameCiphertext = null;
-      vaultDeviceId = null;
-      setVaultName(null);
-      await refreshVaults();
+    },
+
+    async backUpAgain() {
+      await saveSyncState({ localOnly: false, headerOnDrive: false });
+      updateSync({ vaultDrive: 'ok' });
+      startSync();
     },
 
     async findRemoteVaults() {

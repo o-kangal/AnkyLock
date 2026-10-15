@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-settings-get-sync-state"
+description = "Enables the settings_get_sync_state command without any pre-configured scope."
+commands.allow = ["settings_get_sync_state"]
+
+[[permission]]
+identifier = "deny-settings-get-sync-state"
+description = "Denies the settings_get_sync_state command without any pre-configured scope."
+commands.deny = ["settings_get_sync_state"]

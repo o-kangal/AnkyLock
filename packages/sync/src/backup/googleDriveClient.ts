@@ -150,6 +150,10 @@ export class GoogleDriveClient {
     return id === null ? null : this.downloadFile(id);
   }
 
+  async deleteFile(id: string): Promise<void> {
+    await this.#request(`${FILES_URL}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   async downloadFile(id: string): Promise<Bytes> {
     const response = await this.#request(`${FILES_URL}/${encodeURIComponent(id)}?alt=media`);
     return new Uint8Array(await response.arrayBuffer());

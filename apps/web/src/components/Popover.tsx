@@ -11,6 +11,8 @@ export interface PopoverPosition {
 export interface PopoverProps {
   readonly onClose: () => void;
   readonly at: PopoverPosition;
+  /** `above`: the panel's bottom edge sits at `at.y` (for anchors at the bottom of the window). */
+  readonly placement?: 'below' | 'above';
   readonly width: number;
   readonly style?: JSX.CSSProperties;
   readonly role?: 'dialog' | 'menu';
@@ -54,7 +56,9 @@ export function Popover(props: PopoverProps): JSX.Element {
         style={{
           position: 'fixed',
           left: `${left()}px`,
-          top: `${Math.max(MARGIN, props.at.y)}px`,
+          ...(props.placement === 'above'
+            ? { bottom: `${Math.max(MARGIN, window.innerHeight - props.at.y)}px` }
+            : { top: `${Math.max(MARGIN, props.at.y)}px` }),
           width: `${props.width}px`,
           'box-sizing': 'border-box',
           'max-height': `calc(100vh - ${2 * MARGIN}px)`,

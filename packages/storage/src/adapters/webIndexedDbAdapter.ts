@@ -26,7 +26,7 @@ import {
   type Result,
   type SyncOutboxEntry,
 } from '@ankylock/core';
-import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry, isTombstone } from '../guards.js';
+import { isCategory, isFolder, isNote, isNoteContent, isOutboxEntry, isTombstone, isVaultSyncState } from '../guards.js';
 import {
   StorageError,
   type IStorageEngine,
@@ -35,6 +35,7 @@ import {
   type RemoteRecords,
   type Tombstone,
   type VaultImport,
+  type VaultSyncState,
 } from '../interfaces/IStorageEngine.js';
 
 /** The single database used before vaults had ids; adopted as the first vault. */
@@ -50,6 +51,7 @@ const RETENTION_KEY = 'trash_retention_days';
 const VAULT_HEADER_KEY = 'vault_header';
 const VAULT_NAME_KEY = 'vault_name';
 const DEVICE_ID_KEY = 'device_id';
+const SYNC_STATE_KEY = 'sync_state';
 
 const STORES = {
   categories: 'categories',
@@ -767,6 +769,27 @@ export class WebIndexedDbAdapter implements IStorageEngine {
         if (folder) await tx.put(STORES.folders, { ...folder, parentId: null });
       }
     });
+  }
+
+  setVaultName(nameCiphertext: Ciphertext, updatedAt: EpochMs): Promise<void> {
+    return this.#run([STORES.settings], 'readwrite', async (tx) => {
+      const state = await this.#syncState(tx);
+      await tx.put(STORES.settings, { key: VAULT_NAME_KEY, value: nameCiphertext });
+      await tx.put(STORES.settings, { key: SYNC_STATE_KEY, value: { ...state, nameUpdatedAt: updatedAt } });
+    });
+  }
+
+  async #syncState(tx: Tx): Promise<VaultSyncState> {
+    const value = (await tx.get(STORES.settings, SYNC_STATE_KEY, isSetting))?.value;
+    return isVaultSyncState(value) ? value : { nameUpdatedAt: 0 as EpochMs, headerOnDrive: false, localOnly: false };
+  }
+
+  getSyncState(): Promise<VaultSyncState> {
+    return this.#run([STORES.settings], 'readonly', (tx) => this.#syncState(tx));
+  }
+
+  setSyncState(state: VaultSyncState): Promise<void> {
+    return this.#run([STORES.settings], 'readwrite', (tx) => tx.put(STORES.settings, { key: SYNC_STATE_KEY, value: state }));
   }
 
   getDeviceId(): Promise<string> {

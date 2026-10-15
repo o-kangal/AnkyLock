@@ -45,7 +45,7 @@ export class WebVaultDirectory implements IVaultDirectory {
   readonly #now: () => EpochMs;
   readonly #registry: Promise<IDBDatabase>;
   #adopted: Promise<void> | null = null;
-  #current: WebIndexedDbAdapter | null = null;
+  #current: { readonly database: string; readonly storage: WebIndexedDbAdapter } | null = null;
 
   constructor(factory: IDBFactory = indexedDB, now: () => EpochMs = () => Date.now() as EpochMs) {
     this.#factory = factory;
@@ -79,11 +79,21 @@ export class WebVaultDirectory implements IVaultDirectory {
     return this.#adopted;
   }
 
-  #switchTo(storage: WebIndexedDbAdapter): WebIndexedDbAdapter {
+  #switchTo(database: string, storage: WebIndexedDbAdapter): WebIndexedDbAdapter {
     const previous = this.#current;
-    this.#current = storage;
-    void previous?.close();
+    this.#current = { database, storage };
+    void previous?.storage.close();
     return storage;
+  }
+
+  #deleteDatabase(name: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const req = this.#factory.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(new StorageError('ERR_STORAGE', req.error?.message ?? 'Cannot delete the vault database.'));
+      req.onblocked = () =>
+        reject(new StorageError('ERR_STORAGE', 'Close AnkyLock in your other tabs, then remove the vault again.'));
+    });
   }
 
   async list(): Promise<VaultEntry[]> {
@@ -103,7 +113,7 @@ export class WebVaultDirectory implements IVaultDirectory {
     await storage.initializeVault(header, nameCiphertext);
     const now = this.#now();
     await this.#put({ id, createdAt: createdAt ?? now, lastOpenedAt: now, database });
-    return this.#switchTo(storage);
+    return this.#switchTo(database, storage);
   }
 
   async open(id: VaultId): Promise<IStorageEngine> {
@@ -111,6 +121,18 @@ export class WebVaultDirectory implements IVaultDirectory {
     const record = (await this.#records()).find((r) => r.id === id);
     if (!record) throw new StorageError('ERR_NOT_FOUND', 'Vault not found.');
     await this.#put({ ...record, lastOpenedAt: this.#now() });
-    return this.#switchTo(new WebIndexedDbAdapter(this.#factory, this.#now, record.database));
+    return this.#switchTo(record.database, new WebIndexedDbAdapter(this.#factory, this.#now, record.database));
+  }
+
+  async remove(id: VaultId): Promise<void> {
+    const record = (await this.#records()).find((r) => r.id === id);
+    if (!record) throw new StorageError('ERR_NOT_FOUND', 'Vault not found.');
+    if (this.#current?.database === record.database) {
+      await this.#current.storage.close();
+      this.#current = null;
+    }
+    await this.#deleteDatabase(record.database);
+    const store = (await this.#registry).transaction(REGISTRY_STORE, 'readwrite').objectStore(REGISTRY_STORE);
+    await promised(store.delete(id), (_v): _v is unknown => true);
   }
 }

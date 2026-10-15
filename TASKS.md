@@ -453,6 +453,7 @@ pnpm -r run typecheck && pnpm -r run test
 ---
 
 ### Task 11i: Vault Management (Rename & Delete)
+- **Status:** ✅ Completed (2026-10-15)
 - **Type:** Full-Stack
 - **Read-Only Context Files:** `packages/sync/src/backup/vaultCatalog.ts`, `apps/web/src/components/UnlockScreen.tsx`
 - **Target Files (Create/Modify):**
@@ -464,6 +465,7 @@ pnpm -r run typecheck && pnpm -r run test
   1. Rename the open vault: re-encrypt the name and update the header copy in Drive (the only header field that may change).
   2. Remove a vault from this device only (delete its local database; Drive copy kept), or delete it everywhere (also remove its Drive header and snapshots) behind an explicit confirmation that names the consequences.
   3. Devices that open a vault deleted elsewhere stop syncing it and offer to keep it as a local-only vault.
+  4. Clean up Drive: remove the pre-vault-id files from Task 11c (`ankylock-snapshot.v1.bin`, `ankylock-vault-header.v1.json`), which nothing reads any more.
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test
