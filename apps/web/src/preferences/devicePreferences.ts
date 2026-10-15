@@ -1,0 +1,57 @@
+import { createSignal, type Accessor } from 'solid-js';
+
+/** Screens narrower than this (the mobile PWA) start with word wrap on. */
+export const NARROW_SCREEN_PX = 600;
+const WORD_WRAP_KEY = 'ankylock.wordWrap';
+
+export interface WordWrapPreference {
+  readonly wordWrap: Accessor<boolean>;
+  toggle(): void;
+}
+
+type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+function defaultStorage(): PreferenceStorage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+const isNarrowScreen = (): boolean =>
+  typeof matchMedia === 'function'
+    ? matchMedia(`(max-width: ${NARROW_SCREEN_PX - 0.02}px)`).matches
+    : window.innerWidth < NARROW_SCREEN_PX;
+
+/**
+ * Word wrap is a preference of this device, for every vault: a phone and a desktop may want it
+ * differently. It holds no note content, so it is neither synced nor encrypted. Until the user
+ * chooses, it is on for narrow screens only.
+ */
+export function createWordWrapPreference(
+  storage: PreferenceStorage | null = defaultStorage(),
+  narrow: () => boolean = isNarrowScreen,
+): WordWrapPreference {
+  const read = (): string | null => {
+    try {
+      return storage?.getItem(WORD_WRAP_KEY) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const saved = read();
+  const [wordWrap, setWordWrap] = createSignal(saved === null ? narrow() : saved === 'on');
+  return {
+    wordWrap,
+    toggle() {
+      const next = !wordWrap();
+      setWordWrap(next);
+      try {
+        storage?.setItem(WORD_WRAP_KEY, next ? 'on' : 'off');
+      } catch {
+        // Storage can be unavailable (private windows); the choice then lasts for this session.
+      }
+    },
+  };
+}

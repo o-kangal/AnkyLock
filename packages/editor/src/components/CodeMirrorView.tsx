@@ -5,6 +5,7 @@ import type * as Y from 'yjs';
 import { TRASHED_READ_ONLY_MESSAGE } from '@ankylock/core';
 import { editorBasics, editorTheme, type ColorScheme } from '../extensions/theme.js';
 import { titleListener } from '../extensions/title.js';
+import { wordWrap } from '../extensions/wordWrap.js';
 import { noteText, yjsBinding } from '../extensions/yjsBinding.js';
 
 export interface CodeMirrorViewProps {
@@ -19,6 +20,8 @@ export interface CodeMirrorViewProps {
   readonly onTitleChange?: (title: string | null) => void;
   /** Focus the editor when it mounts, so a new or opened note accepts typing immediately. */
   readonly autoFocus?: boolean;
+  /** Soft-wrap long lines; toggling it reconfigures the open editor without remounting it. */
+  readonly wordWrap?: boolean;
 }
 
 const readOnlyExtension = (readOnly: boolean): Extension => [
@@ -50,6 +53,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
   let host!: HTMLDivElement;
   const theme = new Compartment();
   const readOnly = new Compartment();
+  const wrap = new Compartment();
 
   createEffect(() => {
     if (!props.active) return;
@@ -64,6 +68,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
               editorBasics,
               theme.of(editorTheme(props.colorScheme)),
               readOnly.of(readOnlyExtension(props.readOnly ?? false)),
+              wrap.of(wordWrap(props.wordWrap ?? false)),
               yjsBinding(doc),
               titleListener((title) => props.onTitleChange?.(title)),
             ],
@@ -76,6 +81,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
 
     createEffect(() => view.dispatch({ effects: theme.reconfigure(editorTheme(props.colorScheme)) }));
     createEffect(() => view.dispatch({ effects: readOnly.reconfigure(readOnlyExtension(props.readOnly ?? false)) }));
+    createEffect(() => view.dispatch({ effects: wrap.reconfigure(wordWrap(props.wordWrap ?? false)) }));
   });
 
   return (

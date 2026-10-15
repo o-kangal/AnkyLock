@@ -1,7 +1,7 @@
 /** Where the app runs; decides which keys the workspace shortcuts use. */
 export type Platform = 'desktop' | 'web';
 
-export type WorkspaceCommand = 'new-tab' | 'close-tab' | 'next-tab' | 'previous-tab';
+export type WorkspaceCommand = 'new-tab' | 'close-tab' | 'next-tab' | 'previous-tab' | 'toggle-wrap';
 
 type Keys = Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'key' | 'code'>;
 
@@ -11,6 +11,8 @@ type Keys = Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 
  * (`code`): with Alt held, macOS and some layouts type a different character.
  */
 export function workspaceCommand(event: Keys, platform: Platform): WorkspaceCommand | null {
+  // Alt+Z (as in VS Code) on both platforms: browsers leave it to the page.
+  if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyZ') return 'toggle-wrap';
   if (platform === 'desktop') {
     if (!(event.ctrlKey || event.metaKey)) return null;
     switch (event.key.toLowerCase()) {
@@ -40,8 +42,14 @@ export function workspaceCommand(event: Keys, platform: Platform): WorkspaceComm
 }
 
 const LABELS: Record<Platform, Record<WorkspaceCommand, string>> = {
-  desktop: { 'new-tab': 'Ctrl+N', 'close-tab': 'Ctrl+W', 'next-tab': 'Ctrl+Tab', 'previous-tab': 'Ctrl+Shift+Tab' },
-  web: { 'new-tab': 'Alt+N', 'close-tab': 'Alt+W', 'next-tab': 'Alt+]', 'previous-tab': 'Alt+[' },
+  desktop: {
+    'new-tab': 'Ctrl+N',
+    'close-tab': 'Ctrl+W',
+    'next-tab': 'Ctrl+Tab',
+    'previous-tab': 'Ctrl+Shift+Tab',
+    'toggle-wrap': 'Alt+Z',
+  },
+  web: { 'new-tab': 'Alt+N', 'close-tab': 'Alt+W', 'next-tab': 'Alt+]', 'previous-tab': 'Alt+[', 'toggle-wrap': 'Alt+Z' },
 };
 
 export const shortcutLabel = (command: WorkspaceCommand, platform: Platform): string => LABELS[platform][command];

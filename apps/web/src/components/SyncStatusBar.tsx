@@ -64,7 +64,14 @@ const iconButton: JSX.CSSProperties = {
  * Non-intrusive status line (SPEC §7): the open vault, sign-in, relay connection and Drive backup
  * state. Sync problems never block local editing; they only show up here.
  */
-export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element {
+export interface WordWrapToggle {
+  readonly on: () => boolean;
+  readonly toggle: () => void;
+  /** e.g. "Alt+Z", shown on the button so the shortcut is discoverable. */
+  readonly shortcut: string;
+}
+
+export function SyncStatusBar(props: { readonly runtime: Runtime; readonly wordWrap?: WordWrapToggle }): JSX.Element {
   const status = (): ReturnType<Runtime['syncStatus']> => props.runtime.syncStatus();
   const [error, setError] = createSignal<string | null>(null);
   const [settings, setSettings] = createSignal<{ at: PopoverPosition; view: VaultSettingsView } | null>(null);
@@ -178,6 +185,27 @@ export function SyncStatusBar(props: { readonly runtime: Runtime }): JSX.Element
         </Show>
       </span>
       <span style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+        <Show when={props.wordWrap}>
+          {(wrap) => (
+            <button
+              type="button"
+              aria-pressed={wrap().on()}
+              title="Wrap long lines in the editor"
+              style={{
+                ...iconButton,
+                padding: '1px 6px',
+                'border-radius': '3px',
+                font: tokens.font,
+                'font-size': '12px',
+                color: wrap().on() ? 'CanvasText' : 'inherit',
+                background: wrap().on() ? tokens.activeBackground : 'transparent',
+              }}
+              onClick={() => wrap().toggle()}
+            >
+              Wrap ({wrap().shortcut})
+            </button>
+          )}
+        </Show>
         <Show
           when={status().catchingUp || status().backup.kind === 'running'}
           fallback={

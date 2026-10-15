@@ -34,6 +34,7 @@ function mount(initial: { doc: Y.Doc; active?: boolean; readOnly?: boolean; titl
   const [active, setActive] = createSignal(initial.active ?? true);
   const [readOnly, setReadOnly] = createSignal(initial.readOnly ?? false);
   const [scheme, setScheme] = createSignal<ColorScheme>('light');
+  const [wrap, setWrap] = createSignal(false);
   root = document.createElement('div');
   document.body.append(root);
   dispose = render(
@@ -43,12 +44,13 @@ function mount(initial: { doc: Y.Doc; active?: boolean; readOnly?: boolean; titl
         active={active()}
         readOnly={readOnly()}
         colorScheme={scheme()}
+        wordWrap={wrap()}
         onTitleChange={(t) => initial.titles?.push(t)}
       />
     ),
     root,
   );
-  return { setDoc, setActive, setReadOnly, setScheme };
+  return { setDoc, setActive, setReadOnly, setScheme, setWrap };
 }
 
 const editors = (): NodeListOf<Element> => root.querySelectorAll('.cm-editor');
@@ -141,6 +143,23 @@ describe('CodeMirrorView', () => {
     setScheme('dark');
     expect(view()).toBe(before);
     expect(before.dom.classList.contains('cm-editor')).toBe(true);
+  });
+
+  it('toggles word wrap without remounting, aligning wrapped rows with the indentation', () => {
+    const { setWrap } = mount({ doc: docWith('top\n    indented line\n\tand a tab') });
+    const before = view();
+    const wrapping = (): boolean => before.contentDOM.classList.contains('cm-lineWrapping');
+    expect(wrapping()).toBe(false);
+    setWrap(true);
+    expect(view()).toBe(before);
+    expect(wrapping()).toBe(true);
+    const styles = Array.from(before.contentDOM.querySelectorAll('.cm-line')).map((line) => line.getAttribute('style'));
+    expect(styles[0]).toBeNull();
+    expect(styles[1]).toContain('text-indent: -4ch');
+    expect(styles[2]).toContain('text-indent: -4ch');
+    setWrap(false);
+    expect(wrapping()).toBe(false);
+    expect(before.contentDOM.querySelector('.cm-line[style]')).toBeNull();
   });
 
   it('takes focus on mount only when autoFocus is set', async () => {

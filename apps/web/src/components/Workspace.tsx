@@ -3,6 +3,7 @@ import type * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
 import { CodeMirrorView, type ColorScheme } from '@ankylock/editor';
 import { shortcutLabel, workspaceCommand, type Platform } from '../keyboard/shortcuts.js';
+import { createWordWrapPreference } from '../preferences/devicePreferences.js';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { Sidebar } from './sidebar/Sidebar.jsx';
 import { SyncStatusBar } from './SyncStatusBar.jsx';
@@ -30,6 +31,7 @@ function useColorScheme(): () => ColorScheme {
 export function Workspace(props: { readonly runtime: Runtime; readonly platform: Platform }): JSX.Element {
   const { store } = props.runtime;
   const scheme = useColorScheme();
+  const wrap = createWordWrapPreference();
   const activeId = (): NoteId | undefined => store.state.tabs[store.state.activeTabIndex]?.noteId;
   const [doc, setDoc] = createSignal<{ readonly id: NoteId; readonly doc: Y.Doc } | null>(null);
 
@@ -61,7 +63,8 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
     const onKeyDown = (event: KeyboardEvent): void => {
       const command = workspaceCommand(event, props.platform);
       const { tabs, activeTabIndex } = store.state;
-      if (command === 'new-tab') void store.createTab();
+      if (command === 'toggle-wrap') wrap.toggle();
+      else if (command === 'new-tab') void store.createTab();
       else if (command === 'close-tab' && activeTabIndex >= 0) closeTab(activeTabIndex);
       else if ((command === 'next-tab' || command === 'previous-tab') && tabs.length > 0) {
         store.activateTab((activeTabIndex + (command === 'previous-tab' ? tabs.length - 1 : 1)) % tabs.length);
@@ -103,6 +106,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
                   autoFocus={true}
                   readOnly={store.state.notes[open().id]?.deletedAt != null}
                   colorScheme={scheme()}
+                  wordWrap={wrap.wordWrap()}
                   onTitleChange={(title) => store.setTitle(open().id, title)}
                 />
               )}
@@ -110,7 +114,10 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
           </div>
         </section>
       </div>
-      <SyncStatusBar runtime={props.runtime} />
+      <SyncStatusBar
+        runtime={props.runtime}
+        wordWrap={{ on: wrap.wordWrap, toggle: wrap.toggle, shortcut: shortcutLabel('toggle-wrap', props.platform) }}
+      />
     </div>
   );
 }

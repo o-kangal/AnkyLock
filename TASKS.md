@@ -474,6 +474,7 @@ pnpm -r run typecheck && pnpm -r run test
 ---
 
 ### Task 11j: Editor Word Wrap
+- **Status:** ✅ Completed (2026-10-15)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/editor/src/components/CodeMirrorView.tsx`, `apps/web/src/keyboard/shortcuts.ts`, `apps/web/src/components/SyncStatusBar.tsx`
 - **Target Files (Create/Modify):**
