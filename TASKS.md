@@ -524,7 +524,33 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
+### Task 12b: Peer Catch-Up on Connect (Sync Handshake)
+- **Status:** ✅ Completed (2026-10-16)
+- **Type:** Backend/Service
+- **Read-Only Context Files:** `SPEC.md` (§5.2), `packages/sync/src/engine/syncEngine.ts`, `packages/sync/src/hierarchy/hierarchySync.ts`
+- **Target Files (Create/Modify):**
+  - `packages/core/src/types/entities.ts`
+  - `packages/sync/src/protocol/frame.ts`
+  - `packages/sync/src/engine/peerSync.ts`
+  - `packages/sync/src/engine/syncEngine.ts`
+  - `packages/sync/src/hierarchy/hierarchySync.ts`
+  - `packages/sync/tests/peerSync.test.ts`
+  - `SPEC.md`
+- **Step-by-Step Instructions:**
+  1. Found by Task 12: the relay keeps no history, so when two devices edit offline and reconnect one after the other, the first one's queued packets reach nobody, and the second device only sees them after the first one's next Drive backup.
+  2. On every (re)connect, a device sends a sealed `SYNC_REQUEST` with the Yjs state vector of each note it holds (stored vectors are plaintext clock metadata, so building it decrypts nothing).
+  3. Every online device answers with what the requester lacks: Yjs diffs as `CRDT_DELTA` packets (decrypting only notes that are ahead), and its hierarchy records with its tombstones as one `HIERARCHY_MUTATION`. Requests and answers are sent directly, never queued.
+  4. Add `SYNC_REQUEST` to the frame envelope in SPEC §5.2; the relay forwards it like any other frame.
+  5. Test both reconnect orders, notes only one side has, purges, and that answers decrypt only notes that are ahead; the concurrent offline edit scenario of Task 12 must pass as written.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test
+``` 
+
+---
+
 ### Task 12: End-to-End State Machine & Cross-Device Sync Verification
+- **Status:** ✅ Completed (2026-10-16)
 - **Type:** Testing
 - **Read-Only Context Files:** `AGENTS.md`
 - **Target Files (Create/Modify):**
@@ -607,6 +633,7 @@ Task 1 (Workspace & Config)
                    │               ├──► Task 11j (Editor Word Wrap)
                    │               └──► Task 11k (Narrow Screens & Touch)
                    │
+                   ├──► Task 12b (Peer Catch-Up on Connect)
                    └──► Task 12 (E2E Verification & Hardening)
                            └──► Task 13 (Production Release)
 ``` 

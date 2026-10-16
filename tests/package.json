@@ -1,0 +1,25 @@
+{
+  "name": "@ankylock/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ankylock/core": "workspace:*",
+    "@ankylock/crypto": "workspace:*",
+    "@ankylock/storage": "workspace:*",
+    "@ankylock/sync": "workspace:*",
+    "@ankylock/web": "workspace:*",
+    "solid-js": "1.9.17",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.1.2",
+    "typescript": "5.9.3",
+    "vite-plugin-solid": "2.11.14",
+    "vitest": "5.0.4"
+  }
+}

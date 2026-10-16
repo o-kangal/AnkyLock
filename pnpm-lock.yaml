@@ -207,6 +207,46 @@ importers:
         specifier: 5.0.4
         version: 5.0.4(jsdom@30.1.2)(vite@8.3.4)
 
+  tests:
+    dependencies:
+      '@ankylock/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@ankylock/crypto':
+        specifier: workspace:*
+        version: link:../packages/crypto
+      '@ankylock/storage':
+        specifier: workspace:*
+        version: link:../packages/storage
+      '@ankylock/sync':
+        specifier: workspace:*
+        version: link:../packages/sync
+      '@ankylock/web':
+        specifier: workspace:*
+        version: link:../apps/web
+      solid-js:
+        specifier: 1.9.17
+        version: 1.9.17
+      yjs:
+        specifier: 13.6.33
+        version: 13.6.33
+    devDependencies:
+      fake-indexeddb:
+        specifier: 6.2.5
+        version: 6.2.5
+      jsdom:
+        specifier: 30.1.2
+        version: 30.1.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite-plugin-solid:
+        specifier: 2.11.14
+        version: 2.11.14(solid-js@1.9.17)(vite@8.3.4)
+      vitest:
+        specifier: 5.0.4
+        version: 5.0.4(jsdom@30.1.2)(vite@8.3.4)
+
 packages:
 
   '@asamuzakjp/css-color@7.1.5':
