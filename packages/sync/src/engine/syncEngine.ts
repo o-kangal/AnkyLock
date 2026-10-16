@@ -7,7 +7,8 @@ import type { DocManager } from '../crdt/docManager.js';
 import { watchDoc, type DocWatcher } from '../crdt/deltaPacker.js';
 import { applyRemoteRecords, applyRemoteTombstone, createHierarchyPacket, readHierarchyPayload } from '../hierarchy/hierarchySync.js';
 import { mergeNoteUpdate } from '../persistence/notePersistence.js';
-import { createTombstonePacket, decodeFrame, type DeviceId, type SyncPacket } from '../protocol/frame.js';
+import { answerSyncRequest, createSyncRequest, localStateVectors, readSyncRequest } from './peerSync.js';
+import { createTombstonePacket, decodeFrame, encodeFrame, type DeviceId, type SyncPacket } from '../protocol/frame.js';
 import { OutboxQueue } from '../queue/outboxQueue.js';
 
 export interface SyncEngineOptions {
@@ -62,7 +63,11 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
     onStatusChange: (status) => {
       options.onStatusChange(status);
       if (status === 'open') {
-        void queue.drain().then(() => options.onIdle?.(), options.onError);
+        // Send what queued up offline, then ask the devices online for what this one missed.
+        void queue
+          .drain()
+          .then(() => requestCatchUp())
+          .then(() => options.onIdle?.(), options.onError);
       }
     },
     ...(options.createSocket ? { createSocket: options.createSocket } : {}),
@@ -71,6 +76,34 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
 
   async function mergeIntoStorage(noteId: NoteId, update: Uint8Array): Promise<void> {
     await mergeNoteUpdate({ storage, sealer }, noteId, update);
+  }
+
+  /** Sends a SYNC_REQUEST; answers arrive as ordinary packets (see `peerSync.ts`). */
+  async function requestCatchUp(): Promise<void> {
+    const [vectors, tombstones] = await Promise.all([localStateVectors(storage, docs), storage.listTombstones()]);
+    client.send(encodeFrame(await createSyncRequest(sealer, deviceId, vectors, Date.now() as EpochMs, tombstones)));
+  }
+
+  /**
+   * Answers another device's SYNC_REQUEST directly (nothing is queued for a peer that left),
+   * after applying the purges it brought.
+   */
+  async function answer(plaintext: Uint8Array): Promise<void> {
+    const request = readSyncRequest(plaintext);
+    const purged: NoteId[] = [];
+    await inOrder(async () => {
+      for (const t of request.tombstones) {
+        if ((await applyRemoteTombstone(storage, t.entityId, t.entityType)) && t.entityType === 'note') {
+          purged.push(t.entityId as NoteId);
+        }
+      }
+    });
+    if (purged.length > 0) options.onRemoteChange(purged);
+    const packets = await answerSyncRequest(
+      { storage, sealer, docs, deviceId, now: () => Date.now() as EpochMs },
+      request.stateVectors,
+    );
+    for (const packet of packets) if (!client.send(encodeFrame(packet))) return;
   }
 
   /** Hierarchy changes and purges apply one at a time, so each repair sees the previous merge. */
@@ -103,11 +136,22 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
         return;
       }
       case 'HIERARCHY_MUTATION': {
-        const records = readHierarchyPayload(plaintext);
-        await inOrder(() => applyRemoteRecords(storage, records));
-        options.onRemoteChange([]);
+        const { tombstones = [], ...records } = readHierarchyPayload(plaintext);
+        const purged: NoteId[] = [];
+        await inOrder(async () => {
+          for (const t of tombstones) {
+            if ((await applyRemoteTombstone(storage, t.entityId, t.entityType)) && t.entityType === 'note') {
+              purged.push(t.entityId as NoteId);
+            }
+          }
+          await applyRemoteRecords(storage, records);
+        });
+        options.onRemoteChange(purged);
         return;
       }
+      case 'SYNC_REQUEST':
+        await answer(plaintext);
+        return;
     }
   }
 

@@ -16,6 +16,9 @@ import type { DeviceId, SyncPacket } from '../protocol/frame.js';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 
+/** Records with, in answers to a `SYNC_REQUEST`, the sender's purges. */
+export type HierarchyPayload = RemoteRecords & { readonly tombstones?: readonly Tombstone[] };
+
 /**
  * HIERARCHY_MUTATION packet carrying the changed records (state, not operations), sealed as a
  * whole: names inside are ciphertext already, and ids and parents stay hidden from the relay.
@@ -23,10 +26,11 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 export async function createHierarchyPacket(
   sealer: Sealer,
   deviceId: DeviceId,
-  records: RemoteRecords,
+  records: HierarchyPayload,
   now: EpochMs,
 ): Promise<SyncPacket> {
-  const first = records.folders?.[0]?.id ?? records.categories?.[0]?.id ?? records.notes?.[0]?.id;
+  const first =
+    records.folders?.[0]?.id ?? records.categories?.[0]?.id ?? records.notes?.[0]?.id ?? (records.tombstones?.[0]?.entityId as NoteId | undefined);
   if (first === undefined) throw new Error('A hierarchy packet needs at least one record.');
   return {
     packetType: 'HIERARCHY_MUTATION',
@@ -38,7 +42,7 @@ export async function createHierarchyPacket(
 }
 
 /** AES-GCM authenticated the payload, so this vault wrote it; only the shape needs checking. */
-export function readHierarchyPayload(plaintext: Uint8Array): RemoteRecords {
+export function readHierarchyPayload(plaintext: Uint8Array): HierarchyPayload {
   const value: unknown = JSON.parse(decoder.decode(plaintext));
   const list = (key: string): unknown[] => {
     const field = (value as Record<string, unknown>)[key];
@@ -49,6 +53,7 @@ export function readHierarchyPayload(plaintext: Uint8Array): RemoteRecords {
     categories: list('categories') as Category[],
     folders: list('folders') as Folder[],
     notes: list('notes') as Note[],
+    tombstones: list('tombstones') as Tombstone[],
   };
 }
 

@@ -294,11 +294,101 @@ describe('createSyncEngine', () => {
       for (const engine of online) engine.start();
       const shape = async (d: Device) =>
         Object.fromEntries((await d.storage.listFolders()).map((folder) => [folder.id, folder.parentId]));
-      await until(() => applied[0] === 1 && applied[1] === 1, "each device applied the other's move");
+      // Each device applies the other's move (live, or from the other's answer to its sync request).
+      await until(() => applied[0]! >= 1 && applied[1]! >= 1, "each device applied the other's move");
+      await until(async () => JSON.stringify(await shape(a)) === JSON.stringify(await shape(b)), 'converged');
       // Each device saw the cycle and broke it the same way: at f1, the smallest id.
       await until(async () => JSON.stringify(await shape(a)) === JSON.stringify(await shape(b)), 'converged');
       expect(await shape(a)).toEqual({ f1: null, f2: 'f1' });
       await Promise.all(online.map((engine) => engine.stop()));
+    });
+  });
+
+  describe('sync handshake on connect', () => {
+    /** A fresh, online engine over a device's storage and docs (the app reconnecting). */
+    const online = (d: Device, relay: FakeRelay, s: Sealer, id: string): SyncEngine =>
+      createSyncEngine({
+        storage: d.storage,
+        sealer: s,
+        docs: d.docs,
+        deviceId: id as DeviceId,
+        relayUrl: 'ws://relay.test/ws',
+        getIdToken: () => 'id-token',
+        onRemoteChange: () => undefined,
+        onStatusChange: () => undefined,
+        onError: (e) => {
+          throw e;
+        },
+        createSocket: () => new FakeSocket(relay, () => true),
+      });
+
+    it.each([
+      ['A reconnects first', 0],
+      ['B reconnects first', 1],
+    ] as const)('converges offline edits whatever the reconnect order (%s)', async (_label, first) => {
+      const relay = new FakeRelay();
+      const s = await sealer();
+      const a = device(relay, s, 'desktop-a', false);
+      const b = device(relay, s, 'desktop-b', false);
+      a.engine.start();
+      b.engine.start();
+      for (const [d, text] of [[a, 'from A'], [b, 'from B']] as const) {
+        // As in the app, every note has a record in storage.
+        await d.storage.createNote(NOTE);
+        const doc = d.docs.open(NOTE);
+        d.engine.watch(NOTE, doc);
+        doc.getText(TEXT_FIELD).insert(0, text);
+      }
+      await until(async () => (await a.storage.listOutbox(10)).length > 0 && (await b.storage.listOutbox(10)).length > 0, 'queued');
+      await Promise.all([a.engine.stop(), b.engine.stop()]);
+
+      // The first device drains while nobody else is online: its packets reach no one...
+      const order = first === 0 ? [a, b] : [b, a];
+      const engines = [online(order[0]!, relay, s, 'one'), online(order[1]!, relay, s, 'two')];
+      engines[0]!.start();
+      await until(async () => (await order[0]!.storage.listOutbox(10)).length === 0, 'first drained');
+      // ...and the second one catches up through the handshake.
+      engines[1]!.start();
+      const text = (d: Device): string => d.docs.get(NOTE)?.getText(TEXT_FIELD).toString() ?? '';
+      await until(() => text(a) === text(b) && text(a).includes('from A') && text(a).includes('from B'), 'converged');
+      await Promise.all(engines.map((e) => e.stop()));
+    });
+
+    it("brings a purge made offline to the devices online when it next connects", async () => {
+      const relay = new FakeRelay();
+      const s = await sealer();
+      const a = device(relay, s, 'desktop-a', false);
+      const b = device(relay, s, 'desktop-b');
+      for (const d of [a, b]) await d.storage.createNote(NOTE);
+      b.engine.start();
+      // A purges while offline and without sync running: no TOMBSTONE packet exists.
+      await a.storage.trashNote(NOTE);
+      await a.storage.purgeNote(NOTE);
+      await until(() => relay.sockets.size === 1, 'B online');
+
+      const engine = online(a, relay, s, 'desktop-a-again');
+      engine.start();
+      await until(async () => (await b.storage.getNote(NOTE)) === null, 'purged on B');
+      await Promise.all([b.engine.stop(), engine.stop(), a.engine.stop()]);
+    });
+
+    it('purges on a device that was offline when the purge happened', async () => {
+      const relay = new FakeRelay();
+      const s = await sealer();
+      const a = device(relay, s, 'desktop-a');
+      const b = device(relay, s, 'desktop-b', false);
+      await a.storage.createNote(NOTE);
+      await b.storage.createNote(NOTE);
+      a.engine.start();
+      await a.storage.trashNote(NOTE);
+      await a.storage.purgeNote(NOTE);
+      await a.engine.submitTombstone(NOTE, 'note');
+      expect(await b.storage.getNote(NOTE)).not.toBeNull();
+
+      const engine = online(b, relay, s, 'desktop-b-again');
+      engine.start();
+      await until(async () => (await b.storage.getNote(NOTE)) === null, 'purged on B');
+      await Promise.all([a.engine.stop(), engine.stop()]);
     });
   });
 });

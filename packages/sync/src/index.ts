@@ -11,5 +11,6 @@ export * from './backup/vaultCatalog.js';
 export * from './persistence/notePersistence.js';
 export * from './auth/googleAuth.js';
 export * from './engine/syncEngine.js';
+export * from './engine/peerSync.js';
 export * from './hierarchy/hierarchySync.js';
 export * from './catchup/catchUp.js';

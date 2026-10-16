@@ -23,7 +23,7 @@ export type FrameDecodeResult =
   | { readonly ok: true; readonly packet: SyncPacket }
   | { readonly ok: false; readonly reason: string };
 
-const PACKET_TYPES: readonly string[] = ['CRDT_DELTA', 'HIERARCHY_MUTATION', 'TOMBSTONE'];
+const PACKET_TYPES: readonly string[] = ['CRDT_DELTA', 'HIERARCHY_MUTATION', 'TOMBSTONE', 'SYNC_REQUEST'];
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });

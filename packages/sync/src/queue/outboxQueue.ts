@@ -10,7 +10,7 @@ export interface PacketTransport {
 const DRAIN_BATCH = 50;
 
 /** The outbox's `entity_type` column, kept for its CHECK constraint; `packet_type` drives replay. */
-const ENTITY_TYPE_FOR: Record<PacketType, SyncEntityType> = {
+const ENTITY_TYPE_FOR: Record<Exclude<PacketType, 'SYNC_REQUEST'>, SyncEntityType> = {
   CRDT_DELTA: 'note',
   HIERARCHY_MUTATION: 'folder',
   TOMBSTONE: 'tombstone',
@@ -28,7 +28,7 @@ export class OutboxQueue {
   readonly #deviceId: DeviceId;
   /** Unknown at startup, so assume rows may exist until a drain proves otherwise. */
   #hasBacklog = true;
-  /** Bumped on every enqueue so a drain never clears the backlog flag past a concurrent enqueue. */
+  /** Bumped after every enqueue so a drain never clears the backlog flag past a concurrent one. */
   #enqueued = 0;
   #draining: Promise<void> | null = null;
 
@@ -40,15 +40,20 @@ export class OutboxQueue {
 
   /** Sends now if nothing older is waiting; otherwise queues behind the backlog to keep order. */
   async submit(packet: SyncPacket): Promise<void> {
+    if (packet.packetType === 'SYNC_REQUEST') throw new Error('SYNC_REQUEST is sent on connect, never queued.');
     if (!this.#hasBacklog && this.#transport.send(encodeFrame(packet))) return;
     this.#hasBacklog = true;
-    this.#enqueued++;
     await this.#storage.enqueueOutbox({
       entityId: packet.entityId,
       entityType: ENTITY_TYPE_FOR[packet.packetType],
       packetType: packet.packetType,
       encryptedPayload: packet.payload,
     });
+    // Counted once the row exists: a drain running now takes another pass and finds it.
+    this.#enqueued++;
+    // Without a drain running, nothing would look at the row until the next reconnect. Offline,
+    // this is one cheap listing; a failure leaves the row for the next drain.
+    if (!this.#draining) await this.drain().catch(() => undefined);
   }
 
   /** Replays queued packets oldest first; concurrent calls share one drain. */

@@ -200,4 +200,25 @@ describe('startRetentionWorker', () => {
     worker.stop();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('stops a run in progress: nothing is purged after stop() (the vault locked mid-run)', async () => {
+    const { storage, now, advance } = world();
+    await trashedNote(storage, 'a');
+    await trashedNote(storage, 'b');
+    advance(29 * MS_PER_DAY);
+    const purged: string[] = [];
+    let worker: ReturnType<typeof startRetentionWorker> | null = null;
+    worker = startRetentionWorker({
+      storage,
+      now,
+      // The first purge locks the vault: the run must not go on to the second note.
+      onPurged: async (e) => {
+        purged.push(e.id);
+        worker?.stop();
+      },
+    });
+    await worker.runNow();
+    expect(purged).toHaveLength(1);
+    expect(await storage.listTrashedNotes()).toHaveLength(1);
+  });
 });

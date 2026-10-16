@@ -22,6 +22,8 @@ export interface RetentionDeps {
   readonly onPurged?: (entity: PurgedEntity) => Promise<void>;
   /** Failures for single items; the run continues with the rest. */
   readonly onError?: (error: unknown) => void;
+  /** Checked before each purge; a run stops early once it returns false (the vault locked). */
+  readonly active?: () => boolean;
 }
 
 const clock = (deps: RetentionDeps): EpochMs => deps.now?.() ?? (Date.now() as EpochMs);
@@ -44,7 +46,9 @@ export async function purgeExpired(deps: RetentionDeps): Promise<PurgedEntity[]>
   };
 
   const gone = new Set<FolderId>();
+  const active = deps.active ?? (() => true);
   for (const folder of await deps.storage.listTrashedFolders()) {
+    if (!active()) return purged;
     if (gone.has(folder.id) || !expired(folder.deletedAt)) continue;
     try {
       const result = await deps.storage.purgeFolder(folder.id);
@@ -58,6 +62,7 @@ export async function purgeExpired(deps: RetentionDeps): Promise<PurgedEntity[]>
     }
   }
   for (const note of await deps.storage.listTrashedNotes()) {
+    if (!active()) return purged;
     if (!expired(note.deletedAt)) continue;
     try {
       await deps.storage.purgeNote(note.id);
@@ -106,9 +111,10 @@ export interface RetentionWorker {
  */
 export function startRetentionWorker(deps: RetentionDeps & { readonly intervalMs?: number }): RetentionWorker {
   let running: Promise<PurgedEntity[]> | null = null;
+  let stopped = false;
 
   const runNow = (): Promise<PurgedEntity[]> => {
-    running ??= purgeExpired(deps)
+    running ??= purgeExpired({ ...deps, active: () => !stopped && (deps.active?.() ?? true) })
       .catch((error: unknown) => {
         deps.onError?.(error);
         return [];
@@ -121,5 +127,12 @@ export function startRetentionWorker(deps: RetentionDeps & { readonly intervalMs
 
   void runNow();
   const timer = setInterval(() => void runNow(), deps.intervalMs ?? DAY_MS);
-  return { runNow, stop: () => clearInterval(timer) };
+  return {
+    runNow,
+    // Also ends a run in progress: nothing is purged once the vault is locked.
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }

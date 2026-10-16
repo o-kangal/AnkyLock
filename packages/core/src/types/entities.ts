@@ -65,8 +65,8 @@ export interface NoteContent {
 
 export type SyncEntityType = 'note' | 'folder' | 'category' | 'tombstone';
 
-/** Relay packet kinds (SPEC §5.2). */
-export type SyncPacketType = 'CRDT_DELTA' | 'HIERARCHY_MUTATION' | 'TOMBSTONE';
+/** Relay packet kinds (SPEC §5.2). `SYNC_REQUEST` is sent on connect and never queued. */
+export type SyncPacketType = 'CRDT_DELTA' | 'HIERARCHY_MUTATION' | 'TOMBSTONE' | 'SYNC_REQUEST';
 
 export interface SyncOutboxEntry {
   readonly id: number;

@@ -122,6 +122,26 @@ describe('OutboxQueue', () => {
     expect(await storage.listOutbox(10)).toEqual([]);
   });
 
+  it('delivers a packet submitted while the first drain after connecting runs (regression)', async () => {
+    // Startup: the backlog is unknown, so submits queue; the drain may see the outbox before the
+    // row is written. Slow down that write to force the order.
+    const enqueue = storage.enqueueOutbox.bind(storage);
+    let release!: () => void;
+    const written = new Promise<void>((resolve) => (release = resolve));
+    storage.enqueueOutbox = async (entry) => {
+      await written;
+      return enqueue(entry);
+    };
+    transport.online = true;
+    const submitting = queue.submit(packet('n1', 9));
+    await queue.drain();
+    release();
+    await submitting;
+    for (let i = 0; i < 50 && transport.sent.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(markers(transport.sent)).toEqual([9]);
+    expect(await storage.listOutbox(10)).toEqual([]);
+  });
+
   it('rebuilds packets from rows with this device as sender', async () => {
     await queue.submit(packet('n1', 5));
     transport.online = true;

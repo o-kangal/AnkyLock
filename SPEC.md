@@ -190,13 +190,15 @@ Binary frames exchanged between clients and the Rust Axum Blind Relay must confo
 ``` json
 {
   "protocol_version": 1,
-  "packet_type": "CRDT_DELTA | HIERARCHY_MUTATION | TOMBSTONE",
+  "packet_type": "CRDT_DELTA | HIERARCHY_MUTATION | TOMBSTONE | SYNC_REQUEST",
   "entity_id": "uuid-v4",
   "sender_device_id": "uuid-v4",
   "timestamp_ms": 1776100000000,
   "encrypted_envelope": "<base64(iv + ciphertext + tag)>"
 }
 ``` 
+
+The relay keeps no history. So that devices reconnecting at different times still converge, a device sends a `SYNC_REQUEST` on every (re)connect: its envelope seals the Yjs state vector of each note the device holds. Every other online device of the vault answers with what the requester lacks, as ordinary `CRDT_DELTA` packets (Yjs diffs) and one `HIERARCHY_MUTATION` carrying its hierarchy records and tombstones. Requests and answers are sent directly and never queued in `sync_outbox`.
 
 ---
 
