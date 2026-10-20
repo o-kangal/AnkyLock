@@ -1,9 +1,10 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Bytes, CategoryId, Ciphertext, EpochMs, FolderId, NoteId, SealedBytes, VaultId } from '@ankylock/core';
 import { createKeySealer, type Sealer } from '@ankylock/crypto';
-import { WebIndexedDbAdapter } from '@ankylock/storage';
+import { WebIndexedDbAdapter, type IStorageEngine } from '@ankylock/storage';
 import {
+  BACKUP_INTERVAL_MS,
   DriveError,
   GoogleDriveClient,
   TEXT_FIELD,
@@ -18,6 +19,7 @@ import {
   deleteVaultFromDrive,
   removeLegacyDriveFiles,
   syncHeaderFile,
+  trackChanges,
   vaultHeaderFileName,
   vaultSnapshotFileName,
   type BackupStatus,
@@ -286,6 +288,104 @@ describe('createSnapshotScheduler', () => {
     s.notifyIdle();
     await s.runNow();
     expect(uploads).toBe(2);
+  });
+});
+
+describe('periodic backups', () => {
+  /** `null`: the scheduler's default interval. */
+  function counting(intervalMs: number | null = 1_000) {
+    const drive = new MemoryDrive();
+    const upload = drive.upload.bind(drive);
+    let uploads = 0;
+    drive.upload = async (name, data) => {
+      uploads++;
+      await upload(name, data);
+    };
+    const s = createSnapshotScheduler({
+      drive,
+      createSnapshot: async () => new Uint8Array([1]) as SealedBytes,
+      snapshotFile: vaultSnapshotFileName(VAULT, DEVICE_A),
+      prepare: async () => null,
+      onStatus: () => undefined,
+      ...(intervalMs === null ? {} : { intervalMs }),
+    });
+    return { s, drive, uploads: () => uploads };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('backs up every interval, but only when something changed', async () => {
+    vi.useFakeTimers();
+    const { s, uploads } = counting();
+    s.start();
+    // A new scheduler starts out changed: nothing of this session is on Drive yet.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(uploads()).toBe(1);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(uploads()).toBe(1);
+    s.markChanged();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(uploads()).toBe(2);
+    s.stop();
+  });
+
+  it('waits five minutes by default', async () => {
+    vi.useFakeTimers();
+    const { s, uploads } = counting(null);
+    s.start();
+    await vi.advanceTimersByTimeAsync(BACKUP_INTERVAL_MS - 1);
+    expect(uploads()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(uploads()).toBe(1);
+    expect(BACKUP_INTERVAL_MS).toBe(5 * 60 * 1000);
+    s.stop();
+  });
+
+  it('keeps changes made during a backup for the next one', async () => {
+    const { s, drive } = counting();
+    const upload = drive.upload.bind(drive);
+    drive.upload = async (name, data) => {
+      s.markChanged();
+      await upload(name, data);
+    };
+    await s.runNow();
+    expect(s.hasChanges()).toBe(true);
+  });
+
+  it('runs only when changed, and a failure keeps the changes', async () => {
+    const { s, drive, uploads } = counting();
+    drive.failWith = new DriveError('network', null, 'offline');
+    expect(await s.runIfChanged()).toMatchObject({ kind: 'error' });
+    expect(s.hasChanges()).toBe(true);
+    drive.failWith = null;
+    expect(await s.runIfChanged()).toMatchObject({ kind: 'ok' });
+    expect(await s.runIfChanged()).toBeNull();
+    expect(uploads()).toBe(2);
+  });
+});
+
+describe('trackChanges', () => {
+  it('reports writes to vault data, not reads or sync bookkeeping', async () => {
+    let changes = 0;
+    const calls: string[] = [];
+    const fake = new Proxy({} as IStorageEngine, {
+      get: (_t, property) => async () => void calls.push(String(property)),
+    });
+    const tracked = trackChanges(fake, () => changes++);
+    await tracked.listFolders();
+    await tracked.getSyncState();
+    await tracked.enqueueOutbox({} as never);
+    await tracked.deleteOutbox([1]);
+    await tracked.setSyncState({} as never);
+    expect(changes).toBe(0);
+    await tracked.saveNoteContent({} as never);
+    await tracked.mergeRecords({});
+    await tracked.setTrashRetentionDays(7);
+    await tracked.setVaultName('x' as Ciphertext, NOW);
+    expect(changes).toBe(4);
+    expect(calls).toHaveLength(9);
   });
 });
 

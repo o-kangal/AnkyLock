@@ -7,6 +7,7 @@ import { createWebAuthTransport } from './auth/webGoogleAuth.js';
 import { AnkyLockApp } from './components/AnkyLockApp.jsx';
 import { UpdateBanner } from './pwa/UpdateBanner.jsx';
 import { watchForUpdates } from './pwa/updates.js';
+import { guardPageClose } from './runtime/closeGuard.js';
 import { createRuntime } from './runtime/createRuntime.js';
 
 /**
@@ -30,7 +31,9 @@ export function App(): JSX.Element {
     ...(auth ? { auth, relayUrl: import.meta.env.VITE_RELAY_URL ?? 'ws://127.0.0.1:8787/ws' } : {}),
     onError: (message) => console.error(message),
   });
+  const closeGuard = guardPageClose(runtime);
   onCleanup(() => {
+    closeGuard.dispose();
     auth?.dispose();
     sealer.dispose();
     worker.terminate();
@@ -43,6 +46,8 @@ export function App(): JSX.Element {
       .register('/sw.js')
       .then((registration) =>
         watchForUpdates(navigator.serviceWorker, registration, (activate) => setActivateUpdate(() => activate), () => {
+          // Edits were saved before activating (beforeReload); a reload is not leaving the app.
+          closeGuard.release();
           window.location.reload();
         }),
       )

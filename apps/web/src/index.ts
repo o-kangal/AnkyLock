@@ -13,6 +13,7 @@ export { Workspace } from './components/Workspace.jsx';
 export { tokens } from './components/sidebar/styles.js';
 export { applyColorScheme, initialColorScheme } from './theme/colorScheme.js';
 export { shortcutLabel, workspaceCommand, type Platform, type WorkspaceCommand } from './keyboard/shortcuts.js';
+export { CLOSE_BACKUP_WAIT_MS } from './runtime/closeGuard.js';
 export {
   createRuntime,
   MAX_VAULT_NAME_LENGTH,

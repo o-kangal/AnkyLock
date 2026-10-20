@@ -37,6 +37,7 @@ import {
   loadNoteState,
   persistDoc,
   startRetentionWorker,
+  trackChanges,
   type AuthSession,
   type AuthState,
   type BackupStatus,
@@ -140,6 +141,13 @@ export interface Runtime {
   keepLocalOnly(): Promise<void>;
   /** Backs up a local-only vault to Google Drive again, as a vault of its own. */
   backUpAgain(): Promise<void>;
+  /** Backups are on and the vault changed since the last successful one. */
+  hasUnbackedChanges(): boolean;
+  /**
+   * Before the app closes: saves pending edits, then backs up if anything is not on Drive yet,
+   * waiting at most `waitMs`. `clean`: nothing to back up (or backups are off).
+   */
+  backUpBeforeClose(waitMs: number): Promise<'clean' | 'ok' | 'failed' | 'timeout'>;
 }
 
 const LOCK_BACKUP_WAIT_MS = 5_000;
@@ -364,7 +372,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // `signing-in` and `stale` keep a running sync: its live connection still works.
   });
 
-  async function start(opened: IStorageEngine, id: VaultId, header: string): Promise<string | null> {
+  async function start(vaultStorage: IStorageEngine, id: VaultId, header: string): Promise<string | null> {
+    // Every write to vault data, local or from another device, is due for the next backup.
+    const opened = trackChanges(vaultStorage, () => scheduler?.markChanged());
     await sealer.setKey(vault.getKey());
     const nameCiphertext = await opened.getVaultName();
     const deviceOfVault = await opened.getDeviceId();
@@ -427,7 +437,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     retention = null;
     await Promise.all(docs.openNoteIds().map(closeDoc));
     // A last backup, so other devices can catch up on this session; never blocks locking long.
-    if (backup && scheduler) {
+    if (backup && scheduler?.hasChanges()) {
       await Promise.race([scheduler.runNow(), new Promise((resolve) => setTimeout(resolve, LOCK_BACKUP_WAIT_MS))]);
     }
     await stopSync();
@@ -591,6 +601,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         const doc = docs.open(noteId, await loadNoteState({ storage: vaultStorage, sealer }, noteId));
         doc.on('update', (_update: Uint8Array, origin: unknown) => {
           if (origin !== REMOTE_ORIGIN) edited.add(noteId);
+          // Counted before the debounced save, so closing right after typing still warns.
+          scheduler?.markChanged();
         });
         persisters.set(
           noteId,
@@ -631,6 +643,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     async syncNow() {
       await runCatchUp();
       await scheduler?.runNow();
+    },
+
+    hasUnbackedChanges: () => scheduler?.hasChanges() ?? false,
+
+    async backUpBeforeClose(waitMs) {
+      await Promise.all([...persisters.values()].map((persister) => persister.flush()));
+      if (!scheduler?.hasChanges()) return 'clean';
+      const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), waitMs));
+      const result = await Promise.race([scheduler.runNow(), timeout]);
+      return result === 'timeout' ? result : result.kind === 'ok' ? 'ok' : 'failed';
     },
 
     isEmptyAndUnmodified(noteId) {

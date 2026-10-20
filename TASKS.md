@@ -624,6 +624,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12e: Periodic Drive Backup & Close Guard
+- **Status:** ✅ Completed (2026-10-20)
 - **Type:** Backend/Service
 - **Read-Only Context Files:** `packages/sync/src/backup/snapshotScheduler.ts`, `apps/web/src/runtime/createRuntime.ts`
 - **Target Files (Create/Modify):**
