@@ -698,6 +698,26 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
+### Task 12h: Remove a Locked Vault from the Vault Picker
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `packages/storage/src/interfaces/IStorageEngine.ts`, `packages/sync/src/backup/vaultCatalog.ts`, `apps/web/src/components/VaultSettings.tsx`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/web/src/components/UnlockScreen.tsx`
+  - `apps/web/tests/vaultManagement.test.tsx`
+- **Step-by-Step Instructions:**
+  1. In the vault picker, let the user remove a vault on this device without unlocking it, e.g. one whose passphrase is forgotten. The name is encrypted while locked, so name the vault by its label (creation date) and confirm by typing `DELETE`.
+  2. Offer "Remove from this device" and, when the vault has a copy in Google Drive (its sync state says so), "Delete everywhere", which also deletes its header and every device's backup from Drive (`deleteVaultFromDrive`). Deleting from Drive needs Google sign-in but never the passphrase; Drive files are deleted first, then the local copy.
+  3. Say plainly that without the passphrase the notes cannot be recovered or exported first, and that removing from this device only keeps the Drive copy for "Use my existing vault".
+  4. In "Use my existing vault", let the user delete a vault from Drive the same way, so a forgotten vault does not stay there forever. Other devices see it as deleted (11i).
+  5. Test removing locked vaults (this device only, and everywhere), that nothing is removed without the typed confirmation, and deleting a vault from the Drive list.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 13: Production Release (Web, Relay & Desktop Distribution)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
@@ -769,5 +789,6 @@ Task 1 (Workspace & Config)
                            ├──► Task 12e (Periodic Backup & Close Guard)
                            ├──► Task 12f (Export with Optional Zip Password)
                            ├──► Task 12g (Delete All Drive Data)
-                           └──► Task 13 (Production Release, after 12c–12g)
+                           ├──► Task 12h (Remove a Locked Vault from the Picker)
+                           └──► Task 13 (Production Release, after 12c–12h)
 ``` 
