@@ -9,12 +9,13 @@ use tauri::Manager;
 
 use crate::commands::oauth::{GoogleAuth, KeychainStore, OAuthClient};
 use crate::commands::vaults::{self, Vaults};
-use crate::commands::{categories, folders, links, notes, oauth, outbox, settings, sync};
+use crate::commands::{categories, export, folders, links, notes, oauth, outbox, settings, sync};
 use crate::db::pool::DbPool;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(GoogleAuth { client: OAuthClient::from_build_env(), store: Box::new(KeychainStore) })
         .manage(DbPool::default())
         .setup(|app| {
@@ -70,6 +71,7 @@ fn main() {
             sync::sync_list_tombstones,
             sync::sync_merge_records,
             sync::sync_detach_folders,
+            export::export_save,
             links::link_open,
             oauth::oauth_sign_in,
             oauth::oauth_restore,

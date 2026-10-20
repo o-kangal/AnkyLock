@@ -51,6 +51,8 @@ import {
   type SocketLike,
   type SyncEngine,
 } from '@ankylock/sync';
+import { runExportInWorker, type ExportFile, type ExportJob } from '../export/exportNotes.js';
+import { planExport, type ExportScope } from '../export/exportPlan.js';
 import { createWorkspaceStore, type PurgedItem, type WorkspaceStore } from '../stores/workspaceStore.js';
 
 export type VaultStatus = 'loading' | 'uninitialized' | 'locked' | 'unlocked';
@@ -68,6 +70,8 @@ export interface RuntimeOptions {
   /** Test seams for the relay socket and Drive's HTTP client. */
   readonly createSocket?: (url: string, protocols: string[]) => SocketLike;
   readonly driveFetch?: typeof fetch;
+  /** Test seam: builds an export without a Web Worker. */
+  readonly runExport?: (job: ExportJob) => Promise<ExportFile>;
 }
 
 /** Shown in the status bar; never blocks local work (SPEC §7). */
@@ -141,6 +145,12 @@ export interface Runtime {
   keepLocalOnly(): Promise<void>;
   /** Backs up a local-only vault to Google Drive again, as a vault of its own. */
   backUpAgain(): Promise<void>;
+  /**
+   * Builds an unencrypted export of a note, a folder or the whole open vault (Trash left out),
+   * optionally as an AES-256 protected zip. Decrypting happens in the crypto worker and building
+   * the file in the export worker; the file only goes where the user saves it.
+   */
+  exportNotes(scope: ExportScope, password: string | null): Promise<ExportFile>;
   /** Backups are on and the vault changed since the last successful one. */
   hasUnbackedChanges(): boolean;
   /**
@@ -643,6 +653,19 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     async syncNow() {
       await runCatchUp();
       await scheduler?.runNow();
+    },
+
+    async exportNotes(scope, password) {
+      const vaultStorage = openStorage();
+      // Pending edits first, so the export has what the user sees.
+      await Promise.all([...persisters.values()].map((persister) => persister.flush()));
+      const date = new Date().toISOString().slice(0, 10);
+      const plan = planExport(openStore().state, scope, vaultName(), date);
+      const items = await Promise.all(
+        plan.items.map(async (item) => ({ dir: item.dir, state: (await loadNoteState({ storage: vaultStorage, sealer }, item.noteId)) ?? null })),
+      );
+      const job: ExportJob = { archiveName: plan.archiveName, single: plan.single, dirs: plan.dirs, items, password };
+      return (options.runExport ?? runExportInWorker)(job);
     },
 
     hasUnbackedChanges: () => scheduler?.hasChanges() ?? false,

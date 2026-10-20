@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { createSignal, Match, onCleanup, Switch, type JSX } from 'solid-js';
-import { createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
+import { bytesToBase64, createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { TauriVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
@@ -44,6 +44,8 @@ export function App(): JSX.Element {
           platform="desktop"
           // The host checks the scheme again and hands the link to the system browser.
           openLink={(url) => void invoke('link_open', { url }).catch((error: unknown) => console.error(error))}
+          // Native save dialog; the host writes the file where the user picks.
+          saveFile={(file) => invoke<boolean>('export_save', { file: { name: file.name, bytes: bytesToBase64(file.bytes) } })}
         />
       </div>
       <CloseDialog state={closing()} guard={closeGuard} />

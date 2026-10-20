@@ -69,6 +69,9 @@ importers:
       '@ankylock/sync':
         specifier: workspace:*
         version: link:../../packages/sync
+      '@zip.js/zip.js':
+        specifier: 2.23.0
+        version: 2.23.0
       solid-js:
         specifier: 1.9.17
         version: 1.9.17
@@ -645,6 +648,10 @@ packages:
 
   '@vitest/spy@5.0.4':
     resolution: {integrity: sha512-MZKk/gSkm2q+ICobMxCpH1mA+cCAWm8WV7UhxlqGjq/sJ3AGc1BqFOs5CRVXxH78wQtme9q/NAAgBquj4AcyMw==}
+
+  '@zip.js/zip.js@2.23.0':
+    resolution: {integrity: sha512-K5obAqfrO7zhycnCupM9aaoZ9kx0SA0kv7+Z2oOUsdpWquv4s/Z4zyD7AdTqxrK3pgPM+ozaUi8kdRQbCWaIrQ==}
+    engines: {bun: '>=0.7.0', deno: '>=1.0.0', node: '>=18.0.0'}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -1527,6 +1534,8 @@ snapshots:
       vite: 8.3.4
 
   '@vitest/spy@5.0.4': {}
+
+  '@zip.js/zip.js@2.23.0': {}
 
   assertion-error@2.0.1: {}
 

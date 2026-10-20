@@ -1,0 +1,5 @@
+# Saving exports: the native save dialog, then a write of the bytes the frontend built.
+[[set]]
+identifier = "export"
+description = "Save exported notes where the user picks with the native save dialog."
+permissions = ["allow-export-save"]

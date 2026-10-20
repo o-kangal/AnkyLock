@@ -1,6 +1,8 @@
 import { createSignal, For, Show, type JSX } from 'solid-js';
 import { ok, type CategoryId, type FolderId, type Result } from '@ankylock/core';
 import { canDrop, type DragItem, type DropTarget } from '../../dnd/dragDropManager.js';
+import type { ExportScope } from '../../export/exportPlan.js';
+import { useExport } from '../../export/saveFile.js';
 import type { WorkspaceState, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { TOUCH_TARGET_PX, touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { Popover } from '../Popover.jsx';
@@ -15,6 +17,8 @@ export interface MenuAction {
   readonly run: (value: string) => Promise<Result<void>>;
   /** Actions that pick a destination ("Move to…") list their choices first. */
   readonly choices?: readonly MoveChoice[];
+  /** "Export…" opens the export dialog for this scope instead of running. */
+  readonly export?: { readonly scope: ExportScope; readonly label: string };
 }
 
 /** A destination in the "Move to…" list; `depth` indents folders under their parents. */
@@ -71,6 +75,12 @@ const moveTo = (choices: MoveChoice[]): MenuAction => ({
 /** What a menu was opened on: a tree row, a custom category, or the empty tree area / its "+" button. */
 export type MenuTarget = DragItem | { readonly kind: 'category'; readonly id: CategoryId } | { readonly kind: 'root' };
 
+const exportAction = (scope: ExportScope, label: string): MenuAction => ({
+  label: 'Export…',
+  export: { scope, label },
+  run: () => Promise.resolve(ok(undefined)),
+});
+
 const newFolder = (run: (name: string) => Promise<Result<void>>): MenuAction => ({
   label: 'New folder',
   input: { placeholder: 'Folder name', initial: '' },
@@ -109,7 +119,8 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
       ];
     }
     const trash: MenuAction = { label: 'Move to Trash', run: () => store.trashFolder(folder.id) };
-    if (folder.isArchived) return [{ label: 'Unarchive', run: () => store.unarchiveFolder(folder.id) }, trash];
+    const exportFolder = exportAction({ kind: 'folder', id: folder.id }, `“${folder.name}”`);
+    if (folder.isArchived) return [{ label: 'Unarchive', run: () => store.unarchiveFolder(folder.id) }, exportFolder, trash];
     return [
       {
         label: 'New subfolder',
@@ -119,6 +130,7 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
       { label: 'Rename', input: { placeholder: 'Folder name', initial: folder.name }, run: (name) => store.renameFolder(folder.id, name) },
       ...(move ? [moveTo(moveChoices(state, store, { kind: 'folder', id: folder.id }, move))] : []),
       { label: 'Archive', run: () => store.archiveFolder(folder.id) },
+      exportFolder,
       trash,
     ];
   }
@@ -132,12 +144,13 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
     ];
   }
   const trash: MenuAction = { label: 'Move to Trash', run: () => store.trashNote(note.id) };
-  if (note.isArchived) return [{ label: 'Unarchive', run: () => store.setNoteArchived(note.id, false) }, trash];
+  const exportNote = exportAction({ kind: 'note', id: note.id }, `“${note.title ?? 'Untitled'}”`);
+  if (note.isArchived) return [{ label: 'Unarchive', run: () => store.setNoteArchived(note.id, false) }, exportNote, trash];
   const moves = move ? [moveTo(moveChoices(state, store, { kind: 'note', id: note.id }, move))] : [];
   // Scratchpads must be filed into a folder or category before they can be archived (SPEC §3).
   return note.isEphemeral
-    ? [...moves, trash]
-    : [...moves, { label: 'Archive', run: () => store.setNoteArchived(note.id, true) }, trash];
+    ? [...moves, exportNote, trash]
+    : [...moves, { label: 'Archive', run: () => store.setNoteArchived(note.id, true) }, exportNote, trash];
 }
 
 export interface ContextMenuProps {
@@ -167,6 +180,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
   const [value, setValue] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const narrow = useNarrowScreen();
+  const openExport = useExport();
   const itemStyle = (): JSX.CSSProperties =>
     narrow() ? { ...baseItemStyle, 'min-height': `${TOUCH_TARGET_PX}px`, 'font-size': '16px' } : baseItemStyle;
 
@@ -178,6 +192,11 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
 
   const choose = (action: MenuAction): void => {
     setError(null);
+    if (action.export) {
+      props.onClose();
+      openExport?.(action.export.scope, action.export.label);
+      return;
+    }
     if (action.input || action.choices || (action.confirm && pending() !== action)) {
       setPending(action);
       setValue(action.input?.initial ?? '');
@@ -194,7 +213,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
       width={200}
       style={{ padding: '4px 0' }}
     >
-      <For each={menuActions(props.store.state, props.store, props.item, props.move)}>
+      <For each={menuActions(props.store.state, props.store, props.item, props.move).filter((a) => !a.export || openExport)}>
         {(action) => (
           <>
             <button

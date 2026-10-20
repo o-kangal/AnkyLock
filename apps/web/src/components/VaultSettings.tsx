@@ -1,6 +1,7 @@
 import { createSignal, For, Match, Show, Switch, useContext, type JSX } from 'solid-js';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
+import { useExport } from '../export/saveFile.js';
 import { THEME_CHOICES, ThemeContext } from '../theme/colorScheme.js';
 import { tokens } from './sidebar/styles.js';
 import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
@@ -30,6 +31,7 @@ export function VaultSettings(props: {
 }): JSX.Element {
   const narrow = useNarrowScreen();
   const theme = useContext(ThemeContext);
+  const openExport = useExport();
   const field = (): JSX.CSSProperties => touchSized(baseField, narrow());
   const button = (): JSX.CSSProperties => ({ ...field(), cursor: 'pointer', 'text-align': 'left' });
   const danger = (): JSX.CSSProperties => ({ ...button(), color: tokens.danger });
@@ -104,6 +106,21 @@ export function VaultSettings(props: {
             <button type="button" disabled={busy() || !signedIn()} style={button()} onClick={() => void props.runtime.backUpAgain().then(props.onClose)}>
               Back up to Google Drive again
             </button>
+          </Show>
+          <Show when={openExport}>
+            {(open) => (
+              <button
+                type="button"
+                disabled={busy()}
+                style={button()}
+                onClick={() => {
+                  props.onClose();
+                  open()({ kind: 'vault' }, `the vault “${displayName()}”`);
+                }}
+              >
+                Export vault…
+              </button>
+            )}
           </Show>
           <Show when={theme}>
             {(current) => (

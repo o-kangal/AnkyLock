@@ -7,6 +7,9 @@ import { useNarrowScreen } from '../layout/screen.js';
 import { createWordWrapPreference } from '../preferences/devicePreferences.js';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { useTheme } from '../theme/colorScheme.js';
+import type { ExportScope } from '../export/exportPlan.js';
+import { ExportContext } from '../export/saveFile.js';
+import { ExportDialog } from './ExportDialog.jsx';
 import { Sidebar } from './sidebar/Sidebar.jsx';
 import { SyncStatusBar } from './SyncStatusBar.jsx';
 import { tokens } from './sidebar/styles.js';
@@ -33,6 +36,7 @@ export function Workspace(props: {
   const narrow = useNarrowScreen();
   /** On narrow screens the sidebar is a drawer over the editor. */
   const [drawer, setDrawer] = createSignal(false);
+  const [exporting, setExporting] = createSignal<{ scope: ExportScope; label: string } | null>(null);
   const activeId = (): NoteId | undefined => store.state.tabs[store.state.activeTabIndex]?.noteId;
   const [doc, setDoc] = createSignal<{ readonly id: NoteId; readonly doc: Y.Doc } | null>(null);
 
@@ -103,70 +107,75 @@ export function Workspace(props: {
       : { 'min-width': '0' };
 
   return (
-    <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%', font: tokens.font }}>
-      {/* The single row takes exactly the space above the status bar; content scrolls inside it. */}
-      <div
-        style={{
-          position: 'relative',
-          display: 'grid',
-          'grid-template-columns': narrow() ? 'minmax(0, 1fr)' : '260px minmax(0, 1fr)',
-          'grid-template-rows': 'minmax(0, 1fr)',
-          flex: '1',
-          'min-height': '0',
-        }}
-      >
-        <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? 'Navigation' : undefined} style={sidebarStyle()}>
-          <Sidebar store={store} />
-        </div>
-        <Show when={narrow() && drawer()}>
-          <div
-            data-testid="drawer-backdrop"
-            aria-hidden="true"
-            style={{ position: 'absolute', inset: '0', 'z-index': '1', background: tokens.overlay }}
-            onClick={() => setDrawer(false)}
-          />
-        </Show>
-        <section style={{ display: 'flex', 'flex-direction': 'column', 'min-width': '0' }}>
-          <TabBar
-            store={store}
-            isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)}
-            compact={narrow()}
-            {...(narrow() ? { onOpenNavigation: () => setDrawer(true) } : {})}
-          />
-          <div style={{ flex: '1', 'min-height': '0' }}>
-            <Show
-              when={doc()}
-              fallback={
-                <div style={{ display: 'grid', 'place-items': 'center', height: '100%', color: tokens.muted }}>
-                  {narrow()
-                    ? 'Tap + to open a new scratchpad.'
-                    : `Press ${shortcutLabel('new-tab', props.platform)} to open a new scratchpad.`}
-                </div>
-              }
-            >
-              {(open) => (
-                <CodeMirrorView
-                  doc={open().doc}
-                  active={true}
-                  autoFocus={true}
-                  readOnly={store.state.notes[open().id]?.deletedAt != null}
-                  colorScheme={theme.scheme()}
-                  wordWrap={wrap.wordWrap()}
-                  fontSize={narrow() ? 16 : 13}
-                  links={{ modifier: linkModifier(), open: (url) => (props.openLink ?? openInNewTab)(url) }}
-                  onTitleChange={(title) => store.setTitle(open().id, title)}
-                />
-              )}
-            </Show>
+    <ExportContext.Provider value={(scope, label) => setExporting({ scope, label })}>
+      <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%', font: tokens.font }}>
+        {/* The single row takes exactly the space above the status bar; content scrolls inside it. */}
+        <div
+          style={{
+            position: 'relative',
+            display: 'grid',
+            'grid-template-columns': narrow() ? 'minmax(0, 1fr)' : '260px minmax(0, 1fr)',
+            'grid-template-rows': 'minmax(0, 1fr)',
+            flex: '1',
+            'min-height': '0',
+          }}
+        >
+          <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? 'Navigation' : undefined} style={sidebarStyle()}>
+            <Sidebar store={store} />
           </div>
-        </section>
+          <Show when={narrow() && drawer()}>
+            <div
+              data-testid="drawer-backdrop"
+              aria-hidden="true"
+              style={{ position: 'absolute', inset: '0', 'z-index': '1', background: tokens.overlay }}
+              onClick={() => setDrawer(false)}
+            />
+          </Show>
+          <section style={{ display: 'flex', 'flex-direction': 'column', 'min-width': '0' }}>
+            <TabBar
+              store={store}
+              isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)}
+              compact={narrow()}
+              {...(narrow() ? { onOpenNavigation: () => setDrawer(true) } : {})}
+            />
+            <div style={{ flex: '1', 'min-height': '0' }}>
+              <Show
+                when={doc()}
+                fallback={
+                  <div style={{ display: 'grid', 'place-items': 'center', height: '100%', color: tokens.muted }}>
+                    {narrow()
+                      ? 'Tap + to open a new scratchpad.'
+                      : `Press ${shortcutLabel('new-tab', props.platform)} to open a new scratchpad.`}
+                  </div>
+                }
+              >
+                {(open) => (
+                  <CodeMirrorView
+                    doc={open().doc}
+                    active={true}
+                    autoFocus={true}
+                    readOnly={store.state.notes[open().id]?.deletedAt != null}
+                    colorScheme={theme.scheme()}
+                    wordWrap={wrap.wordWrap()}
+                    fontSize={narrow() ? 16 : 13}
+                    links={{ modifier: linkModifier(), open: (url) => (props.openLink ?? openInNewTab)(url) }}
+                    onTitleChange={(title) => store.setTitle(open().id, title)}
+                  />
+                )}
+              </Show>
+            </div>
+          </section>
+        </div>
+        <SyncStatusBar
+          runtime={props.runtime}
+          wordWrap={{ on: wrap.wordWrap, toggle: wrap.toggle, shortcut: shortcutLabel('toggle-wrap', props.platform) }}
+          theme={theme}
+          compact={narrow()}
+        />
       </div>
-      <SyncStatusBar
-        runtime={props.runtime}
-        wordWrap={{ on: wrap.wordWrap, toggle: wrap.toggle, shortcut: shortcutLabel('toggle-wrap', props.platform) }}
-        theme={theme}
-        compact={narrow()}
-      />
-    </div>
+      <Show when={exporting()}>
+        {(open) => <ExportDialog runtime={props.runtime} scope={open().scope} label={open().label} onClose={() => setExporting(null)} />}
+      </Show>
+    </ExportContext.Provider>
   );
 }

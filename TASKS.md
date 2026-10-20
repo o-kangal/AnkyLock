@@ -648,22 +648,26 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
-### Task 12f: Unencrypted Export (Note, Folder, Vault)
+### Task 12f: Export (Note, Folder, Vault) with Optional Zip Password
+- **Status:** ✅ Completed (2026-10-20)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/storage/src/interfaces/IStorageEngine.ts`, `apps/web/src/components/sidebar/ContextMenu.tsx`
 - **Target Files (Create/Modify):**
   - `apps/web/src/export/exportNotes.ts`
   - `apps/web/src/export/exportWorker.ts`
+  - `apps/web/src/components/ExportDialog.tsx`
   - `apps/web/src/components/sidebar/ContextMenu.tsx`
   - `apps/web/src/components/VaultSettings.tsx`
   - `apps/desktop/src/App.tsx`
+  - `apps/desktop/src-tauri/src/commands/export.rs`
   - `apps/web/tests/exportNotes.test.ts`
 - **Step-by-Step Instructions:**
   1. Export a single note as a file named after its title (`.txt`, or `.md` when the title says so). Export a folder (with its subfolders) or the whole vault as a `.zip` that keeps the category and folder structure as directories. Include archived items, exclude Trash.
-  2. Before every export, warn that the files will be written unencrypted and stay outside AnkyLock's protection, and ask for confirmation.
-  3. Make file names safe and unique on every OS: strip reserved characters, avoid reserved names, and add ` (2)` for duplicates.
-  4. Decrypt and build the zip in a Web Worker. Save with the native save dialog on desktop and as a download on the web. Nothing leaves the device.
-  5. Test the names, the structure, Trash exclusion and that nothing is exported without confirmation.
+  2. Before every export, warn that the files leave AnkyLock's protection, and ask for confirmation.
+  3. Offer "Protect with a password (AES-256)", off by default: the zip is encrypted with WinZip AES-256 (never the weak legacy ZipCrypto), and a protected single note comes as a zip too. Ask for the password twice (at least 8 characters) and say plainly that opening it needs a tool such as 7-Zip (the built-in Windows and macOS zip tools usually cannot) and that file and folder names inside stay readable.
+  4. Make file names safe and unique on every OS: strip reserved characters, avoid reserved names, and add ` (2)` for duplicates.
+  5. Decrypt and build the zip in a Web Worker. Save with the native save dialog on desktop and as a download on the web. Nothing leaves the device.
+  6. Test the names, the structure, Trash exclusion, that a protected zip opens only with its password, and that nothing is exported without confirmation.
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && bash .claude/skills/crypto-audit/scripts/scan.sh apps/web/src/export
@@ -762,7 +766,7 @@ Task 1 (Workspace & Config)
                            ├──► Task 12c (Light/Dark Theme & Sidebar Rows)
                            │       └──► Task 12d (Clickable Links)
                            ├──► Task 12e (Periodic Backup & Close Guard)
-                           ├──► Task 12f (Unencrypted Export)
+                           ├──► Task 12f (Export with Optional Zip Password)
                            ├──► Task 12g (Delete All Drive Data)
                            └──► Task 13 (Production Release, after 12c–12g)
 ``` 

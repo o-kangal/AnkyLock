@@ -264,7 +264,7 @@ describe('workspace', () => {
     folderRow.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }));
     await waitFor(() => document.querySelector('[role="menu"]') !== null, 'menu');
     const labels = Array.from(document.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['New subfolder', 'Rename', 'Move to…', 'Archive', 'Move to Trash']);
+    expect(labels).toEqual(['New subfolder', 'Rename', 'Move to…', 'Archive', 'Export…', 'Move to Trash']);
     (Array.from(document.querySelectorAll('[role="menuitem"]')).find((b) => b.textContent === 'Archive') as HTMLElement).click();
     await waitFor(() => runtime.store.state.folders[0]?.isArchived === true, 'archived');
     expect(document.querySelector('[role="menu"]')).toBeNull();
@@ -483,6 +483,7 @@ describe('menuActions', () => {
     const { store } = setup();
     await store.createTab();
     expect(menuActions(store.state, store, { kind: 'note', id: 'id-1' as NoteId }).map((a) => a.label)).toEqual([
+      'Export…',
       'Move to Trash',
     ]);
   });
