@@ -25,6 +25,7 @@ import {
   createCatchUp,
   createSnapshotScheduler,
   createSyncEngine,
+  deleteAllFromDrive,
   deleteVaultFromDrive,
   downloadSnapshots,
   exportSnapshot,
@@ -145,6 +146,13 @@ export interface Runtime {
   keepLocalOnly(): Promise<void>;
   /** Backs up a local-only vault to Google Drive again, as a vault of its own. */
   backUpAgain(): Promise<void>;
+  /**
+   * Leaves AnkyLock's Google Drive: stops sync and backups, deletes every vault's files from
+   * Drive, then revokes the Google grant and signs out. Notes on this device stay; the open vault
+   * becomes local-only. Resolves with an error message (what remains, so it can be retried), or
+   * null; access is never revoked while files remain.
+   */
+  deleteAllDriveData(): Promise<string | null>;
   /**
    * Builds an unencrypted export of a note, a folder or the whole open vault (Trash left out),
    * optionally as an AES-256 protected zip. Decrypting happens in the crypto worker and building
@@ -564,6 +572,29 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       await saveSyncState({ localOnly: false, headerOnDrive: false });
       updateSync({ vaultDrive: 'ok' });
       startSync();
+    },
+
+    async deleteAllDriveData() {
+      if (!auth || !drive) return 'Google sign-in is not available in this app.';
+      if (auth.state().kind !== 'signed-in') return 'Sign in with Google to delete your data from Google Drive.';
+      try {
+        // Sync stays off from here on: a backup now would put files back into Drive.
+        await stopSync();
+        const { remaining } = await deleteAllFromDrive(drive);
+        if (remaining > 0) {
+          return `${remaining} file(s) could not be deleted from Google Drive. Sync is paused; try again.`;
+        }
+        if (syncState) {
+          await saveSyncState({ localOnly: true, headerOnDrive: false });
+          updateSync({ vaultDrive: 'local-only', backup: { kind: 'never' } });
+        }
+      } catch (error) {
+        return `Could not delete your data from Google Drive: ${message(error)} Sync is paused; try again.`;
+      }
+      const failure = await auth.revokeAndSignOut();
+      return failure === null
+        ? null
+        : `Your data was deleted from Google Drive, but AnkyLock's Google access could not be revoked: ${failure} Try again, or remove AnkyLock from your Google Account's third-party access.`;
     },
 
     async findRemoteVaults() {

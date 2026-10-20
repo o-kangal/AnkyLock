@@ -133,15 +133,22 @@ export class FakeDrive {
 
 export const PASSPHRASE = 'correct horse battery';
 
-/** Google sign-in that always succeeds, without a network. */
-export function fakeGoogle(): AuthTransport & { signedOut: number } {
+/** Google sign-in that always succeeds, without a network; revoking fails while `failRevoke` is set. */
+export function fakeGoogle(): AuthTransport & { signedOut: number; failRevoke: boolean; calls: string[] } {
   const t = {
     signedOut: 0,
+    failRevoke: false,
+    calls: [] as string[],
     signIn: async () => ({ idToken: 'id-token', accessToken: 'access-token', expiresAt: (Date.now() + 3_600_000) as EpochMs }),
     restore: async () => null,
     refresh: () => Promise.reject(new AuthError('ERR_AUTH_EXPIRED', 'expired')),
     signOut: async () => {
       t.signedOut++;
+      t.calls.push('signOut');
+    },
+    revoke: async () => {
+      t.calls.push('revoke');
+      if (t.failRevoke) throw new AuthError('ERR_NETWORK', 'Google is unreachable.');
     },
   };
   return t;

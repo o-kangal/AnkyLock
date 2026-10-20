@@ -10,7 +10,8 @@ const b64url = (value: object): string =>
 const jwt = (claims: object): string => `${b64url({ alg: 'RS256' })}.${b64url(claims)}.sig`;
 
 /** Fakes the popup and the callback channel; `respond` plays Google redirecting back. */
-function harness() {
+function harness(revokeResponse: () => Promise<Response> = async () => new Response('')) {
+  const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => revokeResponse());
   const storage = new Map<string, string>();
   const popup = { closed: false, close: vi.fn(() => void (popup.closed = true)) };
   let channel: ChannelLike | null = null;
@@ -29,7 +30,7 @@ function harness() {
       setItem: (k, v) => void storage.set(k, v),
       removeItem: (k) => void storage.delete(k),
     },
-    fetch: vi.fn(async () => new Response('')),
+    fetch,
     now: () => NOW as EpochMs,
     pollMs: 10,
   });
@@ -46,7 +47,7 @@ function harness() {
     id_token: jwt({ aud: CLIENT_ID, iss: 'https://accounts.google.com', nonce: params().get('nonce'), email: 'me@example.com' }),
     ...overrides,
   });
-  return { transport, popup, storage, params, respond, valid };
+  return { transport, popup, storage, params, respond, valid, fetch };
 }
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] }));
@@ -113,5 +114,21 @@ describe('createWebAuthTransport', () => {
     await signingIn;
     await h.transport.signOut();
     expect(h.storage.size).toBe(0);
+  });
+
+  it('revokes strictly: a failed revocation throws and keeps the token for a retry', async () => {
+    let status = 503;
+    const h = harness(async () => new Response('', { status }));
+    const signingIn = h.transport.signIn();
+    h.respond(h.valid());
+    await signingIn;
+    await expect(h.transport.revoke()).rejects.toMatchObject({ code: 'ERR_AUTH' });
+    status = 200;
+    await h.transport.revoke();
+    expect(h.fetch).toHaveBeenCalledTimes(2);
+    expect(String(h.fetch.mock.calls[1]?.[1]?.body)).toBe('token=drive-token');
+    // Already revoked: signing out has nothing left to revoke.
+    await h.transport.signOut();
+    expect(h.fetch).toHaveBeenCalledTimes(2);
   });
 });

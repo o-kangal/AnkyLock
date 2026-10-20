@@ -20,6 +20,7 @@ function transport(overrides: Partial<AuthTransport> = {}): AuthTransport & { re
       return tokens(++n, Date.now() + HOUR);
     },
     signOut: async () => undefined,
+    revoke: async () => undefined,
     ...overrides,
   };
   return t;
@@ -104,6 +105,28 @@ describe('createAuthSession', () => {
     await session.signOut();
     expect(session.state()).toEqual({ kind: 'signed-out' });
     expect(signOut).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('revokes the grant before signing out, and stays signed in when revoking fails', async () => {
+    const calls: string[] = [];
+    let fail = true;
+    const session = createAuthSession(
+      transport({
+        revoke: async () => {
+          calls.push(`revoke:${session.state().kind}`);
+          if (fail) throw new AuthError('ERR_NETWORK', 'Google is unreachable.');
+        },
+        signOut: async () => void calls.push('signOut'),
+      }),
+    );
+    await session.signIn();
+    expect(await session.revokeAndSignOut()).toBe('Google is unreachable.');
+    expect(session.state().kind).toBe('signed-in');
+    fail = false;
+    expect(await session.revokeAndSignOut()).toBeNull();
+    expect(session.state()).toEqual({ kind: 'signed-out' });
+    expect(calls).toEqual(['revoke:signed-in', 'revoke:signed-in', 'signOut']);
     expect(vi.getTimerCount()).toBe(0);
   });
 

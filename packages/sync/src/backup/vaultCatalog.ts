@@ -15,7 +15,7 @@ import {
 import type { Sealer } from '@ankylock/crypto';
 import type { VaultImport } from '@ankylock/storage';
 import { encodeNoteContent } from '../persistence/notePersistence.js';
-import type { DriveFile, GoogleDriveClient } from './googleDriveClient.js';
+import { DriveError, type DriveFile, type GoogleDriveClient } from './googleDriveClient.js';
 import { openSnapshot, type Snapshot } from './snapshot.js';
 
 /**
@@ -137,12 +137,44 @@ export async function deleteVaultFromDrive(
 }
 
 /** Files from before vaults had ids (Task 11c); nothing reads them any more. */
+const LEGACY_PREFIX = 'ankylock-';
 const LEGACY_FILES = ['ankylock-snapshot.v1.bin', 'ankylock-vault-header.v1.json'];
 
 export async function removeLegacyDriveFiles(drive: Pick<GoogleDriveClient, 'listFiles' | 'deleteFile'>): Promise<number> {
-  const legacy = (await drive.listFiles('ankylock-')).filter((f) => LEGACY_FILES.includes(f.name));
+  const legacy = (await drive.listFiles(LEGACY_PREFIX)).filter((f) => LEGACY_FILES.includes(f.name));
   for (const file of legacy) await drive.deleteFile(file.id);
   return legacy.length;
+}
+
+async function listAnkyLockFiles(drive: Pick<GoogleDriveClient, 'listFiles'>): Promise<DriveFile[]> {
+  return [...(await drive.listFiles(PREFIX)), ...(await drive.listFiles(LEGACY_PREFIX))];
+}
+
+/**
+ * Deletes every AnkyLock file in appDataFolder (all vaults, every device's backups), then lists
+ * the folder again. `remaining` is above zero when a deletion failed or another device uploaded
+ * meanwhile; running it again picks up whatever is left.
+ */
+export async function deleteAllFromDrive(
+  drive: Pick<GoogleDriveClient, 'listFiles' | 'deleteFile'>,
+): Promise<{ readonly remaining: number }> {
+  try {
+    const files = await listAnkyLockFiles(drive);
+    // Headers first: other devices then see their vaults as deleted and stop backing up into the
+    // folder being emptied.
+    const headers = files.filter((f) => HEADER_FILE.test(f.name));
+    for (const file of [...headers, ...files.filter((f) => !headers.includes(f))]) {
+      try {
+        await drive.deleteFile(file.id);
+      } catch (error) {
+        // Already gone, e.g. deleted by another device at the same time.
+        if (!(error instanceof DriveError && error.status === 404)) throw error;
+      }
+    }
+  } catch {
+    // Whatever is left is counted below, and a retry deletes it.
+  }
+  return { remaining: (await listAnkyLockFiles(drive)).length };
 }
 
 /** A vault found in Drive, with the snapshots its devices uploaded. */

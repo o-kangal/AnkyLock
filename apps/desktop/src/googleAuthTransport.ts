@@ -56,5 +56,8 @@ export function createTauriAuthTransport(invoke: Invoke = tauriInvoke): AuthTran
     async signOut() {
       await call('oauth_sign_out');
     },
+    async revoke() {
+      await call('oauth_revoke');
+    },
   };
 }

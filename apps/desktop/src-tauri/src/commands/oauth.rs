@@ -92,6 +92,7 @@ pub struct OAuthClient {
     client_id: String,
     client_secret: String,
     token_endpoint: String,
+    revoke_endpoint: String,
     http: reqwest::Client,
 }
 
@@ -101,6 +102,7 @@ impl OAuthClient {
             client_id: client_id.into(),
             client_secret: client_secret.into(),
             token_endpoint: token_endpoint.into(),
+            revoke_endpoint: REVOKE_ENDPOINT.into(),
             http: reqwest::Client::new(),
         }
     }
@@ -145,6 +147,25 @@ impl OAuthClient {
 
     async fn refresh(&self, refresh_token: &str) -> AppResult<TokenResponse> {
         self.token_request(&[("grant_type", "refresh_token"), ("refresh_token", refresh_token)]).await
+    }
+
+    /// Revokes the whole grant. A token Google no longer knows was already revoked or expired.
+    async fn revoke(&self, refresh_token: &str) -> AppResult<()> {
+        let response = self
+            .http
+            .post(&self.revoke_endpoint)
+            .form(&[("token", refresh_token)])
+            .send()
+            .await
+            .map_err(|e| AppError::Network(e.to_string()))?;
+        let status = response.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        match serde_json::from_str::<TokenError>(&response.text().await.unwrap_or_default()) {
+            Ok(TokenError { error }) if error == "invalid_token" => Ok(()),
+            _ => Err(AppError::Auth(format!("Google did not revoke AnkyLock's access (HTTP {status})."))),
+        }
     }
 }
 
@@ -274,6 +295,14 @@ impl GoogleAuth {
             Err(e) => Err(e),
         }
     }
+
+    /// Revokes the grant, then forgets the refresh token; on failure the token is kept for a retry.
+    async fn revoke(&self) -> AppResult<()> {
+        if let Some(token) = self.store.get()? {
+            self.client()?.revoke(&token).await?;
+        }
+        self.store.delete()
+    }
 }
 
 #[tauri::command]
@@ -308,9 +337,15 @@ pub async fn oauth_refresh(auth: State<'_, GoogleAuth>) -> AppResult<Session> {
 #[tauri::command]
 pub async fn oauth_sign_out(auth: State<'_, GoogleAuth>) -> AppResult<()> {
     if let (Some(client), Some(token)) = (auth.client.as_ref(), auth.store.get()?) {
-        let _ = client.http.post(REVOKE_ENDPOINT).form(&[("token", token.as_str())]).send().await;
+        let _ = client.revoke(&token).await;
     }
     auth.store.delete()
+}
+
+/// Like sign-out, but fails when Google does not confirm the revocation (leaving AnkyLock).
+#[tauri::command]
+pub async fn oauth_revoke(auth: State<'_, GoogleAuth>) -> AppResult<()> {
+    auth.revoke().await
 }
 
 #[cfg(test)]
@@ -445,6 +480,32 @@ mod tests {
         let auth = super::tests::auth(&revoked, store);
         assert_eq!(auth.refresh().await.unwrap_err().code(), "ERR_AUTH_EXPIRED");
         assert_eq!(auth.store.get().unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn revoke_forgets_the_token_only_once_google_confirms() {
+        let with_revoke_endpoint = |endpoint: &str, token: &str| {
+            let store = MemoryStore::default();
+            store.set(token).unwrap();
+            let client = OAuthClient { revoke_endpoint: endpoint.into(), ..OAuthClient::new("client-id", "secret", endpoint) };
+            GoogleAuth { client: Some(client), store: Box::new(store) }
+        };
+
+        let (ok, seen) = fake_token_endpoint(200, "{}").await;
+        let auth = with_revoke_endpoint(&ok, "rt");
+        auth.revoke().await.unwrap();
+        assert!(seen.lock().unwrap()[0].contains("token=rt"));
+        assert_eq!(auth.store.get().unwrap(), None);
+
+        let (gone, _) = fake_token_endpoint(400, r#"{"error":"invalid_token"}"#).await;
+        let auth = with_revoke_endpoint(&gone, "rt");
+        auth.revoke().await.unwrap();
+        assert_eq!(auth.store.get().unwrap(), None);
+
+        let (down, _) = fake_token_endpoint(503, "unavailable").await;
+        let auth = with_revoke_endpoint(&down, "rt");
+        assert_eq!(auth.revoke().await.unwrap_err().code(), "ERR_AUTH");
+        assert_eq!(auth.store.get().unwrap().as_deref(), Some("rt"));
     }
 
     #[tokio::test]

@@ -6,7 +6,7 @@ import { THEME_CHOICES, ThemeContext } from '../theme/colorScheme.js';
 import { tokens } from './sidebar/styles.js';
 import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
 
-export type VaultSettingsView = 'menu' | 'remove' | 'delete';
+export type VaultSettingsView = 'menu' | 'remove' | 'delete' | 'wipe';
 
 const baseField: JSX.CSSProperties = {
   display: 'block',
@@ -17,12 +17,14 @@ const baseField: JSX.CSSProperties = {
   font: tokens.font,
 };
 
-
+/** Typed to confirm deleting all Drive data. */
+const WIPE_CONFIRMATION = 'DELETE';
 
 /**
  * The open vault's settings: rename it, remove it from this device, or delete it everywhere.
  * Removing asks for confirmation that spells out what happens to the notes; deleting everywhere,
  * and removing a vault that has no copy in Google Drive, ask for the vault's name to be typed.
+ * The danger zone also deletes all AnkyLock data from Google Drive, confirmed by typing DELETE.
  */
 export function VaultSettings(props: {
   readonly runtime: Runtime;
@@ -166,8 +168,45 @@ export function VaultSettings(props: {
           >
             Delete everywhere…
           </button>
+          <button
+            type="button"
+            style={danger()}
+            disabled={!signedIn()}
+            title={signedIn() ? undefined : 'Sign in with Google to delete your data from Google Drive.'}
+            onClick={() => open('wipe')}
+          >
+            Delete all Google Drive data…
+          </button>
         </Match>
-        <Match when={view() !== 'menu'}>
+        <Match when={view() === 'wipe'}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (typed().trim() === WIPE_CONFIRMATION) void run(() => props.runtime.deleteAllDriveData(), true);
+            }}
+          >
+            <strong>Delete all AnkyLock data from Google Drive?</strong>
+            <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
+              Every vault’s header and every device’s backups in Google Drive are deleted, for all your vaults. Notes on this
+              device stay, and this vault is kept on this device only. Other devices stop syncing and can keep their copies
+              locally. Then AnkyLock’s access to your Google account is revoked and you are signed out. This cannot be undone.
+            </p>
+            <input
+              aria-label="Type DELETE to confirm"
+              placeholder={WIPE_CONFIRMATION}
+              value={typed()}
+              onInput={(e) => setTyped(e.currentTarget.value)}
+              style={field()}
+            />
+            <button type="submit" disabled={busy() || typed().trim() !== WIPE_CONFIRMATION} style={danger()}>
+              {busy() ? 'Deleting…' : 'Delete all Drive data'}
+            </button>
+            <button type="button" disabled={busy()} style={button()} onClick={() => open('menu')}>
+              Cancel
+            </button>
+          </form>
+        </Match>
+        <Match when={view() === 'remove' || view() === 'delete'}>
           <form
             onSubmit={(e) => {
               e.preventDefault();

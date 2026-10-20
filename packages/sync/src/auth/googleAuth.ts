@@ -33,7 +33,13 @@ export interface AuthTransport {
   /** Silent session restore at startup; null when the user isn't signed in. */
   restore(): Promise<AuthTokens | null>;
   refresh(): Promise<AuthTokens>;
+  /** Forgets the tokens, revoking the grant at Google on a best-effort basis. */
   signOut(): Promise<void>;
+  /**
+   * Revokes AnkyLock's access at Google and forgets the tokens. Unlike `signOut`, throws when
+   * Google did not confirm, so the user learns that access may remain.
+   */
+  revoke(): Promise<void>;
 }
 
 export type AuthState =
@@ -55,6 +61,11 @@ export interface AuthSession {
   /** Resolves with an error message, or null on success. */
   signIn(): Promise<string | null>;
   signOut(): Promise<void>;
+  /**
+   * Revokes the grant at Google, then signs out. Resolves with an error message, or null; on an
+   * error the session stays signed in, so it can be retried.
+   */
+  revokeAndSignOut(): Promise<string | null>;
   /** Current ID token for the relay (read on every connect); throws when signed out. */
   idToken(): string;
   /** A valid Drive access token, refreshed first when it is about to expire. */
@@ -162,6 +173,17 @@ export function createAuthSession(transport: AuthTransport, options: AuthSession
     async signOut() {
       drop({ kind: 'signed-out' });
       await transport.signOut();
+    },
+
+    async revokeAndSignOut() {
+      try {
+        await transport.revoke();
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+      drop({ kind: 'signed-out' });
+      await transport.signOut();
+      return null;
     },
 
     idToken() {

@@ -52,6 +52,7 @@ const COMMANDS: &[&str] = &[
     "oauth_restore",
     "oauth_refresh",
     "oauth_sign_out",
+    "oauth_revoke",
 ];
 
 /// Compiles the Google OAuth client (a "Desktop app" client, whose secret Google does not treat

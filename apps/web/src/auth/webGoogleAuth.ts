@@ -80,6 +80,14 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
   const pollMs = options.pollMs ?? 500;
   let accessToken: string | null = null;
 
+  /** Revoking the access token revokes the whole grant, not just this token. */
+  const postRevoke = (token: string): Promise<Response> =>
+    doFetch(REVOKE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }).toString(),
+    });
+
   function authorizeUrl(state: string, nonce: string): string {
     const hint = storage ? safely(() => storage.getItem(HINT_KEY)) : null;
     const params = new URLSearchParams({
@@ -172,13 +180,21 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
       if (storage) safely(() => storage.removeItem(HINT_KEY));
       const token = accessToken;
       accessToken = null;
-      if (token === null) return;
       // Best effort: the token expires within the hour anyway.
-      await doFetch(REVOKE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ token }).toString(),
-      }).catch(() => undefined);
+      if (token !== null) await postRevoke(token).catch(() => undefined);
+    },
+
+    async revoke() {
+      if (accessToken !== null) {
+        let response: Response;
+        try {
+          response = await postRevoke(accessToken);
+        } catch {
+          throw new AuthError('ERR_NETWORK', 'Could not reach Google to revoke AnkyLock’s access.');
+        }
+        if (!response.ok) throw new AuthError('ERR_AUTH', `Google did not revoke AnkyLock’s access (HTTP ${response.status}).`);
+      }
+      accessToken = null;
     },
   };
 }

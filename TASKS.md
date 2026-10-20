@@ -676,6 +676,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && bash .claude/s
 ---
 
 ### Task 12g: Delete All Drive Data (Leave AnkyLock)
+- **Status:** ✅ Completed (2026-10-20)
 - **Type:** Backend/Service
 - **Read-Only Context Files:** `packages/sync/src/backup/vaultCatalog.ts`, `packages/sync/src/backup/googleDriveClient.ts`, `apps/desktop/src-tauri/src/commands/oauth.rs`
 - **Target Files (Create/Modify):**

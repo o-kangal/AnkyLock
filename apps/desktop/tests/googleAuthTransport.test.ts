@@ -18,13 +18,14 @@ function fake(responses: Record<string, unknown>): { invoke: Invoke; calls: stri
 
 describe('createTauriAuthTransport', () => {
   it('maps IPC sessions to tokens', async () => {
-    const { invoke, calls } = fake({ oauth_sign_in: SESSION, oauth_refresh: SESSION, oauth_restore: null, oauth_sign_out: null });
+    const { invoke, calls } = fake({ oauth_sign_in: SESSION, oauth_refresh: SESSION, oauth_restore: null, oauth_sign_out: null, oauth_revoke: null });
     const t = createTauriAuthTransport(invoke);
     expect(await t.signIn()).toEqual(SESSION);
     expect(await t.refresh()).toEqual(SESSION);
     expect(await t.restore()).toBeNull();
     await t.signOut();
-    expect(calls).toEqual(['oauth_sign_in', 'oauth_refresh', 'oauth_restore', 'oauth_sign_out']);
+    await t.revoke();
+    expect(calls).toEqual(['oauth_sign_in', 'oauth_refresh', 'oauth_restore', 'oauth_sign_out', 'oauth_revoke']);
   });
 
   it('maps host error codes, keeping expired distinct', async () => {

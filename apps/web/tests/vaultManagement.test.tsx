@@ -2,7 +2,7 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { VaultId } from '@ankylock/core';
 import { createAuthSession, type SocketLike } from '@ankylock/sync';
-import { VaultSettings } from '../src/components/VaultSettings.jsx';
+import { VaultSettings, type VaultSettingsView } from '../src/components/VaultSettings.jsx';
 import { createRuntime, type Runtime } from '../src/index.js';
 import { FakeDrive, PASSPHRASE, TestVaults, fakeGoogle, localSealer, until } from './helpers.js';
 
@@ -18,24 +18,28 @@ const unreachableRelay = (): SocketLike => ({
   close: () => undefined,
 });
 
-function device(drive: FakeDrive): { runtime: Runtime; vaults: TestVaults } {
+function device(
+  drive: FakeDrive,
+  driveFetch: typeof fetch = drive.fetch,
+): { runtime: Runtime; vaults: TestVaults; google: ReturnType<typeof fakeGoogle> } {
   const vaults = new TestVaults();
+  const google = fakeGoogle();
   const runtime = createRuntime({
     vaults,
     sealer: localSealer(),
-    auth: createAuthSession(fakeGoogle()),
+    auth: createAuthSession(google),
     relayUrl: 'ws://relay.test/ws',
     createSocket: unreachableRelay,
-    driveFetch: drive.fetch,
+    driveFetch,
   });
-  return { runtime, vaults };
+  return { runtime, vaults, google };
 }
 
 const vaultFiles = (drive: FakeDrive, id: VaultId): string[] => drive.names().filter((n) => n.startsWith(`vault-${id}.`));
 
 /** Device A creates and backs up a vault; device B opens it from Drive. */
-async function sharedVault(drive: FakeDrive) {
-  const a = device(drive);
+async function sharedVault(drive: FakeDrive, driveFetchOfA?: typeof fetch) {
+  const a = device(drive, driveFetchOfA);
   await a.runtime.init();
   expect(await a.runtime.createVault('Personal', PASSPHRASE)).toBeNull();
   await a.runtime.signIn();
@@ -117,8 +121,57 @@ describe('vault management', () => {
   });
 });
 
+describe('delete all Drive data', () => {
+  it('empties Drive, then revokes and signs out; this device keeps its notes and other devices stop syncing', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    expect(await a.runtime.deleteAllDriveData()).toBeNull();
+    expect(drive.names()).toEqual([]);
+    expect(a.google.calls).toEqual(['revoke', 'signOut']);
+    expect(a.runtime.syncStatus()).toMatchObject({ auth: 'signed-out', connection: 'off', vaultDrive: 'local-only', onDrive: false });
+    expect(a.runtime.status()).toBe('unlocked');
+    expect(a.runtime.vaults().map((v) => v.id)).toEqual([id]);
+
+    await b.runtime.syncNow();
+    expect(b.runtime.syncStatus()).toMatchObject({ vaultDrive: 'deleted', connection: 'off' });
+    expect(drive.names()).toEqual([]);
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+
+  it('reports a partial deletion without revoking, and finishes on retry', async () => {
+    const drive = new FakeDrive();
+    let failDeletes = 0;
+    const flaky: typeof fetch = (input, init) =>
+      init?.method === 'DELETE' && failDeletes-- > 0 ? Promise.reject(new TypeError('offline')) : drive.fetch(input, init);
+    const { a, b } = await sharedVault(drive, flaky);
+    failDeletes = 1;
+    expect(await a.runtime.deleteAllDriveData()).toMatch(/^3 file\(s\) could not be deleted from Google Drive/);
+    expect(a.google.calls).toEqual([]);
+    expect(a.runtime.syncStatus()).toMatchObject({ auth: 'signed-in', connection: 'off', vaultDrive: 'ok' });
+
+    expect(await a.runtime.deleteAllDriveData()).toBeNull();
+    expect(drive.names()).toEqual([]);
+    expect(a.google.calls).toEqual(['revoke', 'signOut']);
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+
+  it('stays signed in when Google cannot revoke access, after the files are gone', async () => {
+    const drive = new FakeDrive();
+    const { a, b } = await sharedVault(drive);
+    a.google.failRevoke = true;
+    expect(await a.runtime.deleteAllDriveData()).toContain("Google access could not be revoked: Google is unreachable.");
+    expect(drive.names()).toEqual([]);
+    expect(a.runtime.syncStatus().auth).toBe('signed-in');
+
+    a.google.failRevoke = false;
+    expect(await a.runtime.deleteAllDriveData()).toBeNull();
+    expect(a.google.calls).toEqual(['revoke', 'revoke', 'signOut']);
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+});
+
 describe('VaultSettings', () => {
-  function mount(runtime: Runtime, view: 'menu' | 'remove' | 'delete' = 'menu'): HTMLElement {
+  function mount(runtime: Runtime, view: VaultSettingsView = 'menu'): HTMLElement {
     const root = document.createElement('div');
     document.body.append(root);
     const dispose = render(() => <VaultSettings runtime={runtime} initialView={view} onClose={() => undefined} />, root);
@@ -135,6 +188,22 @@ describe('VaultSettings', () => {
   };
   const button = (root: HTMLElement, text: string): HTMLButtonElement =>
     Array.from(root.querySelectorAll('button')).find((b) => b.textContent === text) as HTMLButtonElement;
+
+  it('asks for DELETE to be typed before deleting all Drive data', async () => {
+    const drive = new FakeDrive();
+    const { a, b } = await sharedVault(drive);
+    const root = mount(a.runtime);
+    button(root, 'Delete all Google Drive data…').click();
+    expect(root.textContent).toContain('Notes on this device stay');
+    expect(button(root, 'Delete all Drive data').disabled).toBe(true);
+    type(root, 'Type DELETE to confirm', 'delete');
+    expect(button(root, 'Delete all Drive data').disabled).toBe(true);
+    type(root, 'Type DELETE to confirm', 'DELETE');
+    button(root, 'Delete all Drive data').click();
+    await until(() => a.runtime.syncStatus().auth === 'signed-out', 'signed out');
+    expect(drive.names()).toEqual([]);
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
 
   it('asks for the vault name before deleting everywhere', async () => {
     const { a, b } = await sharedVault(new FakeDrive());

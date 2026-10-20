@@ -82,6 +82,7 @@ function fakeGoogle(): AuthTransport {
     restore: async () => null,
     refresh: () => Promise.reject(new AuthError('ERR_AUTH_EXPIRED', 'expired')),
     signOut: async () => undefined,
+    revoke: async () => undefined,
   };
 }
 

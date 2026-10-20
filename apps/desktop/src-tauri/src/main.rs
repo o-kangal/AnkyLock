@@ -77,6 +77,7 @@ fn main() {
             oauth::oauth_restore,
             oauth::oauth_refresh,
             oauth::oauth_sign_out,
+            oauth::oauth_revoke,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run AnkyLock");
