@@ -53,3 +53,8 @@ const LABELS: Record<Platform, Record<WorkspaceCommand, string>> = {
 };
 
 export const shortcutLabel = (command: WorkspaceCommand, platform: Platform): string => LABELS[platform][command];
+
+/** Ctrl+click opens links, ⌘+click on Apple platforms (where Ctrl+click is a right click). */
+export function linkModifier(platform: string = navigator.platform): 'ctrl' | 'meta' {
+  return /^(Mac|iPhone|iPad|iPod)/.test(platform) ? 'meta' : 'ctrl';
+}

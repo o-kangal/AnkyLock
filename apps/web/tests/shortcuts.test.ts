@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shortcutLabel, workspaceCommand } from '../src/keyboard/shortcuts.js';
+import { linkModifier, shortcutLabel, workspaceCommand } from '../src/keyboard/shortcuts.js';
 
 const key = (init: Partial<KeyboardEvent>) => ({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, key: '', code: '', ...init });
 
@@ -23,5 +23,12 @@ describe('workspaceCommand', () => {
   it('labels shortcuts per platform', () => {
     expect(shortcutLabel('new-tab', 'desktop')).toBe('Ctrl+N');
     expect(shortcutLabel('new-tab', 'web')).toBe('Alt+N');
+  });
+});
+
+describe('link modifier', () => {
+  it('is ⌘ on Apple platforms and Ctrl elsewhere', () => {
+    expect(['MacIntel', 'iPhone', 'iPad'].map((p) => linkModifier(p))).toEqual(['meta', 'meta', 'meta']);
+    expect(['Win32', 'Linux x86_64', ''].map((p) => linkModifier(p))).toEqual(['ctrl', 'ctrl', 'ctrl']);
   });
 });

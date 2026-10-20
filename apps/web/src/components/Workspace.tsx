@@ -2,7 +2,7 @@ import { createEffect, createSignal, on, onCleanup, onMount, Show, type JSX } fr
 import type * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
 import { CodeMirrorView } from '@ankylock/editor';
-import { shortcutLabel, workspaceCommand, type Platform } from '../keyboard/shortcuts.js';
+import { linkModifier, shortcutLabel, workspaceCommand, type Platform } from '../keyboard/shortcuts.js';
 import { useNarrowScreen } from '../layout/screen.js';
 import { createWordWrapPreference } from '../preferences/devicePreferences.js';
 import type { Runtime } from '../runtime/createRuntime.js';
@@ -16,7 +16,17 @@ import { TabBar } from './tabs/TabBar.jsx';
  * Main layout: sidebar, tab bar and a single editor for the active tab. Background tabs keep
  * only their headless Y.Doc in the runtime; closing a tab closes its doc.
  */
-export function Workspace(props: { readonly runtime: Runtime; readonly platform: Platform }): JSX.Element {
+/** Web default: a new tab that cannot reach back into AnkyLock (`noopener`) or learn where it came from. */
+export function openInNewTab(url: string): void {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+export function Workspace(props: {
+  readonly runtime: Runtime;
+  readonly platform: Platform;
+  /** Opens an http(s) link from a note; the desktop app hands it to the system browser. */
+  readonly openLink?: (url: string) => void;
+}): JSX.Element {
   const { store } = props.runtime;
   const theme = useTheme();
   const wrap = createWordWrapPreference();
@@ -143,6 +153,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
                   colorScheme={theme.scheme()}
                   wordWrap={wrap.wordWrap()}
                   fontSize={narrow() ? 16 : 13}
+                  links={{ modifier: linkModifier(), open: (url) => (props.openLink ?? openInNewTab)(url) }}
                   onTitleChange={(title) => store.setTitle(open().id, title)}
                 />
               )}

@@ -4,6 +4,7 @@ import { createEffect, onCleanup, Show, untrack, type JSX } from 'solid-js';
 import type * as Y from 'yjs';
 import { TRASHED_READ_ONLY_MESSAGE } from '@ankylock/core';
 import { editorBasics, editorTheme, type ColorScheme } from '../extensions/theme.js';
+import { links, type LinkOptions } from '../extensions/links.js';
 import { titleListener } from '../extensions/title.js';
 import { wordWrap } from '../extensions/wordWrap.js';
 import { noteText, yjsBinding } from '../extensions/yjsBinding.js';
@@ -24,6 +25,8 @@ export interface CodeMirrorViewProps {
   readonly wordWrap?: boolean;
   /** Text size in px (default 13); narrow screens use 16 so iOS does not zoom on focus. */
   readonly fontSize?: number;
+  /** Makes http(s) links clickable with the modifier key; without it, links are plain text. */
+  readonly links?: LinkOptions;
 }
 
 const readOnlyExtension = (readOnly: boolean): Extension => [
@@ -73,6 +76,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
               wrap.of(wordWrap(props.wordWrap ?? false)),
               yjsBinding(doc),
               titleListener((title) => props.onTitleChange?.(title)),
+              props.links ? links(props.links) : [],
             ],
           }),
         }),

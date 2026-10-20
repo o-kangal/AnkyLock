@@ -601,6 +601,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12d: Clickable Links in the Editor
+- **Status:** ✅ Completed (2026-10-20)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/editor/src/components/CodeMirrorView.tsx`, `apps/desktop/src-tauri/capabilities/default.json`
 - **Target Files (Create/Modify):**

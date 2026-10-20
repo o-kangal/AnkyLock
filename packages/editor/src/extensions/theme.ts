@@ -21,6 +21,9 @@ interface Palette {
   readonly activeLine: string;
   readonly selection: string;
   readonly cursor: string;
+  readonly link: string;
+  readonly tooltipBackground: string;
+  readonly tooltipBorder: string;
 }
 
 // Minimal Notepad++-like palettes: plain background, muted gutter, soft active-line band.
@@ -33,6 +36,9 @@ const PALETTES: Record<ColorScheme, Palette> = {
     activeLine: '#e8f2fe',
     selection: '#c0d8f5',
     cursor: '#1f1f1f',
+    link: '#0067c0',
+    tooltipBackground: '#f3f3f3',
+    tooltipBorder: '#c8c8c8',
   },
   dark: {
     background: '#1e1e1e',
@@ -42,6 +48,9 @@ const PALETTES: Record<ColorScheme, Palette> = {
     activeLine: '#2a2d2e',
     selection: '#264f78',
     cursor: '#aeafad',
+    link: '#4fa3ff',
+    tooltipBackground: '#252526',
+    tooltipBorder: '#454545',
   },
 };
 
@@ -69,6 +78,26 @@ export function editorTheme(scheme: ColorScheme, fontSizePx = 13): Extension {
       '.cm-activeLineGutter': { backgroundColor: p.activeLine },
       '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': {
         backgroundColor: p.selection,
+      },
+      '.cm-link': { color: p.link, textDecoration: 'underline' },
+      '.cm-tooltip': {
+        backgroundColor: p.tooltipBackground,
+        color: p.foreground,
+        border: `1px solid ${p.tooltipBorder}`,
+        borderRadius: '4px',
+        fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+        fontSize: '12px',
+      },
+      '.cm-link-hint': { padding: '3px 8px' },
+      '.cm-link-open': {
+        minHeight: '40px',
+        padding: '0 14px',
+        border: 'none',
+        background: 'transparent',
+        color: p.link,
+        font: 'inherit',
+        fontSize: '15px',
+        cursor: 'pointer',
       },
     },
     { dark: scheme === 'dark' },

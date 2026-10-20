@@ -13,6 +13,8 @@ export function AnkyLockApp(props: {
   readonly platform?: Platform;
   /** Overrides window-width detection (tests). */
   readonly narrow?: Accessor<boolean>;
+  /** How links in notes open; defaults to a new browser tab. */
+  readonly openLink?: (url: string) => void;
   /** Overrides the stored theme preference (tests). */
   readonly theme?: ThemePreference;
 }): JSX.Element {
@@ -30,7 +32,7 @@ export function AnkyLockApp(props: {
             <div style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>Loading…</div>
           </Match>
           <Match when={props.runtime.status() === 'unlocked'}>
-            <Workspace runtime={props.runtime} platform={props.platform ?? 'web'} />
+            <Workspace runtime={props.runtime} platform={props.platform ?? 'web'} {...(props.openLink ? { openLink: props.openLink } : {})} />
           </Match>
           <Match when={props.runtime.status() === 'uninitialized' || props.runtime.status() === 'locked'}>
             <UnlockScreen runtime={props.runtime} />

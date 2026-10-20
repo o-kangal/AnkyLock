@@ -46,6 +46,7 @@ const COMMANDS: &[&str] = &[
     "sync_list_tombstones",
     "sync_merge_records",
     "sync_detach_folders",
+    "link_open",
     "oauth_sign_in",
     "oauth_restore",
     "oauth_refresh",

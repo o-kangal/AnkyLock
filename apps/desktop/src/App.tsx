@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { onCleanup, type JSX } from 'solid-js';
 import { createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
@@ -33,7 +34,12 @@ export function App(): JSX.Element {
     <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%' }}>
       <TitleBar />
       <div style={{ flex: '1', 'min-height': '0' }}>
-        <AnkyLockApp runtime={runtime} platform="desktop" />
+        <AnkyLockApp
+          runtime={runtime}
+          platform="desktop"
+          // The host checks the scheme again and hands the link to the system browser.
+          openLink={(url) => void invoke('link_open', { url }).catch((error: unknown) => console.error(error))}
+        />
       </div>
     </div>
   );

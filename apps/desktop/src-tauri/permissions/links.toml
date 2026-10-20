@@ -1,0 +1,5 @@
+# Opening links from notes in the system browser; the host accepts only http(s) URLs.
+[[set]]
+identifier = "links"
+description = "Open http(s) links from notes in the system browser."
+permissions = ["allow-link-open"]

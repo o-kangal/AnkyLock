@@ -1,5 +1,6 @@
 pub mod categories;
 pub mod folders;
+pub mod links;
 pub mod notes;
 pub mod oauth;
 pub mod outbox;

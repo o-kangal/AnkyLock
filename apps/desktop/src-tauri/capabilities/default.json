@@ -12,6 +12,7 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "storage",
-    "auth"
+    "auth",
+    "links"
   ]
 }
