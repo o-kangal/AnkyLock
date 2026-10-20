@@ -569,6 +569,127 @@ pnpm run test && pnpm run typecheck
 
 ---
 
+### Task 12c: Light/Dark Theme & Sidebar Row Styling
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `packages/editor/src/extensions/theme.ts`, `apps/web/src/preferences/devicePreferences.ts`, `apps/web/src/components/sidebar/styles.ts`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/preferences/devicePreferences.ts`
+  - `apps/web/src/theme/colorScheme.ts`
+  - `apps/web/index.html`
+  - `apps/web/src/components/Workspace.tsx`
+  - `apps/web/src/components/UnlockScreen.tsx`
+  - `apps/web/src/components/VaultSettings.tsx`
+  - `apps/web/src/components/SyncStatusBar.tsx`
+  - `apps/web/src/components/sidebar/styles.ts`
+  - `apps/web/src/components/sidebar/{CategoryList,FolderTree,NoteItem}.tsx`
+  - `apps/desktop/src/TitleBar.tsx`
+  - `packages/editor/src/extensions/theme.ts`
+  - `apps/web/tests/colorScheme.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Found in manual testing: the editor follows the OS light/dark setting while the rest of the app is always light.
+  2. Add a theme preference stored per device for all vaults (System, Light, Dark; default System), like word wrap. System follows `prefers-color-scheme` live.
+  3. Define every app color as a token for both schemes (inline style tokens, no global CSS file) and use them everywhere: workspace, sidebar, tabs, status bar, popovers and menus, vault settings, the unlock screen, the desktop title bar and the editor. Apply the scheme before first paint so a dark setup never flashes light; keep `color-scheme` and the PWA `theme-color` in step.
+  4. Put the selector in the status bar next to Wrap (an icon button on narrow screens) and in the vault menu.
+  5. Give sidebar rows (categories, folders, notes) visible borders with clear hover, focus and selected states in both schemes, keeping the 40 px touch targets of narrow screens.
+  6. Test the default, persistence, live System changes and the selector; check both schemes in WebKitGTK at desktop and 375 px widths.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
+### Task 12d: Clickable Links in the Editor
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `packages/editor/src/components/CodeMirrorView.tsx`, `apps/desktop/src-tauri/capabilities/default.json`
+- **Target Files (Create/Modify):**
+  - `packages/editor/src/extensions/links.ts`
+  - `packages/editor/src/components/CodeMirrorView.tsx`
+  - `apps/web/src/components/Workspace.tsx`
+  - `apps/desktop/src/App.tsx`
+  - `apps/desktop/src-tauri/capabilities/default.json`
+  - `packages/editor/tests/links.test.ts`
+- **Step-by-Step Instructions:**
+  1. Decorate `http(s)://` URLs in the visible viewport only (no full-document scan), styled as links in both themes.
+  2. Hovering a link shows "Ctrl+Click to open" (⌘+Click on macOS). A plain click keeps placing the cursor; Ctrl/⌘+click opens the link. On touch screens, tapping a link shows a small "Open link" button.
+  3. Opening goes through a callback the app supplies: the system browser on desktop (opener plugin, `http`/`https` only), a new tab with `noopener,noreferrer` on the web. Other schemes (`javascript:`, `file:`…) are never opened.
+  4. Test detection, the modifier rule, the scheme allowlist and that a plain click edits.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
+### Task 12e: Periodic Drive Backup & Close Guard
+- **Type:** Backend/Service
+- **Read-Only Context Files:** `packages/sync/src/backup/snapshotScheduler.ts`, `apps/web/src/runtime/createRuntime.ts`
+- **Target Files (Create/Modify):**
+  - `packages/sync/src/backup/snapshotScheduler.ts`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/web/src/components/AnkyLockApp.tsx`
+  - `apps/desktop/src/App.tsx`
+  - `apps/desktop/src-tauri/capabilities/default.json`
+  - `packages/sync/tests/snapshotScheduler.test.ts`
+  - `apps/web/tests/closeGuard.test.ts`
+- **Step-by-Step Instructions:**
+  1. Track whether the vault changed since the last successful backup (note text, hierarchy, settings).
+  2. While signed in, back up every 5 minutes, but only when something changed, and also when the vault is locked. Keep the manual Backup now. Never block local saves or sync; failures keep showing in the status bar.
+  3. Desktop: when the window is closed with unbacked changes, back up first (showing "Backing up…"), then close. If it fails or takes longer than about 10 seconds, ask "Quit anyway" or "Wait".
+  4. Web: with unbacked changes, show the browser's standard leave-page warning (browsers choose its text) and start a backup in the background. Without changes, or when not signed in to Drive, no warning.
+  5. Test the dirty tracking, skipped runs without changes, the lock backup and both close paths.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
+### Task 12f: Unencrypted Export (Note, Folder, Vault)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `packages/storage/src/interfaces/IStorageEngine.ts`, `apps/web/src/components/sidebar/ContextMenu.tsx`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/export/exportNotes.ts`
+  - `apps/web/src/export/exportWorker.ts`
+  - `apps/web/src/components/sidebar/ContextMenu.tsx`
+  - `apps/web/src/components/VaultSettings.tsx`
+  - `apps/desktop/src/App.tsx`
+  - `apps/web/tests/exportNotes.test.ts`
+- **Step-by-Step Instructions:**
+  1. Export a single note as a file named after its title (`.txt`, or `.md` when the title says so). Export a folder (with its subfolders) or the whole vault as a `.zip` that keeps the category and folder structure as directories. Include archived items, exclude Trash.
+  2. Before every export, warn that the files will be written unencrypted and stay outside AnkyLock's protection, and ask for confirmation.
+  3. Make file names safe and unique on every OS: strip reserved characters, avoid reserved names, and add ` (2)` for duplicates.
+  4. Decrypt and build the zip in a Web Worker. Save with the native save dialog on desktop and as a download on the web. Nothing leaves the device.
+  5. Test the names, the structure, Trash exclusion and that nothing is exported without confirmation.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && bash .claude/skills/crypto-audit/scripts/scan.sh apps/web/src/export
+``` 
+
+---
+
+### Task 12g: Delete All Drive Data (Leave AnkyLock)
+- **Type:** Backend/Service
+- **Read-Only Context Files:** `packages/sync/src/backup/vaultCatalog.ts`, `packages/sync/src/backup/googleDriveClient.ts`, `apps/desktop/src-tauri/src/commands/oauth.rs`
+- **Target Files (Create/Modify):**
+  - `packages/sync/src/backup/vaultCatalog.ts`
+  - `packages/sync/src/auth/googleAuth.ts`
+  - `apps/web/src/auth/webGoogleAuth.ts`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/web/src/components/VaultSettings.tsx`
+  - `packages/sync/tests/vaultCatalog.test.ts`
+- **Step-by-Step Instructions:**
+  1. Add "Delete all Drive data" to a danger zone in the settings. It explains that every vault's headers and every device's backups on Drive will be deleted, while data on this device stays. Confirm by typing `DELETE`.
+  2. Stop sync and backups first, delete every AnkyLock file in the app folder (all vaults), check the folder is empty, then revoke the Google grant (desktop and web) and sign out.
+  3. If deletion stops partway, report what remains and let the user retry; never revoke before the files are gone. Other devices see the vaults as deleted on Drive (11i), not as broken.
+  4. Test full deletion, a partial failure with retry, and the order of revoke and sign-out.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 13: Production Release (Web, Relay & Desktop Distribution)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
@@ -635,5 +756,10 @@ Task 1 (Workspace & Config)
                    │
                    ├──► Task 12b (Peer Catch-Up on Connect)
                    └──► Task 12 (E2E Verification & Hardening)
-                           └──► Task 13 (Production Release)
+                           ├──► Task 12c (Light/Dark Theme & Sidebar Rows)
+                           │       └──► Task 12d (Clickable Links)
+                           ├──► Task 12e (Periodic Backup & Close Guard)
+                           ├──► Task 12f (Unencrypted Export)
+                           ├──► Task 12g (Delete All Drive Data)
+                           └──► Task 13 (Production Release, after 12c–12g)
 ``` 
