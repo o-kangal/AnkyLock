@@ -142,6 +142,15 @@ export interface Runtime {
    * (header and every device's backup). Returns to the vault list.
    */
   removeVault(options: { readonly everywhere: boolean }): Promise<string | null>;
+  /** Whether a locked vault on this device has a copy in Google Drive, by its own sync state. */
+  lockedVaultOnDrive(vaultId: VaultId): Promise<boolean>;
+  /**
+   * Removes a locked vault from this device without its passphrase, e.g. one whose passphrase is
+   * forgotten; with `everywhere`, deletes its Drive copy first (signing in if needed).
+   */
+  removeLockedVault(vaultId: VaultId, options: { readonly everywhere: boolean }): Promise<string | null>;
+  /** Deletes a vault found by `findRemoteVaults` from Google Drive, without its passphrase. */
+  deleteRemoteVault(vaultId: VaultId): Promise<string | null>;
   /** Keeps a vault deleted elsewhere on this device only: sync and backup stay off for it. */
   keepLocalOnly(): Promise<void>;
   /** Backs up a local-only vault to Google Drive again, as a vault of its own. */
@@ -556,6 +565,43 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         await closeVault(!everywhere && syncStatus().onDrive);
         await directory.remove(id);
         await refreshVaults();
+        return null;
+      } catch (error) {
+        return message(error);
+      }
+    },
+
+    async lockedVaultOnDrive(id) {
+      if (status() === 'unlocked') return false;
+      const state = await (await directory.open(id)).getSyncState();
+      return state.headerOnDrive && !state.localOnly;
+    },
+
+    async removeLockedVault(id, { everywhere }) {
+      if (status() === 'unlocked') return 'Lock the open vault first.';
+      try {
+        if (everywhere) {
+          if (!auth || !drive) return 'Google sign-in is not available in this app.';
+          if (auth.state().kind !== 'signed-in') {
+            const failure = await auth.signIn();
+            if (failure !== null) return failure;
+          }
+          // Drive first: if that fails, the vault is still here to retry with.
+          await deleteVaultFromDrive(drive, id);
+        }
+        await directory.remove(id);
+        await refreshVaults();
+        return null;
+      } catch (error) {
+        return message(error);
+      }
+    },
+
+    async deleteRemoteVault(id) {
+      if (!drive || !remoteVaults.has(id)) return 'This vault was not found in Google Drive.';
+      try {
+        await deleteVaultFromDrive(drive, id);
+        remoteVaults.delete(id);
         return null;
       } catch (error) {
         return message(error);

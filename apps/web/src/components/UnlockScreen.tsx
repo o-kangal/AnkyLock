@@ -40,13 +40,17 @@ export function remoteVaultLabel(vault: RemoteVault): string {
   return `Vault created ${when(vault.createdAt)} · ${backup}`;
 }
 
-type Mode = 'unlock' | 'create' | 'remote';
+type Mode = 'unlock' | 'create' | 'remote' | 'remove' | 'remote-delete';
+
+/** Typed to confirm removing a vault, whose name stays encrypted while it is locked. */
+const REMOVE_CONFIRMATION = 'DELETE';
 type RemoteList = { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly vaults: readonly RemoteVault[] };
 
 /**
  * Vault picker. Each vault is isolated: its own passphrase, key and notes. Unlock one of the
  * vaults on this device, create a new one, or open one that another device backed up to Google
- * Drive. Passphrases never leave this device and are never stored.
+ * Drive. Passphrases never leave this device and are never stored. A vault can also be removed
+ * here without its passphrase (from this device, or from Google Drive), confirmed by typing DELETE.
  */
 export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element {
   let firstField: HTMLInputElement | undefined;
@@ -64,7 +68,9 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
     chosenMode() === 'unlock' && props.runtime.status() === 'uninitialized' ? 'create' : chosenMode();
   const canUseDrive = (): boolean => props.runtime.syncStatus().auth !== 'unavailable';
   const [selected, setSelected] = createSignal<VaultId | null>(null);
-  const vaultId = (): VaultId | null => selected() ?? props.runtime.vaults()[0]?.id ?? null;
+  // A removed vault may still be the selected one.
+  const vaultId = (): VaultId | null =>
+    props.runtime.vaults().find((v) => v.id === selected())?.id ?? props.runtime.vaults()[0]?.id ?? null;
   const [remote, setRemote] = createSignal<RemoteList>({ kind: 'loading' });
   const [selectedRemote, setSelectedRemote] = createSignal<VaultId | null>(null);
   const remoteId = (): VaultId | null => {
@@ -76,6 +82,32 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   const [confirmation, setConfirmation] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
+  /** The vault being removed, and whether it has a Drive copy (null while checking). */
+  const [target, setTarget] = createSignal<VaultId | null>(null);
+  const [targetOnDrive, setTargetOnDrive] = createSignal<boolean | null>(null);
+  const [typed, setTyped] = createSignal('');
+  const confirming = (): boolean => mode() === 'remove' || mode() === 'remote-delete';
+  const confirmed = (): boolean => typed().trim() === REMOVE_CONFIRMATION;
+  const targetLabel = (): string => {
+    const id = target();
+    const list = remote();
+    if (mode() === 'remote-delete' && list.kind === 'ready') {
+      const vault = list.vaults.find((v) => v.vaultId === id);
+      return vault ? remoteVaultLabel(vault) : '';
+    }
+    const entry = props.runtime.vaults().find((v) => v.id === id);
+    return entry ? vaultLabel(entry) : '';
+  };
+
+  const confirmRemoval = (next: 'remove' | 'remote-delete', id: VaultId): void => {
+    setTarget(id);
+    setTargetOnDrive(null);
+    if (next === 'remove') void props.runtime.lockedVaultOnDrive(id).then(setTargetOnDrive, () => setTargetOnDrive(false));
+    setMode(next);
+  };
+  const leaveRemoval = (): void => {
+    setMode(mode() === 'remote-delete' ? 'remote' : 'unlock');
+  };
 
   const loadRemote = async (): Promise<void> => {
     setRemote({ kind: 'loading' });
@@ -92,6 +124,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
       (current) => {
         setPassphrase('');
         setConfirmation('');
+        setTyped('');
         setError(null);
         if (current === 'remote') void loadRemote();
         queueMicrotask(focusFirst);
@@ -119,29 +152,54 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
         const id = vaultId();
         return id === null ? Promise.resolve('Choose a vault.') : props.runtime.unlock(id, passphrase());
       }
+      case 'remove': {
+        const id = target();
+        return id === null ? Promise.resolve('Choose a vault.') : props.runtime.removeLockedVault(id, { everywhere: false });
+      }
+      case 'remote-delete': {
+        const id = target();
+        return id === null ? Promise.resolve('Choose a vault.') : props.runtime.deleteRemoteVault(id);
+      }
     }
   };
 
-  const submit = async (event: SubmitEvent): Promise<void> => {
-    event.preventDefault();
-    const invalid = mode() === 'create' ? validateNew() : null;
-    if (invalid !== null) {
-      setError(invalid);
-      return;
-    }
+  const execute = async (work: () => Promise<string | null>): Promise<void> => {
     setBusy(true);
-    const failure = await run();
+    const failure = await work();
     setBusy(false);
     setError(failure);
     if (failure === null) {
       setName('');
       setPassphrase('');
       setConfirmation('');
-      setMode('unlock');
+      if (confirming()) leaveRemoval();
+      else setMode('unlock');
     } else {
       focusFirst();
     }
   };
+
+  const submit = async (event: SubmitEvent): Promise<void> => {
+    event.preventDefault();
+    const invalid =
+      mode() === 'create' ? validateNew() : confirming() && !confirmed() ? `Type ${REMOVE_CONFIRMATION} to confirm.` : null;
+    if (invalid !== null) {
+      setError(invalid);
+      return;
+    }
+    await execute(run);
+  };
+
+  const confirmationInput = (): JSX.Element => (
+    <input
+      ref={(el) => (firstField = el)}
+      aria-label={`Type ${REMOVE_CONFIRMATION} to confirm`}
+      placeholder={REMOVE_CONFIRMATION}
+      value={typed()}
+      onInput={(e) => setTyped(e.currentTarget.value)}
+      style={fieldStyle()}
+    />
+  );
 
   const passphraseInput = (first: boolean): JSX.Element => (
     <input
@@ -159,10 +217,19 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   );
 
   const submitLabel = (): string => {
-    if (busy()) return mode() === 'remote' ? 'Restoring…' : 'Deriving key…';
-    return { unlock: 'Unlock', create: 'Create vault', remote: 'Open vault' }[mode()];
+    if (busy()) return { unlock: 'Deriving key…', create: 'Deriving key…', remote: 'Restoring…', remove: 'Removing…', 'remote-delete': 'Deleting…' }[mode()];
+    return {
+      unlock: 'Unlock',
+      create: 'Create vault',
+      remote: 'Open vault',
+      remove: 'Remove from this device',
+      'remote-delete': 'Delete from Google Drive',
+    }[mode()];
   };
   const showSubmit = (): boolean => mode() !== 'remote' || (remote().kind === 'ready' && remoteId() !== null);
+  const submitDisabled = (): boolean =>
+    busy() || (confirming() && (!confirmed() || (mode() === 'remove' && targetOnDrive() === null)));
+  const submitStyle = (): JSX.CSSProperties => ({ ...fieldStyle(), cursor: 'pointer', ...(confirming() ? { color: tokens.danger } : {}) });
 
   return (
     <main style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>
@@ -253,6 +320,31 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
               </Match>
             </Switch>
           </Match>
+          <Match when={mode() === 'remove'}>
+            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Remove this vault?</h1>
+            <p style={{ margin: '0', color: tokens.muted }}>
+              {targetLabel()}. Without its passphrase, its notes cannot be recovered or exported first.
+            </p>
+            <p role="note" style={{ margin: '8px 0 0', color: tokens.muted }}>
+              <Switch>
+                <Match when={targetOnDrive() === null}>Checking for a copy in Google Drive…</Match>
+                <Match when={targetOnDrive()}>
+                  Its copy in Google Drive stays, so it can be opened again with “Use my existing vault”.
+                  <Show when={canUseDrive()}> “Delete everywhere” deletes that copy too, and other devices stop syncing it.</Show>
+                </Match>
+                <Match when={true}>It has no copy in Google Drive, so removing it deletes its notes for good.</Match>
+              </Switch>
+            </p>
+            {confirmationInput()}
+          </Match>
+          <Match when={mode() === 'remote-delete'}>
+            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Delete this vault from Google Drive?</h1>
+            <p style={{ margin: '0', color: tokens.muted }}>
+              {targetLabel()}. Its header and every device’s backup are deleted from Google Drive, without its passphrase.
+              Other devices with this vault stop syncing it and can keep their copy locally. This cannot be undone.
+            </p>
+            {confirmationInput()}
+          </Match>
         </Switch>
         <Show when={error()}>
           <div role="alert" style={{ color: tokens.danger, 'margin-top': '8px' }}>
@@ -260,12 +352,30 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
           </div>
         </Show>
         <Show when={showSubmit()}>
-          <button type="submit" disabled={busy()} style={{ ...fieldStyle(), cursor: 'pointer' }}>
+          <button type="submit" disabled={submitDisabled()} style={submitStyle()}>
             {submitLabel()}
           </button>
         </Show>
+        <Show when={mode() === 'remove' && targetOnDrive() && canUseDrive()}>
+          <button
+            type="button"
+            disabled={submitDisabled()}
+            style={submitStyle()}
+            onClick={() => {
+              const id = target();
+              if (id !== null) void execute(() => props.runtime.removeLockedVault(id, { everywhere: true }));
+            }}
+          >
+            Delete everywhere
+          </button>
+        </Show>
         <div style={{ display: 'flex', gap: '16px', 'margin-top': '16px', 'flex-wrap': 'wrap' }}>
-          <Show when={mode() !== 'unlock' && (props.runtime.status() === 'locked' || mode() === 'remote')}>
+          <Show when={confirming()}>
+            <button type="button" style={linkButton} disabled={busy()} onClick={leaveRemoval}>
+              Cancel
+            </button>
+          </Show>
+          <Show when={!confirming() && mode() !== 'unlock' && (props.runtime.status() === 'locked' || mode() === 'remote')}>
             <button type="button" style={linkButton} disabled={busy()} onClick={() => setMode('unlock')}>
               {props.runtime.status() === 'locked' ? 'Back to my vaults' : 'Back'}
             </button>
@@ -275,10 +385,24 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
               Create a new vault
             </button>
           </Show>
-          <Show when={mode() !== 'remote' && canUseDrive()}>
+          <Show when={!confirming() && mode() !== 'remote' && canUseDrive()}>
             <button type="button" style={linkButton} onClick={() => setMode('remote')}>
               Use my existing vault
             </button>
+          </Show>
+          <Show when={mode() === 'unlock' ? vaultId() : null}>
+            {(id) => (
+              <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => confirmRemoval('remove', id())}>
+                Remove this vault…
+              </button>
+            )}
+          </Show>
+          <Show when={mode() === 'remote' && !busy() ? remoteId() : null}>
+            {(id) => (
+              <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => confirmRemoval('remote-delete', id())}>
+                Delete from Google Drive…
+              </button>
+            )}
           </Show>
         </div>
       </form>

@@ -699,6 +699,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12h: Remove a Locked Vault from the Vault Picker
+- **Status:** ✅ Completed (2026-10-20)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/storage/src/interfaces/IStorageEngine.ts`, `packages/sync/src/backup/vaultCatalog.ts`, `apps/web/src/components/VaultSettings.tsx`
 - **Target Files (Create/Modify):**

@@ -2,6 +2,7 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { VaultId } from '@ankylock/core';
 import { createAuthSession, type SocketLike } from '@ankylock/sync';
+import { UnlockScreen } from '../src/components/UnlockScreen.jsx';
 import { VaultSettings, type VaultSettingsView } from '../src/components/VaultSettings.jsx';
 import { createRuntime, type Runtime } from '../src/index.js';
 import { FakeDrive, PASSPHRASE, TestVaults, fakeGoogle, localSealer, until } from './helpers.js';
@@ -121,6 +122,53 @@ describe('vault management', () => {
   });
 });
 
+describe('removing a locked vault', () => {
+  it('removes it from this device only; its Drive copy stays', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    await a.runtime.lock();
+    expect(await a.runtime.lockedVaultOnDrive(id)).toBe(true);
+    expect(await a.runtime.removeLockedVault(id, { everywhere: false })).toBeNull();
+    expect(a.runtime.vaults()).toEqual([]);
+    expect(a.runtime.status()).toBe('uninitialized');
+    expect(vaultFiles(drive, id)).toContain(`vault-${id}.header.json`);
+    await b.runtime.lock();
+  });
+
+  it('deletes it everywhere without the passphrase; other devices stop syncing', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    await a.runtime.lock();
+    expect(await a.runtime.removeLockedVault(id, { everywhere: true })).toBeNull();
+    expect(a.runtime.vaults()).toEqual([]);
+    expect(vaultFiles(drive, id)).toEqual([]);
+    await b.runtime.syncNow();
+    expect(b.runtime.syncStatus()).toMatchObject({ vaultDrive: 'deleted', connection: 'off' });
+    await b.runtime.lock();
+  });
+
+  it('refuses while a vault is open', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    expect(await a.runtime.removeLockedVault(id, { everywhere: true })).toBe('Lock the open vault first.');
+    expect(vaultFiles(drive, id)).not.toEqual([]);
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+
+  it('deletes a vault found in Google Drive without opening it', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    const c = device(drive);
+    await c.runtime.init();
+    const found = await c.runtime.findRemoteVaults();
+    expect('vaults' in found && found.vaults.map((v) => v.vaultId)).toEqual([id]);
+    expect(await c.runtime.deleteRemoteVault(id)).toBeNull();
+    expect(vaultFiles(drive, id)).toEqual([]);
+    expect(await c.runtime.findRemoteVaults()).toEqual({ vaults: [] });
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+});
+
 describe('delete all Drive data', () => {
   it('empties Drive, then revokes and signs out; this device keeps its notes and other devices stop syncing', async () => {
     const drive = new FakeDrive();
@@ -233,6 +281,60 @@ describe('VaultSettings', () => {
     type(root, 'Vault name', 'Research');
     root.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await until(() => a.runtime.vaultName() === 'Research', 'renamed');
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+});
+
+describe('UnlockScreen removal', () => {
+  function mount(runtime: Runtime): HTMLElement {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const dispose = render(() => <UnlockScreen runtime={runtime} />, root);
+    disposers.push(() => {
+      dispose();
+      root.remove();
+    });
+    return root;
+  }
+  const type = (root: HTMLElement, value: string): void => {
+    const input = root.querySelector('[aria-label="Type DELETE to confirm"]') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  };
+  const button = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
+    Array.from(root.querySelectorAll('button')).find((b) => b.textContent === text);
+
+  it('removes a locked vault everywhere once DELETE is typed', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    await a.runtime.lock();
+    const root = mount(a.runtime);
+    button(root, 'Remove this vault…')?.click();
+    await until(() => root.textContent?.includes('Its copy in Google Drive stays') ?? false, 'Drive copy found');
+    expect(root.textContent).toContain('cannot be recovered or exported');
+    expect(button(root, 'Delete everywhere')?.disabled).toBe(true);
+    expect(button(root, 'Remove from this device')?.disabled).toBe(true);
+    type(root, 'DELETE');
+    button(root, 'Delete everywhere')?.click();
+    await until(() => a.runtime.vaults().length === 0, 'vault removed');
+    expect(vaultFiles(drive, id)).toEqual([]);
+    await b.runtime.lock();
+  });
+
+  it('deletes a vault from the Google Drive list, then lists again', async () => {
+    const drive = new FakeDrive();
+    const { a, b, id } = await sharedVault(drive);
+    const c = device(drive);
+    await c.runtime.init();
+    const root = mount(c.runtime);
+    button(root, 'Use my existing vault')?.click();
+    await until(() => button(root, 'Delete from Google Drive…') !== undefined, 'remote list');
+    button(root, 'Delete from Google Drive…')?.click();
+    expect(button(root, 'Delete from Google Drive')?.disabled).toBe(true);
+    type(root, 'DELETE');
+    button(root, 'Delete from Google Drive')?.click();
+    await until(() => root.textContent?.includes('No other vaults were found') ?? false, 'list reloaded');
+    expect(vaultFiles(drive, id)).toEqual([]);
     await Promise.all([a.runtime.lock(), b.runtime.lock()]);
   });
 });
