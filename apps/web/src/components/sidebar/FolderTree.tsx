@@ -8,7 +8,7 @@ import { TrashToolbar } from './TrashToolbar.jsx';
 import { NoteItem } from './NoteItem.jsx';
 import { TOUCH_TARGET_PX, useNarrowScreen } from '../../layout/screen.js';
 import { longPress, RowMenuButton } from './rowMenu.jsx';
-import { rowStyle, tokens } from './styles.js';
+import { createHover, itemRowHeight, itemStyle, rowStyle, tokens } from './styles.js';
 import { buildTreeRows, type TreeRow } from './treeRows.js';
 
 export interface FolderTreeProps {
@@ -25,7 +25,8 @@ export function FolderTree(props: FolderTreeProps): JSX.Element {
   const [expanded, setExpanded] = createSignal<ReadonlySet<FolderId>>(new Set());
   const rows = createMemo(() => buildTreeRows(props.store.state, expanded()));
   const narrow = useNarrowScreen();
-  const rowHeight = (): number => (narrow() ? TOUCH_TARGET_PX : tokens.rowHeight);
+  const headerHeight = (): number => (narrow() ? TOUCH_TARGET_PX : tokens.rowHeight);
+  const rowHeight = (): number => itemRowHeight(narrow());
 
   const toggle = (id: FolderId): void => {
     setExpanded((current) => {
@@ -53,7 +54,7 @@ export function FolderTree(props: FolderTreeProps): JSX.Element {
       <Show
         when={props.store.state.selection.kind === 'system' && props.store.state.selection.id === 'system_trash'}
         fallback={
-          <div style={{ ...rowStyle(0, false, rowHeight()), cursor: 'default', color: tokens.muted, 'justify-content': 'space-between' }}>
+          <div style={{ ...rowStyle(0, headerHeight()), cursor: 'default', color: tokens.muted, 'justify-content': 'space-between' }}>
             <span>Folders</span>
             <Show when={canCreate()}>
               <button
@@ -78,15 +79,17 @@ export function FolderTree(props: FolderTreeProps): JSX.Element {
               {(folderRow) => {
                 const openMenu = (event: MouseEvent): void =>
                   props.onItemMenu?.(event, { kind: 'folder', id: folderRow().folder.id });
+                const [hovered, hover] = createHover();
                 return (
                   <div
                     {...props.dnd.dragSource(() => ({ kind: 'folder', id: folderRow().folder.id }))}
                     {...props.dnd.dropTarget({ kind: 'folder', id: folderRow().folder.id })}
                     {...longPress(openMenu)}
+                    {...hover}
                     data-folder-id={folderRow().folder.id}
                     role="treeitem"
                     aria-expanded={folderRow().expanded}
-                    style={rowStyle(folderRow().depth, false, rowHeight())}
+                    style={itemStyle(folderRow().depth, { hovered: hovered() }, rowHeight())}
                     onClick={() => toggle(folderRow().folder.id)}
                     onContextMenu={(event) => {
                       event.preventDefault();

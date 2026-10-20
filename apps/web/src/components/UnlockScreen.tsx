@@ -22,7 +22,7 @@ const linkButton: JSX.CSSProperties = {
   border: 'none',
   background: 'transparent',
   padding: '0',
-  color: 'LinkText',
+  color: tokens.accent,
   cursor: 'pointer',
   font: tokens.font,
   'text-decoration': 'underline',

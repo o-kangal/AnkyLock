@@ -1,7 +1,9 @@
-import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
+import { createSignal, For, Match, Show, Switch, useContext, type JSX } from 'solid-js';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
+import { THEME_CHOICES, ThemeContext } from '../theme/colorScheme.js';
 import { tokens } from './sidebar/styles.js';
+import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
 
 export type VaultSettingsView = 'menu' | 'remove' | 'delete';
 
@@ -27,6 +29,7 @@ export function VaultSettings(props: {
   readonly onClose: () => void;
 }): JSX.Element {
   const narrow = useNarrowScreen();
+  const theme = useContext(ThemeContext);
   const field = (): JSX.CSSProperties => touchSized(baseField, narrow());
   const button = (): JSX.CSSProperties => ({ ...field(), cursor: 'pointer', 'text-align': 'left' });
   const danger = (): JSX.CSSProperties => ({ ...button(), color: tokens.danger });
@@ -101,6 +104,37 @@ export function VaultSettings(props: {
             <button type="button" disabled={busy() || !signedIn()} style={button()} onClick={() => void props.runtime.backUpAgain().then(props.onClose)}>
               Back up to Google Drive again
             </button>
+          </Show>
+          <Show when={theme}>
+            {(current) => (
+              <div role="group" aria-label="Theme" style={{ 'margin-top': '10px' }}>
+                <span style={{ color: tokens.muted, 'font-size': '12px' }}>Theme (this device)</span>
+                <div style={{ display: 'flex', gap: '4px', 'margin-top': '6px' }}>
+                  <For each={THEME_CHOICES}>
+                    {(choice) => (
+                      <button
+                        type="button"
+                        aria-pressed={current().choice() === choice}
+                        style={{
+                          ...field(),
+                          'margin-top': '0',
+                          display: 'inline-flex',
+                          'align-items': 'center',
+                          'justify-content': 'center',
+                          gap: '4px',
+                          cursor: 'pointer',
+                          'border-color': current().choice() === choice ? tokens.accent : undefined,
+                        }}
+                        onClick={() => current().choose(choice)}
+                      >
+                        <ThemeIcon choice={choice} />
+                        {THEME_LABELS[choice]}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            )}
           </Show>
           <hr style={{ border: 'none', 'border-top': `1px solid ${tokens.border}`, margin: '10px 0 4px' }} />
           <button type="button" style={danger()} onClick={() => open('remove')}>

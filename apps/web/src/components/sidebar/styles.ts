@@ -1,17 +1,39 @@
-import type { JSX } from 'solid-js';
+import { createSignal, type Accessor, type JSX } from 'solid-js';
+import { TOUCH_TARGET_PX } from '../../layout/screen.js';
+import { colorVar, type ThemeColors } from '../../theme/colorScheme.js';
 
-/** Shared design tokens; components use inline styles only (no global CSS). */
+const color = (name: keyof ThemeColors): string => `var(${colorVar(name)})`;
+
+/**
+ * Shared design tokens; components use inline styles only (no global CSS). Colors resolve to the
+ * active theme's custom properties (see `applyColorScheme`).
+ */
 export const tokens = {
-  rowHeight: 24,
+  rowHeight: 28,
   indent: 14,
   font: '13px system-ui, -apple-system, "Segoe UI", sans-serif',
-  muted: '#6b6b6b',
-  activeBackground: 'rgba(0, 120, 212, 0.14)',
-  border: 'rgba(127, 127, 127, 0.25)',
-  danger: '#b3261e',
+  background: color('background'),
+  surface: color('surface'),
+  text: color('text'),
+  muted: color('muted'),
+  border: color('border'),
+  rowBorder: color('rowBorder'),
+  hoverBackground: color('hoverBackground'),
+  activeBackground: color('activeBackground'),
+  accent: color('accent'),
+  danger: color('danger'),
+  overlay: color('overlay'),
+  shadow: color('shadow'),
 } as const;
 
-export function rowStyle(depth: number, active = false, height: number = tokens.rowHeight): JSX.CSSProperties {
+/** Space around each framed sidebar item, inside its fixed-height row. */
+export const ROW_GAP_PX = 2;
+
+/** Height of a sidebar item's row; on touch screens the item itself stays 40 px tall. */
+export const itemRowHeight = (narrow: boolean): number => (narrow ? TOUCH_TARGET_PX + 2 * ROW_GAP_PX : tokens.rowHeight);
+
+/** Plain row: headers and toolbars in the sidebar. */
+export function rowStyle(depth: number, height: number = tokens.rowHeight): JSX.CSSProperties {
   return {
     display: 'flex',
     'align-items': 'center',
@@ -25,6 +47,39 @@ export function rowStyle(depth: number, active = false, height: number = tokens.
     overflow: 'hidden',
     'text-overflow': 'ellipsis',
     'user-select': 'none',
-    background: active ? tokens.activeBackground : 'transparent',
   };
+}
+
+export interface ItemState {
+  readonly active?: boolean;
+  readonly hovered?: boolean;
+}
+
+/**
+ * A category, folder or note: an outlined box inset in its row, indented by depth so nesting
+ * reads as a tree. Selected items get the accent outline; hover only tints the background.
+ */
+export function itemStyle(depth: number, state: ItemState, rowHeight: number = tokens.rowHeight): JSX.CSSProperties {
+  return {
+    ...rowStyle(0, rowHeight - 2 * ROW_GAP_PX),
+    'box-sizing': 'border-box',
+    margin: `${ROW_GAP_PX}px 6px ${ROW_GAP_PX}px ${6 + depth * tokens.indent}px`,
+    'padding-left': '7px',
+    border: `1px solid ${state.active ? tokens.accent : tokens.rowBorder}`,
+    'border-radius': '5px',
+    background: state.active ? tokens.activeBackground : state.hovered ? tokens.hoverBackground : 'transparent',
+    color: tokens.text,
+  };
+}
+
+/** Mouse hover for inline-styled rows (no stylesheet, so no `:hover`); touch never hovers. */
+export function createHover(): readonly [Accessor<boolean>, Pick<JSX.HTMLAttributes<HTMLElement>, 'onPointerEnter' | 'onPointerLeave'>] {
+  const [hovered, setHovered] = createSignal(false);
+  return [
+    hovered,
+    {
+      onPointerEnter: (event: PointerEvent) => setHovered(event.pointerType === 'mouse'),
+      onPointerLeave: () => setHovered(false),
+    },
+  ];
 }

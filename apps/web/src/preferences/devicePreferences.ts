@@ -9,13 +9,29 @@ export interface WordWrapPreference {
   toggle(): void;
 }
 
-type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
+export type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
-function defaultStorage(): PreferenceStorage | null {
+export function defaultStorage(): PreferenceStorage | null {
   try {
     return window.localStorage;
   } catch {
     return null;
+  }
+}
+
+export function readPreference(storage: PreferenceStorage | null, key: string): string | null {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePreference(storage: PreferenceStorage | null, key: string, value: string): void {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // Storage can be unavailable (private windows); the choice then lasts for this session.
   }
 }
 
@@ -33,25 +49,14 @@ export function createWordWrapPreference(
   storage: PreferenceStorage | null = defaultStorage(),
   narrow: () => boolean = isNarrowScreen,
 ): WordWrapPreference {
-  const read = (): string | null => {
-    try {
-      return storage?.getItem(WORD_WRAP_KEY) ?? null;
-    } catch {
-      return null;
-    }
-  };
-  const saved = read();
+  const saved = readPreference(storage, WORD_WRAP_KEY);
   const [wordWrap, setWordWrap] = createSignal(saved === null ? narrow() : saved === 'on');
   return {
     wordWrap,
     toggle() {
       const next = !wordWrap();
       setWordWrap(next);
-      try {
-        storage?.setItem(WORD_WRAP_KEY, next ? 'on' : 'off');
-      } catch {
-        // Storage can be unavailable (private windows); the choice then lasts for this session.
-      }
+      writePreference(storage, WORD_WRAP_KEY, next ? 'on' : 'off');
     },
   };
 }

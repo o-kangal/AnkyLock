@@ -54,6 +54,7 @@ export function TabBar(props: TabBarProps): JSX.Element {
         'min-height': props.compact ? '40px' : '32px',
         'flex-shrink': '0',
         'border-bottom': `1px solid ${tokens.border}`,
+        background: tokens.surface,
         'overflow-x': 'auto',
         'scrollbar-width': 'thin',
       }}

@@ -3,9 +3,9 @@ import { SYSTEM_ALL, SYSTEM_ARCHIVE, SYSTEM_TRASH, type SystemCategoryId } from 
 import type { DragDropManager } from '../../dnd/dragDropManager.js';
 import type { MenuTarget } from './ContextMenu.jsx';
 import type { Selection, WorkspaceStore } from '../../stores/workspaceStore.js';
-import { TOUCH_TARGET_PX, touchSized, useNarrowScreen } from '../../layout/screen.js';
+import { touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { longPress } from './rowMenu.jsx';
-import { rowStyle, tokens } from './styles.js';
+import { createHover, itemRowHeight, itemStyle, tokens, type ItemState } from './styles.js';
 
 /** Immutable system categories (BR-HIER-01): fixed labels, views rather than containers. */
 export const SYSTEM_CATEGORY_LABELS: Record<SystemCategoryId, string> = {
@@ -42,39 +42,47 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
   };
 
   const narrow = useNarrowScreen();
-  const rowHeight = (): number => (narrow() ? TOUCH_TARGET_PX : tokens.rowHeight);
+  const style = (state: ItemState): JSX.CSSProperties => itemStyle(0, state, itemRowHeight(narrow()));
 
   return (
-    <nav aria-label="Categories" style={{ 'border-bottom': `1px solid ${tokens.border}`, 'padding-bottom': '4px' }}>
+    <nav aria-label="Categories" style={{ 'border-bottom': `1px solid ${tokens.border}`, 'padding': '4px 0' }}>
       <For each={SYSTEM_ORDER}>
-        {(id) => (
-          <div
-            role="button"
-            aria-pressed={isSelected(props.store.state.selection, 'system', id)}
-            style={rowStyle(0, isSelected(props.store.state.selection, 'system', id), rowHeight())}
-            onClick={() => props.store.select({ kind: 'system', id })}
-          >
-            {SYSTEM_CATEGORY_LABELS[id]}
-          </div>
-        )}
+        {(id) => {
+          const [hovered, hover] = createHover();
+          return (
+            <div
+              {...hover}
+              role="button"
+              aria-pressed={isSelected(props.store.state.selection, 'system', id)}
+              style={style({ active: isSelected(props.store.state.selection, 'system', id), hovered: hovered() })}
+              onClick={() => props.store.select({ kind: 'system', id })}
+            >
+              {SYSTEM_CATEGORY_LABELS[id]}
+            </div>
+          );
+        }}
       </For>
       <For each={props.store.state.categories}>
-        {(category) => (
-          <div
-            {...props.dnd.dropTarget({ kind: 'category', id: category.id })}
-            {...longPress((event) => props.onItemMenu?.(event, { kind: 'category', id: category.id }))}
-            role="button"
-            aria-pressed={isSelected(props.store.state.selection, 'category', category.id)}
-            style={rowStyle(0, isSelected(props.store.state.selection, 'category', category.id), rowHeight())}
-            onClick={() => props.store.select({ kind: 'category', id: category.id })}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              props.onItemMenu?.(event, { kind: 'category', id: category.id });
-            }}
-          >
-            {category.name}
-          </div>
-        )}
+        {(category) => {
+          const [hovered, hover] = createHover();
+          return (
+            <div
+              {...props.dnd.dropTarget({ kind: 'category', id: category.id })}
+              {...longPress((event) => props.onItemMenu?.(event, { kind: 'category', id: category.id }))}
+              {...hover}
+              role="button"
+              aria-pressed={isSelected(props.store.state.selection, 'category', category.id)}
+              style={style({ active: isSelected(props.store.state.selection, 'category', category.id), hovered: hovered() })}
+              onClick={() => props.store.select({ kind: 'category', id: category.id })}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                props.onItemMenu?.(event, { kind: 'category', id: category.id });
+              }}
+            >
+              {category.name}
+            </div>
+          );
+        }}
       </For>
       <form onSubmit={(e) => void submit(e)} style={{ padding: '4px 8px' }}>
         <input

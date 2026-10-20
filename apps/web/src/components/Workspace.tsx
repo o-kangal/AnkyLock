@@ -1,29 +1,16 @@
 import { createEffect, createSignal, on, onCleanup, onMount, Show, type JSX } from 'solid-js';
 import type * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
-import { CodeMirrorView, type ColorScheme } from '@ankylock/editor';
+import { CodeMirrorView } from '@ankylock/editor';
 import { shortcutLabel, workspaceCommand, type Platform } from '../keyboard/shortcuts.js';
 import { useNarrowScreen } from '../layout/screen.js';
 import { createWordWrapPreference } from '../preferences/devicePreferences.js';
 import type { Runtime } from '../runtime/createRuntime.js';
+import { useTheme } from '../theme/colorScheme.js';
 import { Sidebar } from './sidebar/Sidebar.jsx';
 import { SyncStatusBar } from './SyncStatusBar.jsx';
 import { tokens } from './sidebar/styles.js';
 import { TabBar } from './tabs/TabBar.jsx';
-
-/** Follows the OS light/dark preference; falls back to light where matchMedia is unavailable. */
-function useColorScheme(): () => ColorScheme {
-  const query = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
-  const [scheme, setScheme] = createSignal<ColorScheme>(query?.matches ? 'dark' : 'light');
-  if (query) {
-    const onChange = (event: MediaQueryListEvent): void => {
-      setScheme(event.matches ? 'dark' : 'light');
-    };
-    query.addEventListener('change', onChange);
-    onCleanup(() => query.removeEventListener('change', onChange));
-  }
-  return scheme;
-}
 
 /**
  * Main layout: sidebar, tab bar and a single editor for the active tab. Background tabs keep
@@ -31,7 +18,7 @@ function useColorScheme(): () => ColorScheme {
  */
 export function Workspace(props: { readonly runtime: Runtime; readonly platform: Platform }): JSX.Element {
   const { store } = props.runtime;
-  const scheme = useColorScheme();
+  const theme = useTheme();
   const wrap = createWordWrapPreference();
   const narrow = useNarrowScreen();
   /** On narrow screens the sidebar is a drawer over the editor. */
@@ -97,8 +84,8 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
           left: '0',
           width: 'min(85%, 320px)',
           'z-index': '2',
-          background: 'Canvas',
-          'box-shadow': drawer() ? '2px 0 12px rgba(0, 0, 0, 0.25)' : 'none',
+          background: tokens.surface,
+          'box-shadow': drawer() ? `2px 0 12px ${tokens.shadow}` : 'none',
           transform: drawer() ? 'none' : 'translateX(-100%)',
           visibility: drawer() ? 'visible' : 'hidden',
           transition: 'transform 160ms ease-out, visibility 160ms',
@@ -125,7 +112,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
           <div
             data-testid="drawer-backdrop"
             aria-hidden="true"
-            style={{ position: 'absolute', inset: '0', 'z-index': '1', background: 'rgba(0, 0, 0, 0.3)' }}
+            style={{ position: 'absolute', inset: '0', 'z-index': '1', background: tokens.overlay }}
             onClick={() => setDrawer(false)}
           />
         </Show>
@@ -153,7 +140,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
                   active={true}
                   autoFocus={true}
                   readOnly={store.state.notes[open().id]?.deletedAt != null}
-                  colorScheme={scheme()}
+                  colorScheme={theme.scheme()}
                   wordWrap={wrap.wordWrap()}
                   fontSize={narrow() ? 16 : 13}
                   onTitleChange={(title) => store.setTitle(open().id, title)}
@@ -166,6 +153,7 @@ export function Workspace(props: { readonly runtime: Runtime; readonly platform:
       <SyncStatusBar
         runtime={props.runtime}
         wordWrap={{ on: wrap.wordWrap, toggle: wrap.toggle, shortcut: shortcutLabel('toggle-wrap', props.platform) }}
+        theme={theme}
         compact={narrow()}
       />
     </div>

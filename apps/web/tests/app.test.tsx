@@ -4,7 +4,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { EpochMs, FolderId, NoteId } from '@ankylock/core';
 import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
-import { AnkyLockApp, createRuntime, menuActions, type Platform, type Runtime } from '../src/index.js';
+import { AnkyLockApp, createRuntime, menuActions, tokens, type Platform, type Runtime } from '../src/index.js';
 import { setup, TestVaults } from './helpers.js';
 
 beforeAll(() => {
@@ -463,7 +463,7 @@ describe('confirmation styling', () => {
     expect(purge().style.color).toBe('inherit');
     purge().click();
     await waitFor(() => purge().textContent?.includes('Click again to confirm') === true, 'confirm prompt');
-    expect(purge().style.color).toBe('rgb(179, 38, 30)');
+    expect(purge().style.color).toBe(tokens.danger);
   });
 });
 

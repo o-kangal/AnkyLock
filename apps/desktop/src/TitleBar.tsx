@@ -1,5 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { JSX } from 'solid-js';
+import { tokens } from '@ankylock/web/workspace';
 import logoUrl from '../src-tauri/icons/app-icon.svg';
 
 const buttonStyle: JSX.CSSProperties = {
@@ -7,6 +8,7 @@ const buttonStyle: JSX.CSSProperties = {
   height: '100%',
   border: 'none',
   background: 'transparent',
+  color: 'inherit',
   font: '13px system-ui, sans-serif',
   cursor: 'pointer',
 };
@@ -24,7 +26,9 @@ export function TitleBar(): JSX.Element {
         'padding-left': '12px',
         font: '12px system-ui, sans-serif',
         'user-select': 'none',
-        'border-bottom': '1px solid rgba(127, 127, 127, 0.25)',
+        color: tokens.text,
+        background: tokens.surface,
+        'border-bottom': `1px solid ${tokens.border}`,
       }}
     >
       {/* Clicks pass through the logo to the header, so dragging it moves the window. */}

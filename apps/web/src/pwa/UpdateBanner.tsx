@@ -30,10 +30,10 @@ export function UpdateBanner(props: {
             gap: '12px',
             'align-items': 'center',
             padding: '8px 12px',
-            background: 'Canvas',
-            color: 'CanvasText',
+            background: tokens.background,
+            color: tokens.text,
             border: `1px solid ${tokens.border}`,
-            'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.18)',
+            'box-shadow': `0 4px 12px ${tokens.shadow}`,
             font: tokens.font,
             'z-index': '1000',
           }}

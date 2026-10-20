@@ -27,6 +27,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
         height: '100%',
         'min-width': '0',
         font: tokens.font,
+        background: tokens.surface,
         'border-right': `1px solid ${tokens.border}`,
       }}
     >

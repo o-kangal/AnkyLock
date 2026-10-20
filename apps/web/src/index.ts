@@ -10,6 +10,8 @@ export { ContextMenu, menuActions, type MenuAction, type MenuTarget } from './co
 export { AnkyLockApp } from './components/AnkyLockApp.jsx';
 export { UnlockScreen, MIN_PASSPHRASE_LENGTH, vaultLabel } from './components/UnlockScreen.jsx';
 export { Workspace } from './components/Workspace.jsx';
+export { tokens } from './components/sidebar/styles.js';
+export { applyColorScheme, initialColorScheme } from './theme/colorScheme.js';
 export { shortcutLabel, workspaceCommand, type Platform, type WorkspaceCommand } from './keyboard/shortcuts.js';
 export {
   createRuntime,

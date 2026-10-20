@@ -1,6 +1,8 @@
 import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import type { BackupStatus } from '@ankylock/sync';
 import type { Runtime } from '../runtime/createRuntime.js';
+import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
+import type { ThemePreference } from '../theme/colorScheme.js';
 import { Popover, type PopoverPosition } from './Popover.jsx';
 import { VaultSettings, type VaultSettingsView } from './VaultSettings.jsx';
 import { tokens } from './sidebar/styles.js';
@@ -8,8 +10,9 @@ import { tokens } from './sidebar/styles.js';
 const linkButton: JSX.CSSProperties = {
   border: 'none',
   background: 'transparent',
-  padding: '0',
-  color: 'LinkText',
+  // Vertical padding widens the click target without changing how the link looks.
+  padding: '6px 2px',
+  color: tokens.accent,
   cursor: 'pointer',
   font: tokens.font,
   'text-decoration': 'underline',
@@ -58,7 +61,7 @@ const iconButton: JSX.CSSProperties = {
   display: 'inline-flex',
   border: 'none',
   background: 'transparent',
-  padding: '2px',
+  padding: '6px',
   color: 'inherit',
   cursor: 'pointer',
 };
@@ -77,6 +80,7 @@ export interface WordWrapToggle {
 export function SyncStatusBar(props: {
   readonly runtime: Runtime;
   readonly wordWrap?: WordWrapToggle;
+  readonly theme?: ThemePreference;
   /** Narrow screens: short labels and icon buttons; Lock and Sign out live in the vault menu. */
   readonly compact?: boolean;
 }): JSX.Element {
@@ -102,14 +106,15 @@ export function SyncStatusBar(props: {
         'justify-content': 'space-between',
         'align-items': 'center',
         gap: '12px',
-        // Tall enough that its links sit clear of the frameless window's bottom resize edge.
-        'min-height': '30px',
+        // Tall enough for easy clicks, with links clear of the frameless window's bottom resize edge.
+        'min-height': '40px',
         'box-sizing': 'border-box',
         padding: '0 12px',
         'border-top': `1px solid ${tokens.border}`,
         font: tokens.font,
         'font-size': '12px',
         color: tokens.muted,
+        background: tokens.surface,
       }}
     >
       <span style={{ display: 'flex', gap: '8px', 'align-items': 'center' }}>
@@ -120,7 +125,7 @@ export function SyncStatusBar(props: {
           title="Vault settings: rename, remove or delete"
           style={{
             ...linkButton,
-            color: 'CanvasText',
+            color: tokens.text,
             'text-decoration': 'none',
             'white-space': 'nowrap',
             overflow: 'hidden',
@@ -244,11 +249,11 @@ export function SyncStatusBar(props: {
               style={{
                 ...iconButton,
                 ...(props.compact ? { 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' } : {}),
-                padding: '1px 6px',
+                padding: '6px 8px',
                 'border-radius': '3px',
                 font: tokens.font,
                 'font-size': '12px',
-                color: wrap().on() ? 'CanvasText' : 'inherit',
+                color: wrap().on() ? tokens.text : 'inherit',
                 background: wrap().on() ? tokens.activeBackground : 'transparent',
               }}
               onClick={() => wrap().toggle()}
@@ -256,6 +261,30 @@ export function SyncStatusBar(props: {
               <span aria-hidden="true">↵</span>
               <Show when={!props.compact}>
                 <span style={{ 'margin-left': '4px' }}>Wrap ({wrap().shortcut})</span>
+              </Show>
+            </button>
+          )}
+        </Show>
+        <Show when={props.theme}>
+          {(theme) => (
+            <button
+              type="button"
+              {...(props.compact ? { 'aria-label': `Theme: ${THEME_LABELS[theme().choice()]}` } : {})}
+              title="Color theme: System, Light or Dark"
+              style={{
+                ...iconButton,
+                ...(props.compact ? { 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' } : {}),
+                padding: '6px 8px',
+                'align-items': 'center',
+                gap: '4px',
+                font: tokens.font,
+                'font-size': '12px',
+              }}
+              onClick={() => theme().cycle()}
+            >
+              <ThemeIcon choice={theme().choice()} />
+              <Show when={!props.compact}>
+                <span>{THEME_LABELS[theme().choice()]}</span>
               </Show>
             </button>
           )}
@@ -280,7 +309,7 @@ export function SyncStatusBar(props: {
             </Show>
           }
         >
-          <span role="progressbar" aria-label="Syncing" style={{ display: 'inline-flex', padding: '2px' }}>
+          <span role="progressbar" aria-label="Syncing" style={{ display: 'inline-flex', padding: '6px' }}>
             <SyncIcon spinning={true} />
           </span>
         </Show>

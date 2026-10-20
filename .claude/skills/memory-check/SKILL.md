@@ -50,7 +50,7 @@ Never type-check bytes with `instanceof Uint8Array` / `instanceof ArrayBuffer`. 
 
 ### Styling
 
-There are no global CSS files and no component libraries (AGENTS.md). That also rules out Tailwind, which needs a global CSS entry file. Use component-scoped styles (CSS modules or inline style objects) together with a small set of shared design tokens.
+There are no global CSS files and no component libraries (AGENTS.md). That also rules out Tailwind, which needs a global CSS entry file. Use component-scoped styles (CSS modules or inline style objects) together with a small set of shared design tokens. Colors always come from `tokens` (`apps/web/src/components/sidebar/styles.ts`), which resolve to `--al-*` custom properties that `applyColorScheme` sets on the root for the light or dark palette (Task 12c). Never hardcode a color or use system colors like `Canvas`/`LinkText`: they ignore the user's theme choice. Inline styles have no `:hover`; use `createHover()`.
 
 ## Part 2: Auditing
 

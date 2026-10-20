@@ -570,6 +570,7 @@ pnpm run test && pnpm run typecheck
 ---
 
 ### Task 12c: Light/Dark Theme & Sidebar Row Styling
+- **Status:** ✅ Completed (2026-10-20)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/editor/src/extensions/theme.ts`, `apps/web/src/preferences/devicePreferences.ts`, `apps/web/src/components/sidebar/styles.ts`
 - **Target Files (Create/Modify):**

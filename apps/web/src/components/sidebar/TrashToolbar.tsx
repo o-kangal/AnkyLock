@@ -163,7 +163,7 @@ export function TrashToolbar(props: { readonly store: WorkspaceStore }): JSX.Ele
       </Show>
       <Show when={open() === 'empty'}>
         <Popover label="Empty Trash" at={anchor()} width={POPOVER_WIDTH} onClose={() => setOpen(null)} style={popoverStyle}>
-          <p style={{ margin: '0 0 8px', color: 'CanvasText' }}>
+          <p style={{ margin: '0 0 8px', color: tokens.text }}>
             Permanently delete all {count()} {count() === 1 ? 'item' : 'items'} in Trash? This cannot be undone.
           </p>
           <div style={{ display: 'flex', gap: '8px' }}>

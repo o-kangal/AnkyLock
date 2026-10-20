@@ -1,9 +1,9 @@
 import { onMount, Show, type JSX } from 'solid-js';
 import type { DragDropManager, DragItem } from '../../dnd/dragDropManager.js';
 import type { NoteView, WorkspaceStore } from '../../stores/workspaceStore.js';
-import { TOUCH_TARGET_PX, useNarrowScreen } from '../../layout/screen.js';
+import { useNarrowScreen } from '../../layout/screen.js';
 import { longPress, RowMenuButton } from './rowMenu.jsx';
-import { rowStyle } from './styles.js';
+import { createHover, itemRowHeight, itemStyle } from './styles.js';
 
 export interface NoteItemProps {
   readonly store: WorkspaceStore;
@@ -25,14 +25,16 @@ export function NoteItem(props: NoteItemProps): JSX.Element {
   };
 
   const narrow = useNarrowScreen();
+  const [hovered, hover] = createHover();
   const openMenu = (event: MouseEvent): void => props.onItemMenu?.(event, { kind: 'note', id: props.note.id });
 
   return (
     <div
       {...props.dnd.dragSource(() => ({ kind: 'note', id: props.note.id }))}
       {...longPress(openMenu)}
+      {...hover}
       data-note-id={props.note.id}
-      style={rowStyle(props.depth, active(), narrow() ? TOUCH_TARGET_PX : undefined)}
+      style={itemStyle(props.depth, { active: active(), hovered: hovered() }, itemRowHeight(narrow()))}
       title={props.note.title ?? 'Untitled'}
       onClick={() => props.store.openNote(props.note.id)}
       onContextMenu={(event) => {
