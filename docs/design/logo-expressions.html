@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AnkyLock — 8 Locked & 4 Unlocked Expressions</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px;
+      background: #07090c;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.02em;
+    }
+    p {
+      font-size: 13px;
+      color: #7d8590;
+      margin: 0;
+    }
+
+    /* Selector Panels */
+    .panel-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 760px;
+      margin-bottom: 18px;
+    }
+    .selector-box {
+      background: #0d1117;
+      border: 1px solid #222b38;
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .selector-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #7d8590;
+      display: flex;
+      justify-content: space-between;
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .btn {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #222b38;
+      background: #11151c;
+      color: #e6edf3;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.14s ease;
+    }
+    .btn:hover {
+      background: #181e27;
+      border-color: #3b485e;
+    }
+    .btn.primary {
+      background: #e6edf3;
+      color: #0b0e11;
+      border-color: #e6edf3;
+      padding: 10px 18px;
+      font-size: 13px;
+    }
+    .btn.opt {
+      border-color: transparent;
+      background: #131820;
+      color: #8b949e;
+    }
+    .btn.opt.active {
+      background: #222b38;
+      color: #f8fafc;
+      border-color: #485770;
+    }
+    .btn.active-toggle {
+      background: #1f2937;
+      border-color: #f8fafc;
+      color: #f8fafc;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* Showcase Grid */
+    .matrix {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 368px));
+      gap: 24px;
+      max-width: 760px;
+      width: 100%;
+    }
+    .card {
+      border-radius: 20px;
+      padding: 26px 20px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid #222b38;
+      cursor: pointer;
+      user-select: none;
+    }
+    .theme-dark {
+      --bg: #0b0e11;
+      --fg: #f8fafc;
+      background: #0b0e11;
+      color: #f8fafc;
+      border-color: #222b38;
+    }
+    .theme-light {
+      --bg: #ffffff;
+      --fg: #0f172a;
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #e2e8f0;
+    }
+
+    .icon-stage {
+      width: 170px;
+      height: 170px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .icon-stage svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* ==========================================
+       ANKYLOCK SPRING ANIMATION KEYFRAMES & CSS
+       ========================================== */
+    .anky-svg {
+      --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --smooth: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .anky-svg .body-group {
+      transform-origin: 126px 168px;
+      transition: transform 0.45s var(--spring);
+    }
+    .is-unlocked .anky-svg .body-group {
+      transform: translateY(-3px);
+    }
+
+    .anky-svg .shackle {
+      transform-origin: 156px 98px;
+      transition: transform 0.5s var(--spring);
+    }
+    .is-unlocked .anky-svg .shackle {
+      transform: translateY(-18px) rotate(15deg);
+    }
+
+    .anky-svg .keyhole {
+      transform-origin: 130px 136px;
+      transition: transform 0.45s var(--spring);
+    }
+    .is-unlocked .anky-svg .keyhole {
+      transform: rotate(28deg);
+    }
+
+    .anky-svg .head-group {
+      transform-origin: 72px 148px;
+      transition: transform 0.5s var(--spring);
+    }
+    .is-unlocked .anky-svg .head-group {
+      transform: translate(-4px, -7px) rotate(7deg);
+    }
+
+    .anky-svg .face-locked {
+      transform-origin: 56px 145px;
+      transition: opacity 0.18s ease, transform 0.3s var(--smooth);
+      opacity: 1;
+      transform: scale(1);
+    }
+    .is-unlocked .anky-svg .face-locked {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+
+    .anky-svg .face-unlocked {
+      transform-origin: 56px 145px;
+      transition: opacity 0.22s ease 0.04s, transform 0.4s var(--spring) 0.04s;
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    .is-unlocked .anky-svg .face-unlocked {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Visibility Selectors for 8 Locked + 4 Unlocked Variants */
+    .locked-v, .unlocked-v { display: none; }
+    body[data-locked="squint"] .l-squint { display: block; }
+    body[data-locked="blink"] .l-blink { display: block; }
+    body[data-locked="arch"] .l-arch { display: block; }
+    body[data-locked="sleepz"] .l-sleepz { display: block; }
+    body[data-locked="guard"] .l-guard { display: block; }
+    body[data-locked="tight"] .l-tight { display: block; }
+    body[data-locked="visor"] .l-visor { display: block; }
+    body[data-locked="bubble"] .l-bubble { display: block; }
+
+    body[data-unlocked="awake"] .u-awake { display: block; }
+    body[data-unlocked="star"] .u-star { display: block; }
+    body[data-unlocked="cheer"] .u-cheer { display: block; }
+    body[data-unlocked="curious"] .u-curious { display: block; }
+
+    .anky-svg .tail-group {
+      transform-origin: 176px 158px;
+      transition: transform 0.55s var(--spring);
+    }
+    .is-unlocked .anky-svg .tail-group {
+      transform: rotate(22deg);
+    }
+
+    .anky-svg .scutes {
+      transform-origin: 128px 90px;
+      transition: transform 0.45s var(--spring) 0.03s;
+    }
+    .is-unlocked .anky-svg .scutes {
+      transform: translateY(-2px);
+    }
+
+    .size-strip {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin: 8px 0 14px;
+      padding: 8px 16px;
+      border-radius: 10px;
+      background: rgba(125, 133, 144, 0.08);
+    }
+    .meta {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+      border-top: 1px solid rgba(125, 133, 144, 0.2);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .state-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 99px;
+      border: 1px solid currentColor;
+      opacity: 0.85;
+    }
+    .hint {
+      font-size: 11px;
+      opacity: 0.5;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .matrix { grid-template-columns: 1fr; }
+      .btn-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body data-locked="squint" data-unlocked="awake">
+
+  <header>
+    <h1>AnkyLock — 8 Locked × 4 Unlocked Expression Matrix</h1>
+    <p>Switch expressions manually or enable Randomize on Toggle to cycle through all 12 faces</p>
+  </header>
+
+  <div class="panel-group">
+    <!-- 8 LOCKED EXPRESSIONS -->
+    <div class="selector-box">
+      <div class="selector-label">
+        <span>🔒 Locked Expressions (8 Variants)</span>
+        <span id="locked-indicator">Active: 1. &gt; Squint</span>
+      </div>
+      <div class="btn-grid" id="locked-grid">
+        <button class="btn opt active" data-val="squint" onclick="selectLocked('squint', this)">1. &gt; Squint</button>
+        <button class="btn opt" data-val="blink" onclick="selectLocked('blink', this)">2. — Blink</button>
+        <button class="btn opt" data-val="arch" onclick="selectLocked('arch', this)">3. ◠ Arch</button>
+        <button class="btn opt" data-val="sleepz" onclick="selectLocked('sleepz', this)">4. ◡ + zZ</button>
+        <button class="btn opt" data-val="guard" onclick="selectLocked('guard', this)">5. ▀ Guard</button>
+        <button class="btn opt" data-val="tight" onclick="selectLocked('tight', this)">6. × Tight</button>
+        <button class="btn opt" data-val="visor" onclick="selectLocked('visor', this)">7. 🕶 Visor</button>
+        <button class="btn opt" data-val="bubble" onclick="selectLocked('bubble', this)">8. ○ Bubble</button>
+      </div>
+    </div>
+
+    <!-- 4 UNLOCKED EXPRESSIONS -->
+    <div class="selector-box">
+      <div class="selector-label">
+        <span>🔓 Unlocked Expressions (4 Variants)</span>
+        <span id="unlocked-indicator">Active: 1. • Awake</span>
+      </div>
+      <div class="btn-grid" id="unlocked-grid">
+        <button class="btn opt active" data-val="awake" onclick="selectUnlocked('awake', this)">1. • Awake</button>
+        <button class="btn opt" data-val="star" onclick="selectUnlocked('star', this)">2. ✦ Starry</button>
+        <button class="btn opt" data-val="cheer" onclick="selectUnlocked('cheer', this)">3. ∩ Cheer</button>
+        <button class="btn opt" data-val="curious" onclick="selectUnlocked('curious', this)">4. ◎ Curious</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MASTER ACTION CONTROLS -->
+  <div class="controls">
+    <button class="btn primary" id="toggleBtn" onclick="toggleAll()">
+      <span>🔓 Unlock Vault</span>
+    </button>
+    <button class="btn" id="randomBtn" onclick="toggleRandomize()">
+      <span>🎲 Randomize on Toggle: OFF</span>
+    </button>
+    <button class="btn" id="loopBtn" onclick="toggleAutoLoop()">
+      <span>🔁 Auto-Loop: OFF</span>
+    </button>
+    <button class="btn" onclick="copySolidComponent(this)">
+      <span>📋 Copy All-in-One Solid.js Component</span>
+    </button>
+  </div>
+
+  <!-- REUSABLE ANIMATED SVG TEMPLATE -->
+  <template id="anky-template">
+    <svg class="anky-svg" viewBox="0 0 240 210">
+      <g class="body-group">
+        <!-- 1. Padlock Shackle -->
+        <g class="shackle">
+          <path d="M 96 96 V 58 A 30 30 0 0 1 156 58 V 104"
+                fill="none" stroke="var(--fg)" stroke-width="12" stroke-linecap="round" />
+        </g>
+
+        <!-- 5. Tail & Club -->
+        <g class="tail-group">
+          <path d="M 176 158 Q 208 154 206 126"
+                fill="none" stroke="var(--fg)" stroke-width="12" stroke-linecap="round" />
+          <circle cx="206" cy="120" r="12"
+                  fill="var(--bg)" stroke="var(--fg)" stroke-width="10" />
+        </g>
+
+        <!-- Stubby Legs -->
+        <rect x="86" y="162" width="22" height="24" rx="11"
+              fill="var(--bg)" stroke="var(--fg)" stroke-width="10" />
+        <rect x="144" y="162" width="22" height="24" rx="11"
+              fill="var(--bg)" stroke="var(--fg)" stroke-width="10" />
+
+        <!-- 6. Top Mini Armor Scutes -->
+        <g class="scutes">
+          <circle cx="102" cy="92" r="9" fill="var(--bg)" stroke="var(--fg)" stroke-width="9" />
+          <circle cx="128" cy="86" r="10" fill="var(--bg)" stroke="var(--fg)" stroke-width="9" />
+          <circle cx="154" cy="92" r="9" fill="var(--bg)" stroke="var(--fg)" stroke-width="9" />
+        </g>
+
+        <!-- Main Armored Shell -->
+        <path d="M 68 152 C 68 106, 92 90, 126 90 C 160 90, 184 106, 184 152 C 184 166, 174 172, 160 172 H 92 C 78 172, 68 166, 68 152 Z"
+              fill="var(--bg)" stroke="var(--fg)" stroke-width="11" stroke-linejoin="round" />
+
+        <!-- 2. Keyhole -->
+        <g class="keyhole">
+          <circle cx="130" cy="128" r="9" fill="var(--fg)" />
+          <path d="M 125 132 L 123 152 H 137 L 135 132 Z" fill="var(--fg)" />
+        </g>
+
+        <!-- 3. Cute Anky Head -->
+        <g class="head-group">
+          <path d="M 52 134 L 58 120 L 68 130"
+                fill="var(--bg)" stroke="var(--fg)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
+          <rect x="34" y="128" width="50" height="40" rx="20"
+                fill="var(--bg)" stroke="var(--fg)" stroke-width="10" />
+
+          <!-- ==========================================
+               8 LOCKED EXPRESSIONS
+               ========================================== -->
+          <g class="face-locked">
+            <!-- L1: Squint '>' -->
+            <g class="locked-v l-squint">
+              <path d="M 53 138 L 62 143 L 53 148" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M 43 154 H 49" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- L2: Natural Horizontal Blink '—' -->
+            <g class="locked-v l-blink">
+              <path d="M 52 143 H 64" fill="none" stroke="var(--fg)" stroke-width="5.5" stroke-linecap="round" />
+              <path d="M 43 153 Q 47 156 51 153" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- L3: Happy Arch '◠' -->
+            <g class="locked-v l-arch">
+              <path d="M 52 146 Q 58 138 64 146" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" />
+              <path d="M 43 153 Q 47 156 51 153" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- L4: Sleepy Curve + Floating 'z' -->
+            <g class="locked-v l-sleepz">
+              <path d="M 51 142 Q 57 147 63 142 L 66 139" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M 43 154 H 48" fill="none" stroke="var(--fg)" stroke-width="4" stroke-linecap="round" />
+              <path d="M 33 108 H 42 L 33 117 H 42" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+
+            <!-- L5: Determined Guardian Brow '▀' -->
+            <g class="locked-v l-guard">
+              <path d="M 50 138 L 65 142" fill="none" stroke="var(--fg)" stroke-width="5.5" stroke-linecap="round" />
+              <circle cx="58" cy="144" r="3.8" fill="var(--fg)" />
+              <path d="M 43 155 Q 47 152 51 155" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- L6: Tightly Shut '×' -->
+            <g class="locked-v l-tight">
+              <path d="M 53 138 L 63 147 M 63 138 L 53 147" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" />
+              <circle cx="46" cy="154" r="2.8" fill="var(--fg)" />
+            </g>
+
+            <!-- L7: Cyber Shades Visor '🕶' -->
+            <g class="locked-v l-visor">
+              <path d="M 47 138 H 68 L 65 147 H 50 Z" fill="var(--fg)" />
+              <path d="M 66 140 H 79" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" />
+              <path d="M 44 154 Q 49 156 53 152" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- L8: Retro Sleep Bubble '○' -->
+            <g class="locked-v l-bubble">
+              <path d="M 52 143 Q 58 148 64 143" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" />
+              <circle cx="46" cy="154" r="2.5" fill="var(--fg)" />
+              <circle cx="29" cy="144" r="7.5" fill="var(--bg)" stroke="var(--fg)" stroke-width="5" />
+            </g>
+          </g>
+
+          <!-- ==========================================
+               4 UNLOCKED EXPRESSIONS
+               ========================================== -->
+          <g class="face-unlocked">
+            <!-- U1: Classic Awake Dot '•' -->
+            <g class="unlocked-v u-awake">
+              <circle cx="58" cy="143" r="5" fill="var(--fg)" />
+              <path d="M 43 152 Q 48 157 54 152" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- U2: Starry Sparkle Eye '✦' -->
+            <g class="unlocked-v u-star">
+              <path d="M 58 133 L 60.5 139.5 L 67 142 L 60.5 144.5 L 58 151 L 55.5 144.5 L 49 142 L 55.5 139.5 Z" fill="var(--fg)" />
+              <path d="M 42 151 Q 48 159 55 151 Z" fill="var(--fg)" />
+            </g>
+
+            <!-- U3: Cheerful Arch + Blush Dot '∩' -->
+            <g class="unlocked-v u-cheer">
+              <path d="M 52 146 C 52 137, 63 137, 63 146" fill="none" stroke="var(--fg)" stroke-width="5" stroke-linecap="round" />
+              <circle cx="66" cy="150" r="3" fill="var(--fg)" />
+              <path d="M 42 151 Q 48 158 54 151" fill="none" stroke="var(--fg)" stroke-width="4.5" stroke-linecap="round" />
+            </g>
+
+            <!-- U4: Wide Curious Ring Eye '◎' -->
+            <g class="unlocked-v u-curious">
+              <circle cx="58" cy="142" r="6.5" fill="var(--bg)" stroke="var(--fg)" stroke-width="4.5" />
+              <circle cx="56.5" cy="142" r="2.5" fill="var(--fg)" />
+              <circle cx="46" cy="154" r="3.5" fill="none" stroke="var(--fg)" stroke-width="4" />
+            </g>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </template>
+
+  <div class="matrix">
+    <!-- DARK MODE INTERACTIVE CARD -->
+    <div class="card theme-dark" id="card-dark" onclick="toggleAll()">
+      <div class="icon-stage" data-mount></div>
+      <div class="size-strip" title="Live Animated 48px / 28px / 16px">
+        <div style="width:48px;height:42px" data-mount></div>
+        <div style="width:28px;height:24px" data-mount></div>
+        <div style="width:18px;height:16px" data-mount></div>
+      </div>
+      <div class="meta">
+        <span>Dark Mode</span>
+        <span class="state-pill" data-label>LOCKED</span>
+      </div>
+      <div class="hint">Click card to toggle Lock / Unlock</div>
+    </div>
+
+    <!-- LIGHT MODE INTERACTIVE CARD -->
+    <div class="card theme-light" id="card-light" onclick="toggleAll()">
+      <div class="icon-stage" data-mount></div>
+      <div class="size-strip" title="Live Animated 48px / 28px / 16px">
+        <div style="width:48px;height:42px" data-mount></div>
+        <div style="width:28px;height:24px" data-mount></div>
+        <div style="width:18px;height:16px" data-mount></div>
+      </div>
+      <div class="meta">
+        <span>Light Mode</span>
+        <span class="state-pill" data-label>LOCKED</span>
+      </div>
+      <div class="hint">Click card to toggle Lock / Unlock</div>
+    </div>
+  </div>
+
+  <script>
+    const tpl = document.getElementById('anky-template');
+    document.querySelectorAll('[data-mount]').forEach(slot => {
+      slot.appendChild(tpl.content.cloneNode(true));
+    });
+
+    const LOCKED_LIST = ['squint', 'blink', 'arch', 'sleepz', 'guard', 'tight', 'visor', 'bubble'];
+    const UNLOCKED_LIST = ['awake', 'star', 'cheer', 'curious'];
+
+    let globalUnlocked = false;
+    let randomizeOnToggle = false;
+    let loopTimer = null;
+
+    function selectLocked(val, btn) {
+      document.body.setAttribute('data-locked', val);
+      document.querySelectorAll('#locked-grid .opt').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      else {
+        const match = document.querySelector(`#locked-grid [data-val="${val}"]`);
+        if (match) match.classList.add('active');
+      }
+      document.getElementById('locked-indicator').textContent = `Active: ${val}`;
+      if (globalUnlocked) setUnlockedState(false);
+    }
+
+    function selectUnlocked(val, btn) {
+      document.body.setAttribute('data-unlocked', val);
+      document.querySelectorAll('#unlocked-grid .opt').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      else {
+        const match = document.querySelector(`#unlocked-grid [data-val="${val}"]`);
+        if (match) match.classList.add('active');
+      }
+      document.getElementById('unlocked-indicator').textContent = `Active: ${val}`;
+      if (!globalUnlocked) setUnlockedState(true);
+    }
+
+    function setUnlockedState(unlocked) {
+      globalUnlocked = unlocked;
+      if (randomizeOnToggle) {
+        if (unlocked) {
+          const nextU = UNLOCKED_LIST[Math.floor(Math.random() * UNLOCKED_LIST.length)];
+          document.body.setAttribute('data-unlocked', nextU);
+          document.querySelectorAll('#unlocked-grid .opt').forEach(b => b.classList.toggle('active', b.dataset.val === nextU));
+          document.getElementById('unlocked-indicator').textContent = `Active: ${nextU} (Random)`;
+        } else {
+          const nextL = LOCKED_LIST[Math.floor(Math.random() * LOCKED_LIST.length)];
+          document.body.setAttribute('data-locked', nextL);
+          document.querySelectorAll('#locked-grid .opt').forEach(b => b.classList.toggle('active', b.dataset.val === nextL));
+          document.getElementById('locked-indicator').textContent = `Active: ${nextL} (Random)`;
+        }
+      }
+
+      ['card-dark', 'card-light'].forEach(id => {
+        const card = document.getElementById(id);
+        card.classList.toggle('is-unlocked', globalUnlocked);
+        card.querySelector('[data-label]').textContent = globalUnlocked ? 'UNLOCKED' : 'LOCKED';
+      });
+
+      const btn = document.getElementById('toggleBtn');
+      btn.innerHTML = globalUnlocked
+        ? '<span>🔒 Lock Vault</span>'
+        : '<span>🔓 Unlock Vault</span>';
+    }
+
+    function toggleAll() {
+      setUnlockedState(!globalUnlocked);
+    }
+
+    function toggleRandomize() {
+      randomizeOnToggle = !randomizeOnToggle;
+      const btn = document.getElementById('randomBtn');
+      btn.classList.toggle('active-toggle', randomizeOnToggle);
+      btn.innerHTML = randomizeOnToggle
+        ? '<span>🎲 Randomize on Toggle: ON</span>'
+        : '<span>🎲 Randomize on Toggle: OFF</span>';
+    }
+
+    function toggleAutoLoop() {
+      const btn = document.getElementById('loopBtn');
+      if (loopTimer) {
+        clearInterval(loopTimer);
+        loopTimer = null;
+        btn.classList.remove('active-toggle');
+        btn.innerHTML = '<span>🔁 Auto-Loop: OFF</span>';
+      } else {
+        toggleAll();
+        loopTimer = setInterval(toggleAll, 1500);
+        btn.classList.add('active-toggle');
+        btn.innerHTML = '<span>🔁 Auto-Loop: ON</span>';
+      }
+    }
+
+    function copySolidComponent(btn) {
+      const code = `import { Component, createEffect, createSignal, Switch, Match } from 'solid-js';
+
+export type LockedExpression =
+  | 'squint'
+  | 'blink'
+  | 'arch'
+  | 'sleepz'
+  | 'guard'
+  | 'tight'
+  | 'visor'
+  | 'bubble';
+
+export type UnlockedExpression = 'awake' | 'star' | 'cheer' | 'curious';
+
+const LOCKED_VARIANTS: LockedExpression[] = [
+  'squint', 'blink', 'arch', 'sleepz', 'guard', 'tight', 'visor', 'bubble'
+];
+const UNLOCKED_VARIANTS: UnlockedExpression[] = [
+  'awake', 'star', 'cheer', 'curious'
+];
+
+interface AnkyLockIconProps {
+  unlocked: boolean;
+  lockedVariant?: LockedExpression;
+  unlockedVariant?: UnlockedExpression;
+  randomizeOnToggle?: boolean;
+  size?: number;
+  class?: string;
+}
+
+export const AnkyLockIcon: Component<AnkyLockIconProps> = (props) => {
+  const [activeLocked, setActiveLocked] = createSignal<LockedExpression>(
+    props.lockedVariant ?? 'squint'
+  );
+  const [activeUnlocked, setActiveUnlocked] = createSignal<UnlockedExpression>(
+    props.unlockedVariant ?? 'awake'
+  );
+
+  createEffect(() => {
+    if (props.randomizeOnToggle) {
+      if (props.unlocked) {
+        const rand = UNLOCKED_VARIANTS[Math.floor(Math.random() * UNLOCKED_VARIANTS.length)];
+        setActiveUnlocked(rand);
+      } else {
+        const rand = LOCKED_VARIANTS[Math.floor(Math.random() * LOCKED_VARIANTS.length)];
+        setActiveLocked(rand);
+      }
+    } else {
+      if (props.lockedVariant) setActiveLocked(props.lockedVariant);
+      if (props.unlockedVariant) setActiveUnlocked(props.unlockedVariant);
+    }
+  });
+
+  return (
+    <svg
+      width={props.size ?? 28}
+      height={((props.size ?? 28) * 210) / 240}
+      viewBox="0 0 240 210"
+      class={\`anky-svg \${props.unlocked ? 'is-unlocked' : ''} \${props.class ?? ''}\`}
+    >
+      <g class="body-group">
+        <g class="shackle">
+          <path d="M 96 96 V 58 A 30 30 0 0 1 156 58 V 104" fill="none" stroke="var(--text-primary)" stroke-width="12" stroke-linecap="round" />
+        </g>
+        <g class="tail-group">
+          <path d="M 176 158 Q 208 154 206 126" fill="none" stroke="var(--text-primary)" stroke-width="12" stroke-linecap="round" />
+          <circle cx="206" cy="120" r="12" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="10" />
+        </g>
+        <rect x="86" y="162" width="22" height="24" rx="11" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="10" />
+        <rect x="144" y="162" width="22" height="24" rx="11" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="10" />
+        <g class="scutes">
+          <circle cx="102" cy="92" r="9" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="9" />
+          <circle cx="128" cy="86" r="10" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="9" />
+          <circle cx="154" cy="92" r="9" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="9" />
+        </g>
+        <path d="M 68 152 C 68 106, 92 90, 126 90 C 160 90, 184 106, 184 152 C 184 166, 174 172, 160 172 H 92 C 78 172, 68 166, 68 152 Z" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="11" stroke-linejoin="round" />
+        <g class="keyhole">
+          <circle cx="130" cy="128" r="9" fill="var(--text-primary)" />
+          <path d="M 125 132 L 123 152 H 137 L 135 132 Z" fill="var(--text-primary)" />
+        </g>
+        <g class="head-group">
+          <path d="M 52 134 L 58 120 L 68 130" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
+          <rect x="34" y="128" width="50" height="40" rx="20" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="10" />
+
+          {/* 8 LOCKED EXPRESSIONS */}
+          <g class="face-locked">
+            <Switch>
+              <Match when={activeLocked() === 'squint'}>
+                <path d="M 53 138 L 62 143 L 53 148" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M 43 154 H 49" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeLocked() === 'blink'}>
+                <path d="M 52 143 H 64" fill="none" stroke="var(--text-primary)" stroke-width="5.5" stroke-linecap="round" />
+                <path d="M 43 153 Q 47 156 51 153" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeLocked() === 'arch'}>
+                <path d="M 52 146 Q 58 138 64 146" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" />
+                <path d="M 43 153 Q 47 156 51 153" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeLocked() === 'sleepz'}>
+                <path d="M 51 142 Q 57 147 63 142 L 66 139" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M 43 154 H 48" fill="none" stroke="var(--text-primary)" stroke-width="4" stroke-linecap="round" />
+                <path d="M 33 108 H 42 L 33 117 H 42" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+              </Match>
+              <Match when={activeLocked() === 'guard'}>
+                <path d="M 50 138 L 65 142" fill="none" stroke="var(--text-primary)" stroke-width="5.5" stroke-linecap="round" />
+                <circle cx="58" cy="144" r="3.8" fill="var(--text-primary)" />
+                <path d="M 43 155 Q 47 152 51 155" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeLocked() === 'tight'}>
+                <path d="M 53 138 L 63 147 M 63 138 L 53 147" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" />
+                <circle cx="46" cy="154" r="2.8" fill="var(--text-primary)" />
+              </Match>
+              <Match when={activeLocked() === 'visor'}>
+                <path d="M 47 138 H 68 L 65 147 H 50 Z" fill="var(--text-primary)" />
+                <path d="M 66 140 H 79" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" />
+                <path d="M 44 154 Q 49 156 53 152" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeLocked() === 'bubble'}>
+                <path d="M 52 143 Q 58 148 64 143" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" />
+                <circle cx="46" cy="154" r="2.5" fill="var(--text-primary)" />
+                <circle cx="29" cy="144" r="7.5" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="5" />
+              </Match>
+            </Switch>
+          </g>
+
+          {/* 4 UNLOCKED EXPRESSIONS */}
+          <g class="face-unlocked">
+            <Switch>
+              <Match when={activeUnlocked() === 'awake'}>
+                <circle cx="58" cy="143" r="5" fill="var(--text-primary)" />
+                <path d="M 43 152 Q 48 157 54 152" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeUnlocked() === 'star'}>
+                <path d="M 58 133 L 60.5 139.5 L 67 142 L 60.5 144.5 L 58 151 L 55.5 144.5 L 49 142 L 55.5 139.5 Z" fill="var(--text-primary)" />
+                <path d="M 42 151 Q 48 159 55 151 Z" fill="var(--text-primary)" />
+              </Match>
+              <Match when={activeUnlocked() === 'cheer'}>
+                <path d="M 52 146 C 52 137, 63 137, 63 146" fill="none" stroke="var(--text-primary)" stroke-width="5" stroke-linecap="round" />
+                <circle cx="66" cy="150" r="3" fill="var(--text-primary)" />
+                <path d="M 42 151 Q 48 158 54 151" fill="none" stroke="var(--text-primary)" stroke-width="4.5" stroke-linecap="round" />
+              </Match>
+              <Match when={activeUnlocked() === 'curious'}>
+                <circle cx="58" cy="142" r="6.5" fill="var(--bg-canvas)" stroke="var(--text-primary)" stroke-width="4.5" />
+                <circle cx="56.5" cy="142" r="2.5" fill="var(--text-primary)" />
+                <circle cx="46" cy="154" r="3.5" fill="none" stroke="var(--text-primary)" stroke-width="4" />
+              </Match>
+            </Switch>
+          </g>
+        </g>
+      </g>
+    </svg>
+  );
+};`;
+      navigator.clipboard.writeText(code);
+      const prev = btn.innerHTML;
+      btn.innerHTML = '<span>✅ Copied All 12 Variants Component!</span>';
+      setTimeout(() => { btn.innerHTML = prev; }, 1800);
+    }
+  </script>
+</body>
+</html>

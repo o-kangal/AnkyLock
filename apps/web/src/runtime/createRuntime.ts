@@ -55,6 +55,7 @@ import {
 import { runExportInWorker, type ExportFile, type ExportJob } from '../export/exportNotes.js';
 import { planExport, type ExportScope } from '../export/exportPlan.js';
 import { createWorkspaceStore, type PurgedItem, type WorkspaceStore } from '../stores/workspaceStore.js';
+import { DEFAULT_LOGO_FACE, nextLogoFace, type LogoFace } from './logoFace.js';
 
 export type VaultStatus = 'loading' | 'uninitialized' | 'locked' | 'unlocked';
 
@@ -73,6 +74,8 @@ export interface RuntimeOptions {
   readonly driveFetch?: typeof fetch;
   /** Test seam: builds an export without a Web Worker. */
   readonly runExport?: (job: ExportJob) => Promise<ExportFile>;
+  /** Test seam for the logo's random expressions; returns a number in [0, 1). */
+  readonly random?: () => number;
 }
 
 /** Shown in the status bar; never blocks local work (SPEC §7). */
@@ -100,6 +103,8 @@ export interface Runtime {
   readonly vaults: Accessor<readonly VaultEntry[]>;
   /** The open vault's decrypted name; null while locked or for vaults created before names existed. */
   readonly vaultName: Accessor<string | null>;
+  /** Shared by every logo on screen: a new random expression on every lock and unlock. */
+  readonly logoFace: Accessor<LogoFace>;
   /** Lists the vaults on this device; call once at startup. */
   init(): Promise<void>;
   /**
@@ -235,7 +240,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const persisters = new Map<NoteId, DocPersister>();
   const opening = new Map<NoteId, Promise<Y.Doc>>();
   const edited = new Set<NoteId>();
-  const [status, setStatus] = createSignal<VaultStatus>('loading');
+  const [status, setVaultStatus] = createSignal<VaultStatus>('loading');
+  const [logoFace, setLogoFace] = createSignal<LogoFace>(DEFAULT_LOGO_FACE);
+  const random = options.random ?? Math.random;
+  const setStatus = (next: VaultStatus): void => {
+    setVaultStatus(next);
+    setLogoFace((face) => nextLogoFace(face, next === 'unlocked', random));
+  };
   const [vaultList, setVaultList] = createSignal<readonly VaultEntry[]>([]);
   const [vaultName, setVaultName] = createSignal<string | null>(null);
   const [syncStatus, setSyncStatus] = createSignal<SyncStatus>({
@@ -496,6 +507,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     status,
     vaults: vaultList,
     vaultName,
+    logoFace,
 
     init: refreshVaults,
 

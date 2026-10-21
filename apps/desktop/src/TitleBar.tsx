@@ -1,7 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { JSX } from 'solid-js';
-import { tokens } from '@ankylock/web/workspace';
-import logoUrl from '../src-tauri/icons/app-icon.svg';
+import type { Accessor, JSX } from 'solid-js';
+import { AnkyLogo, tokens, type LogoFace } from '@ankylock/web/workspace';
 
 const buttonStyle: JSX.CSSProperties = {
   width: '44px',
@@ -14,7 +13,7 @@ const buttonStyle: JSX.CSSProperties = {
 };
 
 /** Custom title bar for the frameless window; the empty area drags the window. */
-export function TitleBar(): JSX.Element {
+export function TitleBar(props: { readonly logoFace: Accessor<LogoFace> }): JSX.Element {
   const appWindow = getCurrentWindow();
   return (
     <header
@@ -32,14 +31,9 @@ export function TitleBar(): JSX.Element {
       }}
     >
       {/* Clicks pass through the logo to the header, so dragging it moves the window. */}
-      <img
-        src={logoUrl}
-        alt=""
-        width="16"
-        height="16"
-        draggable={false}
-        style={{ 'margin-right': '8px', 'pointer-events': 'none' }}
-      />
+      <span style={{ display: 'flex', 'margin-right': '8px', 'pointer-events': 'none' }}>
+        <AnkyLogo face={props.logoFace()} size={26} background={tokens.surface} />
+      </span>
       <span data-tauri-drag-region style={{ flex: '1' }}>
         AnkyLock
       </span>

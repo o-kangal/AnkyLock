@@ -37,7 +37,7 @@ export function App(): JSX.Element {
 
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%' }}>
-      <TitleBar />
+      <TitleBar logoFace={runtime.logoFace} />
       <div style={{ flex: '1', 'min-height': '0' }}>
         <AnkyLockApp
           runtime={runtime}

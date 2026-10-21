@@ -1,9 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <!-- Maskable variant: full-bleed background, artwork kept inside the 80% safe zone. -->
-  <rect width="1024" height="1024" fill="#285aa0"/>
-  <g transform="translate(512 560) scale(0.78) translate(-512 -600)">
-  <path d="M372 470 V400 A140 140 0 0 1 652 400 V470" fill="none" stroke="#ffffff" stroke-width="72" stroke-linecap="round"/>
-  <rect x="290" y="450" width="444" height="390" rx="56" fill="#ffffff"/>
-  <path d="M372 570 H652 M372 650 H652 M372 730 H552" stroke="#285aa0" stroke-width="40" stroke-linecap="round"/>
+  <rect width="1024" height="1024" fill="#0b0e11"/>
+  <g transform="translate(512 512) scale(2.9) translate(-126 -106.5)">
+  <g fill="#0b0e11" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 96 96 V 58 A 30 30 0 0 1 156 58 V 104" fill="none" stroke-width="12"/>
+    <path d="M 176 158 Q 208 154 206 126" fill="none" stroke-width="12"/>
+    <circle cx="206" cy="120" r="12" stroke-width="10"/>
+    <rect x="86" y="162" width="22" height="24" rx="11" stroke-width="10"/>
+    <rect x="144" y="162" width="22" height="24" rx="11" stroke-width="10"/>
+    <circle cx="102" cy="92" r="9" stroke-width="9"/>
+    <circle cx="128" cy="86" r="10" stroke-width="9"/>
+    <circle cx="154" cy="92" r="9" stroke-width="9"/>
+    <path d="M 68 152 C 68 106, 92 90, 126 90 C 160 90, 184 106, 184 152 C 184 166, 174 172, 160 172 H 92 C 78 172, 68 166, 68 152 Z" stroke-width="11"/>
+    <circle cx="130" cy="128" r="9" fill="#f8fafc" stroke="none"/>
+    <path d="M 125 132 L 123 152 H 137 L 135 132 Z" fill="#f8fafc" stroke="none"/>
+    <path d="M 52 134 L 58 120 L 68 130" stroke-width="9"/>
+    <rect x="34" y="128" width="50" height="40" rx="20" stroke-width="10"/>
+    <path d="M 52 146 Q 58 138 64 146" fill="none" stroke-width="5"/>
+    <path d="M 43 153 Q 47 156 51 153" fill="none" stroke-width="4.5"/>
+  </g>
   </g>
 </svg>

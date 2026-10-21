@@ -4,6 +4,7 @@ import type { VaultEntry } from '@ankylock/storage';
 import type { RemoteVault } from '@ankylock/sync';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
+import { AnkyLogo } from './AnkyLogo.jsx';
 import { tokens } from './sidebar/styles.js';
 
 /** Passphrases are the only thing protecting the vault; short ones fall to offline guessing. */
@@ -234,6 +235,9 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   return (
     <main style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>
       <form onSubmit={(e) => void submit(e)} style={{ width: '340px', 'max-width': 'calc(100% - 32px)' }}>
+        <div style={{ display: 'flex', 'justify-content': 'center', 'margin-bottom': '16px' }}>
+          <AnkyLogo face={props.runtime.logoFace()} size={96} animateIn />
+        </div>
         <Switch>
           <Match when={mode() === 'unlock'}>
             <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Unlock AnkyLock</h1>

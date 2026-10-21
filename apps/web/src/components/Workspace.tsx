@@ -121,7 +121,7 @@ export function Workspace(props: {
           }}
         >
           <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? 'Navigation' : undefined} style={sidebarStyle()}>
-            <Sidebar store={store} />
+            <Sidebar store={store} logoFace={props.runtime.logoFace} />
           </div>
           <Show when={narrow() && drawer()}>
             <div

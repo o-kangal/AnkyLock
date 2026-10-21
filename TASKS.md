@@ -742,6 +742,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12j: Animated AnkyLock Logo with Lock/Unlock Expressions
+- **Status:** ✅ Completed (2026-10-21)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `docs/design/logo-expressions.html`, `apps/desktop/src/TitleBar.tsx`, `apps/web/src/theme/colorScheme.ts`, `README.md` (App icons)
 - **Target Files (Create/Modify):**
