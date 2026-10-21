@@ -37,6 +37,19 @@ function mount(face: () => LogoFace, animateIn = false): SVGSVGElement {
   return root.querySelector('svg') as SVGSVGElement;
 }
 
+/** Records Web Animations calls; jsdom has no `Element.animate`. Each call gets its element third. */
+function stubAnimate() {
+  const animate = vi.fn((_keyframes: Keyframe[], _options: KeyframeAnimationOptions, _el: Element) => undefined);
+  Element.prototype.animate = function (this: Element, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+    animate(keyframes, options, this);
+    return {} as Animation;
+  } as Element['animate'];
+  disposers.push(() => {
+    delete (Element.prototype as { animate?: unknown }).animate;
+  });
+  return animate;
+}
+
 /** The shackle's group: it lifts when unlocked. */
 const shackle = (svg: SVGSVGElement): SVGGElement => svg.querySelectorAll('g')[1] as SVGGElement;
 
@@ -107,10 +120,27 @@ describe('AnkyLogo', () => {
     expect(shackle(svg).style.transition).toBe('none');
   });
 
-  it('plays the change into its state after mounting', async () => {
+  it('plays the change into its state after mounting, from explicit keyframes', () => {
+    const animate = stubAnimate();
     const svg = mount(() => ({ unlocked: true, locked: 'arch', unlockedFace: 'cheer' }), true);
-    expect(shackle(svg).style.transform).toBe('none');
-    await vi.waitFor(() => expect(shackle(svg).style.transform).toBe('translateY(-18px) rotate(15deg)'));
+    expect(shackle(svg).style.transform).toBe('translateY(-18px) rotate(15deg)');
+    const call = animate.mock.calls.find(([, , el]) => el === shackle(svg));
+    expect(call?.[0]).toEqual([{ transform: 'none' }, { transform: 'translateY(-18px) rotate(15deg)' }]);
+    expect(call?.[1]).toMatchObject({ duration: 500, fill: 'backwards' });
+    // Body, shackle, tail, scutes, keyhole, head and both faces.
+    expect(animate).toHaveBeenCalledTimes(8);
+  });
+
+  it('does not play keyframes when shown in place or with reduced motion', () => {
+    const animate = stubAnimate();
+    mount(() => DEFAULT_LOGO_FACE);
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    mount(() => DEFAULT_LOGO_FACE, true);
+    expect(animate).not.toHaveBeenCalled();
   });
 });
 
@@ -129,6 +159,7 @@ describe('lock and unlock on screen', () => {
   const pickerLogo = (root: HTMLElement): SVGSVGElement | null => root.querySelector('main svg[aria-hidden="true"]');
 
   it('plays the unlock on the picker before opening the vault, and the lock when it comes back', async () => {
+    const animate = stubAnimate();
     const { root, runtime } = app();
     await until(() => runtime.status() === 'uninitialized', 'picker');
     expect(await runtime.createVault('Personal', PASSPHRASE)).toBeNull();
@@ -142,9 +173,10 @@ describe('lock and unlock on screen', () => {
     await runtime.lock();
     const logo = pickerLogo(root) as SVGSVGElement;
     expect(logo.getAttribute('data-logo-face')).toBe(runtime.logoFace().locked);
-    // Starts open, then closes.
-    expect(shackle(logo).style.transform).not.toBe('none');
-    await until(() => shackle(logo).style.transform === 'none', 'locked');
+    // Plays from open to closed.
+    expect(shackle(logo).style.transform).toBe('none');
+    const call = animate.mock.calls.find(([, , el]) => el === shackle(logo));
+    expect(call?.[0]).toEqual([{ transform: 'translateY(-18px) rotate(15deg)' }, { transform: 'none' }]);
   });
 
   it('opens the vault right away when the OS asks to reduce motion', async () => {

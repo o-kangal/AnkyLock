@@ -1,4 +1,4 @@
-import { createSignal, type Accessor } from 'solid-js';
+import { batch, createSignal, type Accessor } from 'solid-js';
 import type * as Y from 'yjs';
 import type { Ciphertext, EpochMs, NoteId, VaultId } from '@ankylock/core';
 import {
@@ -243,10 +243,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const [status, setVaultStatus] = createSignal<VaultStatus>('loading');
   const [logoFace, setLogoFace] = createSignal<LogoFace>(DEFAULT_LOGO_FACE);
   const random = options.random ?? Math.random;
-  const setStatus = (next: VaultStatus): void => {
-    setVaultStatus(next);
-    setLogoFace((face) => nextLogoFace(face, next === 'unlocked', random));
-  };
+  // Together, so whatever appears with the new status (the vault picker) sees the new face.
+  const setStatus = (next: VaultStatus): void =>
+    batch(() => {
+      setVaultStatus(next);
+      setLogoFace((face) => nextLogoFace(face, next === 'unlocked', random));
+    });
   const [vaultList, setVaultList] = createSignal<readonly VaultEntry[]>([]);
   const [vaultName, setVaultName] = createSignal<string | null>(null);
   const [syncStatus, setSyncStatus] = createSignal<SyncStatus>({
