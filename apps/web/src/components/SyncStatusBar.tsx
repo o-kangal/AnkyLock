@@ -113,6 +113,8 @@ export function SyncStatusBar(props: {
         'border-top': `1px solid ${tokens.border}`,
         font: tokens.font,
         'font-size': '12px',
+        // Backup times keep their width as the digits change.
+        'font-variant-numeric': 'tabular-nums',
         color: tokens.muted,
         background: tokens.surface,
       }}

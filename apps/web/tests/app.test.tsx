@@ -137,7 +137,7 @@ describe('vault screens', () => {
     root.remove();
 
     mount(vaults);
-    await waitFor(() => text().includes('Unlock AnkyLock'), 'unlock screen');
+    await waitFor(() => text().includes('Unlock your vault'), 'unlock screen');
     type('[aria-label="Passphrase"]', 'wrong passphrase');
     submit();
     await waitFor(() => text().includes('does not unlock'), 'wrong passphrase error');
@@ -182,7 +182,7 @@ describe('multiple vaults', () => {
     await runtime.flush();
     await runtime.lock();
 
-    await waitFor(() => text().includes('Unlock AnkyLock'), 'unlock screen');
+    await waitFor(() => text().includes('Unlock your vault'), 'unlock screen');
     (Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Create a new vault') as HTMLElement).click();
     await waitFor(() => text().includes('Create a vault'), 'create screen');
     await waitFor(() => document.activeElement?.getAttribute('aria-label') === 'Vault name', 'name focused');
@@ -226,7 +226,7 @@ describe('workspace', () => {
     root.remove();
 
     const again = mount(vaults);
-    await waitFor(() => text().includes('Unlock AnkyLock'), 'unlock screen');
+    await waitFor(() => text().includes('Unlock your vault'), 'unlock screen');
     type('[aria-label="Passphrase"]', 'correct horse battery');
     submit();
     await waitFor(() => text().includes('Press Ctrl+N'), 'workspace');

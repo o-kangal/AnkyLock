@@ -1,6 +1,7 @@
 import { createSignal, type Accessor, type JSX } from 'solid-js';
 import { TOUCH_TARGET_PX } from '../../layout/screen.js';
 import { colorVar, type ThemeColors } from '../../theme/colorScheme.js';
+import { BRAND_FAMILY, UI_FAMILY, UI_WEIGHT_VAR } from '../../theme/fonts.js';
 
 const color = (name: keyof ThemeColors): string => `var(${colorVar(name)})`;
 
@@ -11,7 +12,12 @@ const color = (name: keyof ThemeColors): string => `var(${colorVar(name)})`;
 export const tokens = {
   rowHeight: 28,
   indent: 14,
-  font: '13px system-ui, -apple-system, "Segoe UI", sans-serif',
+  /** UI text: Plus Jakarta Sans at the theme's weight, falling back to the system font. */
+  font: `var(${UI_WEIGHT_VAR}, 500) 13px "${UI_FAMILY}", system-ui, -apple-system, "Segoe UI", sans-serif`,
+  /** The "AnkyLock" wordmark only; callers set the size. */
+  brandFamily: `"${BRAND_FAMILY}", "${UI_FAMILY}", system-ui, sans-serif`,
+  /** Headings and emphasis. */
+  strongWeight: '600',
   background: color('background'),
   surface: color('surface'),
   text: color('text'),

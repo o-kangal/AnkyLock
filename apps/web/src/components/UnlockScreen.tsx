@@ -19,6 +19,8 @@ const baseFieldStyle: JSX.CSSProperties = {
   font: tokens.font,
 };
 
+const headingStyle: JSX.CSSProperties = { 'font-size': '18px', 'font-weight': tokens.strongWeight, margin: '0 0 4px' };
+
 const linkButton: JSX.CSSProperties = {
   border: 'none',
   background: 'transparent',
@@ -235,12 +237,15 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   return (
     <main style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>
       <form onSubmit={(e) => void submit(e)} style={{ width: '340px', 'max-width': 'calc(100% - 32px)' }}>
-        <div style={{ display: 'flex', 'justify-content': 'center', 'margin-bottom': '16px' }}>
+        <div style={{ display: 'flex', 'flex-direction': 'column', 'align-items': 'center', gap: '6px', 'margin-bottom': '20px' }}>
           <AnkyLogo face={props.runtime.logoFace()} size={96} animateIn />
+          <span style={{ 'font-family': tokens.brandFamily, 'font-size': '26px', 'font-weight': '600', 'letter-spacing': '0' }}>
+            AnkyLock
+          </span>
         </div>
         <Switch>
           <Match when={mode() === 'unlock'}>
-            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Unlock AnkyLock</h1>
+            <h1 style={headingStyle}>Unlock your vault</h1>
             <Show
               when={props.runtime.vaults().length > 1}
               fallback={<p style={{ margin: '0', color: tokens.muted }}>Enter your passphrase to decrypt your notes.</p>}
@@ -260,7 +265,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             {passphraseInput(true)}
           </Match>
           <Match when={mode() === 'create'}>
-            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Create a vault</h1>
+            <h1 style={headingStyle}>Create a vault</h1>
             <p style={{ margin: '0', color: tokens.muted }}>
               A vault keeps its notes apart, under its own passphrase. The passphrase cannot be recovered if lost.
             </p>
@@ -285,7 +290,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             />
           </Match>
           <Match when={mode() === 'remote'}>
-            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Open a vault from Google Drive</h1>
+            <h1 style={headingStyle}>Open a vault from Google Drive</h1>
             <p style={{ margin: '0', color: tokens.muted }}>
               Vaults that your other devices back up to Google Drive. Each one opens with its own passphrase.
             </p>
@@ -325,7 +330,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             </Switch>
           </Match>
           <Match when={mode() === 'remove'}>
-            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Remove this vault?</h1>
+            <h1 style={headingStyle}>Remove this vault?</h1>
             <p style={{ margin: '0', color: tokens.muted }}>
               {targetLabel()}. Without its passphrase, its notes cannot be recovered or exported first.
             </p>
@@ -342,7 +347,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             {confirmationInput()}
           </Match>
           <Match when={mode() === 'remote-delete'}>
-            <h1 style={{ 'font-size': '18px', margin: '0 0 4px' }}>Delete this vault from Google Drive?</h1>
+            <h1 style={headingStyle}>Delete this vault from Google Drive?</h1>
             <p style={{ margin: '0', color: tokens.muted }}>
               {targetLabel()}. Its header and every device’s backup are deleted from Google Drive, without its passphrase.
               Other devices with this vault stop syncing it and can keep their copy locally. This cannot be undone.

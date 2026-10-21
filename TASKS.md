@@ -770,6 +770,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12k: App Fonts (Fredoka, Plus Jakarta Sans, JetBrains Mono)
+- **Status:** ✅ Completed (2026-10-21)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/sidebar/styles.ts`, `packages/editor/src/extensions/theme.ts`, `apps/web/src/sw/cachePolicy.ts`, `apps/desktop/src-tauri/tauri.conf.json`
 - **Target Files (Create/Modify):**

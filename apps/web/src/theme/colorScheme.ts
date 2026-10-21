@@ -1,6 +1,7 @@
 import { createContext, createSignal, onCleanup, useContext, type Accessor } from 'solid-js';
 import type { ColorScheme } from '@ankylock/editor';
 import { defaultStorage, readPreference, writePreference, type PreferenceStorage } from '../preferences/devicePreferences.js';
+import { UI_WEIGHT_VAR, uiWeight } from './fonts.js';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 export const THEME_CHOICES: readonly ThemeChoice[] = ['system', 'light', 'dark'];
@@ -67,6 +68,7 @@ export const colorVar = (name: keyof ThemeColors): string => `--al-${name.replac
 export function applyColorScheme(scheme: ColorScheme, root: HTMLElement = document.documentElement): void {
   const colors = THEME_COLORS[scheme];
   for (const name of Object.keys(colors) as (keyof ThemeColors)[]) root.style.setProperty(colorVar(name), colors[name]);
+  root.style.setProperty(UI_WEIGHT_VAR, String(uiWeight(scheme)));
   root.style.colorScheme = scheme;
   root.style.background = colors.background;
   root.style.color = colors.text;

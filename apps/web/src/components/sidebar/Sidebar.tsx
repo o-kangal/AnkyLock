@@ -38,7 +38,16 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       <Show when={props.logoFace}>
         {(face) => (
           <div
-            style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '12px 12px 8px', 'font-size': '15px', 'font-weight': '600' }}
+            style={{
+              display: 'flex',
+              'align-items': 'center',
+              gap: '10px',
+              padding: '12px 12px 8px',
+              'font-family': tokens.brandFamily,
+              'font-size': '18px',
+              'font-weight': '600',
+              'letter-spacing': '0',
+            }}
           >
             <AnkyLogo face={face()()} size={44} background={tokens.surface} />
             AnkyLock

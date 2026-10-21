@@ -58,19 +58,23 @@ const PALETTES: Record<ColorScheme, Palette> = {
 /** Left padding of every line; wrapped rows of indented lines build on it (see `wordWrap`). */
 export const LINE_PADDING_LEFT = '8px';
 
-const FONT_STACK = '"JetBrains Mono", "Cascadia Code", "Fira Code", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+// The app registers "JetBrains Mono Variable" and "Plus Jakarta Sans Variable" (Fontsource names).
+const FONT_STACK =
+  '"JetBrains Mono Variable", "JetBrains Mono", "Cascadia Code", "Fira Code", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+const UI_FONT_STACK = '"Plus Jakarta Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /**
  * Scoped CodeMirror theme (no global CSS): colors, monospace font and line padding. Narrow
  * screens pass 16 px: iOS zooms into any focused text smaller than that.
  */
-export function editorTheme(scheme: ColorScheme, fontSizePx = 13): Extension {
+export function editorTheme(scheme: ColorScheme, fontSizePx = 14): Extension {
   const p = PALETTES[scheme];
   return EditorView.theme(
     {
       '&': { height: '100%', color: p.foreground, backgroundColor: p.background, fontSize: `${fontSizePx}px` },
       '&.cm-focused': { outline: 'none' },
-      '.cm-scroller': { fontFamily: FONT_STACK, lineHeight: '1.5' },
+      // Ligatures off: `->` and `!=` stay the characters that were typed.
+      '.cm-scroller': { fontFamily: FONT_STACK, lineHeight: '1.6', fontVariantLigatures: 'none' },
       '.cm-content': { padding: '6px 0', caretColor: p.cursor },
       '.cm-line': { padding: `0 12px 0 ${LINE_PADDING_LEFT}` },
       '.cm-cursor, .cm-dropCursor': { borderLeftColor: p.cursor },
@@ -86,7 +90,7 @@ export function editorTheme(scheme: ColorScheme, fontSizePx = 13): Extension {
         color: p.foreground,
         border: `1px solid ${p.tooltipBorder}`,
         borderRadius: '4px',
-        fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+        fontFamily: UI_FONT_STACK,
         fontSize: '12px',
       },
       '.cm-link-hint': { padding: '3px 8px' },

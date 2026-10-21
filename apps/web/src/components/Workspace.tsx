@@ -157,7 +157,7 @@ export function Workspace(props: {
                     readOnly={store.state.notes[open().id]?.deletedAt != null}
                     colorScheme={theme.scheme()}
                     wordWrap={wrap.wordWrap()}
-                    fontSize={narrow() ? 16 : 13}
+                    fontSize={narrow() ? 16 : 14}
                     links={{ modifier: linkModifier(), open: (url) => (props.openLink ?? openInNewTab)(url) }}
                     onTitleChange={(title) => store.setTitle(open().id, title)}
                   />

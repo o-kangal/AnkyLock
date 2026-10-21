@@ -4,6 +4,7 @@ import { createNarrowScreen, ScreenContext } from '../layout/screen.js';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { SaveFileContext, downloadFile, type SaveFile } from '../export/saveFile.js';
 import { applyColorScheme, createThemePreference, ThemeContext, type ThemePreference } from '../theme/colorScheme.js';
+import { loadAppFonts } from '../theme/fonts.js';
 import { createReducedMotion, LOGO_TRANSITION_MS } from './AnkyLogo.jsx';
 import { tokens } from './sidebar/styles.js';
 import { UnlockScreen } from './UnlockScreen.jsx';
@@ -23,6 +24,8 @@ export function AnkyLockApp(props: {
   readonly theme?: ThemePreference;
 }): JSX.Element {
   onMount(() => void props.runtime.init());
+  // Before any editor exists, so notes open with their font already loaded.
+  loadAppFonts();
   const narrow = props.narrow ?? createNarrowScreen();
   const theme = props.theme ?? createThemePreference();
   // The whole document follows, including the desktop title bar outside this tree.

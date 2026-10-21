@@ -21,6 +21,9 @@
     "@ankylock/editor": "workspace:*",
     "@ankylock/storage": "workspace:*",
     "@ankylock/sync": "workspace:*",
+    "@fontsource-variable/fredoka": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "5.3.0",
     "@zip.js/zip.js": "2.23.0",
     "solid-js": "1.9.17",
     "yjs": "13.6.33"
