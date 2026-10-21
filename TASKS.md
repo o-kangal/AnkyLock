@@ -741,6 +741,61 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
+### Task 12j: Animated AnkyLock Logo with Lock/Unlock Expressions
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `docs/design/logo-expressions.html`, `apps/desktop/src/TitleBar.tsx`, `apps/web/src/theme/colorScheme.ts`, `README.md` (App icons)
+- **Target Files (Create/Modify):**
+  - `docs/design/logo-expressions.html`
+  - `apps/web/src/components/AnkyLogo.tsx`
+  - `apps/web/src/components/UnlockScreen.tsx`
+  - `apps/web/src/components/sidebar/Sidebar.tsx`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/desktop/src/TitleBar.tsx`
+  - `apps/desktop/src-tauri/icons/app-icon.svg`
+  - `apps/desktop/src-tauri/icons/app-icon-maskable.svg`
+  - `apps/web/tests/ankyLogo.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Move the logo study from the repository root to `docs/design/logo-expressions.html` as the design source. Build one Solid component from its SVG (padlock-ankylosaurus, viewBox `0 0 240 210`) with its 8 locked expressions (squint, blink, arch, sleepz, guard, tight, visor, bubble) and 4 unlocked ones (awake, star, cheer, curious). Draw with the theme's text and surface colors, so it follows light/dark (12c).
+  2. Keep the study's spring transitions between locked and unlocked (shackle lifts and tilts, head and tail move, faces swap); with `prefers-reduced-motion` the logo switches without motion. The logo is decorative (`aria-hidden`).
+  3. Every lock picks a random locked expression and every unlock a random unlocked one, never the same as the previous pick of that state. At launch the logo shows the default "arch". The pick lives in memory only (one per app window, shared by every logo on screen); nothing is stored or synced.
+  4. Show the logo large (about 96 px) above the vault picker, about 20 px before "AnkyLock" in the desktop title bar (still part of the drag region), and small at the top of the sidebar, so the unlocked expressions are seen on the web too.
+  5. Redraw the app icon from the default "arch" (locked) logo: light strokes (`#f8fafc`) on a dark rounded square (`#0b0e11`), plus the full-bleed maskable variant; regenerate the desktop, PWA and favicon images as README "App icons" describes.
+  6. Test that lock and unlock change the expression within the right set and never repeat the previous one, the default at launch, and the reduced-motion case.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
+### Task 12k: App Fonts (Fredoka, Plus Jakarta Sans, JetBrains Mono)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/components/sidebar/styles.ts`, `packages/editor/src/extensions/theme.ts`, `apps/web/src/sw/cachePolicy.ts`, `apps/desktop/src-tauri/tauri.conf.json`
+- **Target Files (Create/Modify):**
+  - `apps/web/package.json`
+  - `apps/web/src/theme/fonts.ts`
+  - `apps/web/src/components/sidebar/styles.ts`
+  - `apps/web/src/components/AnkyLogo.tsx`
+  - `apps/web/src/components/UnlockScreen.tsx`
+  - `apps/web/src/components/sidebar/Sidebar.tsx`
+  - `apps/desktop/src/TitleBar.tsx`
+  - `packages/editor/src/extensions/theme.ts`
+  - `packages/editor/src/components/CodeMirrorView.tsx`
+  - `apps/web/tests/fonts.test.ts`
+- **Step-by-Step Instructions:**
+  1. Use three self-hosted variable fonts from Fontsource at exact versions: `@fontsource-variable/fredoka` for the brand wordmark "AnkyLock" (600, 700 for emphasis; `letter-spacing: 0`), `@fontsource-variable/plus-jakarta-sans` for the UI, sidebar and tabs (500, 600 for emphasis; 12.5–13 px), and `@fontsource-variable/jetbrains-mono` for the editor (400, 500; 13.5–14 px, `line-height: 1.65`). Narrow screens keep their 16 px editor text (11k).
+  2. Never load fonts from a CDN: the files ship in the app bundle, so the desktop app and the offline PWA work without network and no third party sees the user's visits. Check that the strict CSP allows them (`font-src` falls back to `'self'`) and that the ServiceWorker precaches them.
+  3. No global CSS file (AGENTS.md): instead of importing Fontsource's CSS, import the `.woff2` files as asset URLs and register them with the `FontFace` API, with `latin` and `latin-ext` subsets (Turkish ş, ğ, ı, İ are in `latin-ext`) and their `unicode-range`. Every font stack ends in system fallbacks, and text shows right away in the fallback until the font loads (`font-display: swap`).
+  4. Once the editor font has loaded, have CodeMirror re-measure, so the cursor, selections and wrapped lines line up with the new glyph widths.
+  5. Show the wordmark in Fredoka next to the logo (12j): in the desktop title bar, above the vault picker and at the top of the sidebar.
+  6. Test that the fonts are registered with the right weights and subsets, that the UI, editor and wordmark use their stacks with the fallbacks, and that the editor re-measures after loading.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 13: Production Release (Web, Relay & Desktop Distribution)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
@@ -814,5 +869,7 @@ Task 1 (Workspace & Config)
                            ├──► Task 12g (Delete All Drive Data)
                            ├──► Task 12h (Remove a Locked Vault from the Picker)
                            ├──► Task 12i (Tab Indents in the Editor)
-                           └──► Task 13 (Production Release, after 12c–12i)
+                           ├──► Task 12j (Animated Logo with Lock/Unlock Expressions)
+                           │       └──► Task 12k (App Fonts)
+                           └──► Task 13 (Production Release, after 12c–12k)
 ``` 
