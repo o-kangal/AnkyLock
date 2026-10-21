@@ -814,7 +814,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 - **Step-by-Step Instructions:**
   1. Add a radius scale to the shared tokens and use it everywhere instead of ad-hoc values. Starting point, to be tried in the app and tuned with the user: 8 px for sidebar rows, buttons and inputs; 12 px for popovers, menus, settings and dialogs; 6 px for tabs and small chips (e.g. "Wrap"). Focus rings follow the rounded shapes.
   2. Round the desktop window itself. The window is frameless, so the OS draws square corners: make the window transparent and draw the app inside a rounded, clipped container with its own border and shadow; when maximized or fullscreen, drop the radius, border and margin so the app fills the screen. Resizing from the edges and dragging by the title bar keep working.
-  3. Settle per platform: Linux (GNOME/Wayland) is tried now; on Windows 11 prefer the system's rounded corners and shadow for frameless windows over transparency; macOS follows the transparent approach. Windows and macOS are verified with the signed builds of Task 13.
+  3. Settle per platform: Linux (GNOME/Wayland) is tried now; on Windows 11 prefer the system's rounded corners and shadow for frameless windows over transparency; macOS follows the transparent approach. Windows and macOS are verified with their signed builds (see Later).
   4. The web app keeps the browser's window; only its contents get the radius scale.
   5. Test that components use the radius tokens and that the desktop container drops its corners when maximized.
 - **Verification:**
@@ -844,28 +844,161 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
-### Task 13: Production Release (Web, Relay & Desktop Distribution)
-- **Type:** DevOps/Release
-- **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
+### Task 13a: Drive-Only Sync (No Hosted Relay) and an Optional Own Relay
+- **Type:** Backend/Service
+- **Read-Only Context Files:** `packages/sync/src/engine/syncEngine.ts`, `packages/sync/src/backup/snapshotScheduler.ts`, `packages/sync/src/catchup/catchUp.ts`, `apps/relay/src/config.rs`
 - **Target Files (Create/Modify):**
-  - `.github/workflows/ci.yml`
-  - `.github/workflows/release.yml`
-  - `apps/relay/Dockerfile`
-  - `apps/web/public/privacy.html`
-  - `apps/web/public/terms.html`
-  - `apps/desktop/src-tauri/tauri.conf.json`
-  - `README.md`
+  - `apps/web/src/runtime/createRuntime.ts`
+  - `apps/web/src/App.tsx`
+  - `apps/desktop/src/App.tsx`
+  - `apps/web/src/preferences/devicePreferences.ts`
+  - `apps/web/src/components/SyncStatusBar.tsx`
+  - `apps/web/src/components/VaultSettings.tsx`
+  - `apps/web/tests/sync.test.tsx`
 - **Step-by-Step Instructions:**
-  1. Decide the hosting with the user before writing deployment config: the web PWA on `ankylock.com` (with `www.ankylock.com` redirecting to it, DNS on Cloudflare) and the relay on a subdomain such as `relay.ankylock.com` over `wss://` with TLS.
-  2. Containerize the stateless relay (small image, non-root, `/healthz` probe) and configure its production client ids, bind address and frame limit through the environment only.
-  3. Build the web app with the production relay URL and a strict CSP; serve it with long-lived caching for hashed assets and no caching for `sw.js` and `index.html`.
-  4. Publish the Google OAuth consent screen for production: privacy policy and terms pages, the authorized domain `ankylock.com`, and verification of the requested scopes (`openid email drive.appdata`).
-  5. Ship signed desktop builds from CI for Linux (AppImage, deb, rpm), Windows (signed MSI/NSIS) and macOS (signed and notarized DMG), and enable the Tauri updater with a signing key kept only in CI secrets.
-  6. Add CI for every push (typecheck, lint, tests, clippy, cargo test, crypto scan) and a tagged release workflow; document the release steps and the required secrets in `README.md`. Settle the license before the first public release.
+  1. No hosted relay for now (no monthly server cost). Drive backup and catch-up run on their own whenever the user is signed in, without a relay connection: catch up at unlock, on "Sync now" and on a regular interval, and back up as today (12e). Other devices see changes after their next catch-up, not instantly.
+  2. Production builds have no default relay: drop the `ws://127.0.0.1:8787` fallback outside development, so the app never tries to connect to a relay that is not there. The status bar says "Synced via Google Drive" (with the last catch-up time) instead of "Offline; changes are queued".
+  3. Advanced, per device: let the user enter their own relay URL (`wss://` only, except `ws://localhost` for development) for instant sync, and turn it off again. Explain that the relay sees only encrypted frames, but receives the user's short-lived Google ID token to sign in, so it must be a relay they trust; a self-hosted relay must accept AnkyLock's OAuth client ids (`GOOGLE_CLIENT_ID`).
+  4. With a relay set, everything works as today (live sync, outbox, peer catch-up); without one, the outbox still queues hierarchy and text changes into the next Drive backup, and nothing is lost (no Last-Write-Wins).
+  5. Test Drive-only sync between two devices, no relay connection attempts without a URL, entering and removing an own relay, and the status texts.
 - **Verification:**
 ``` bash
-pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && cargo test --workspace
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ``` 
+
+---
+
+### Task 13b: Security Review and Hardening (Before Going Public)
+- **Type:** Security
+- **Read-Only Context Files:** `AGENTS.md`, `SPEC.md`, `.claude/skills/crypto-audit/SKILL.md`, `apps/desktop/src-tauri/capabilities/`, `apps/desktop/src-tauri/tauri.conf.json`
+- **Target Files (Create/Modify):**
+  - `docs/security/threat-model.md`
+  - `docs/security/review-2026.md`
+  - `.gitleaks.toml`
+  - `deny.toml`
+  - Fixes in the files the review names
+- **Step-by-Step Instructions:**
+  1. Write a threat model: assets (note plaintext, the passphrase and vault key, Google tokens), trust boundaries (page and workers, Tauri IPC, Google Drive, the relay, the update channel) and attackers (a malicious page or dependency, a stolen device, a hostile relay, Drive access, network attackers).
+  2. Scan the whole git history for secrets with gitleaks before the repository becomes public; rotate anything found. Allow-list the relay's test-only RSA keys (`apps/relay/tests/fixtures/*.pem`) or generate them at test time instead.
+  3. Audit dependencies: `pnpm audit`, `cargo audit` and `cargo deny` (advisories, licenses compatible with AGPL-3.0, banned or duplicate crates).
+  4. Review by hand, with the `crypto-audit` and `security-review` skills: plaintext never leaves the device unencrypted (Drive, relay, logs, exports only on request); XSS paths (no `innerHTML`, link handling, strict CSP on web and desktop); OAuth (state, nonce, token storage, revoke); Tauri commands and capabilities (least privilege, `link_open` schemes, `export_save` paths); export file names (path traversal inside zips); the relay (auth, frame limits, per-account channels, DoS); the ServiceWorker cache; and the update channel.
+  5. Fix what the review finds, each with a test, and record findings and decisions in `docs/security/review-2026.md`.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && cargo test --workspace && bash .claude/skills/crypto-audit/scripts/scan.sh packages apps
+``` 
+
+---
+
+### Task 13c: License and Documentation
+- **Type:** Documentation
+- **Read-Only Context Files:** `SPEC.md`, `AGENTS.md`, `docs/security/threat-model.md`
+- **Target Files (Create/Modify):**
+  - `LICENSE`
+  - `README.md`
+  - `SECURITY.md`
+  - `CONTRIBUTING.md`
+  - `THIRD_PARTY_NOTICES.md`
+  - `package.json`, `apps/*/package.json`, `packages/*/package.json`, `Cargo.toml` (license fields)
+- **Step-by-Step Instructions:**
+  1. License the project under AGPL-3.0-or-later: the full `LICENSE` text, the SPDX id in every `package.json` and Cargo manifest, and a short notice in the README.
+  2. Write a detailed README: what AnkyLock is and promises (zero-knowledge E2EE, local-first, no account beyond Google for Drive), how it works (vault key from the passphrase, AES-256-GCM, Drive appdata backups, the optional relay), screenshots, download and install for Linux, the web app, building from source, running your own relay, architecture overview and the release process.
+  3. `SECURITY.md`: how to report a vulnerability privately (GitHub private advisories), what is in scope, and a link to the threat model. `CONTRIBUTING.md`: setup, the commands from `AGENTS.md`, conventions, and that contributions are under AGPL-3.0.
+  4. `THIRD_PARTY_NOTICES.md`: licenses of bundled assets and dependencies, including the OFL fonts (Fredoka, Plus Jakarta Sans, JetBrains Mono), generated from the dependency tree where possible.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && cargo test --workspace
+``` 
+
+---
+
+### Task 13d: CI Pipeline with Security Checks
+- **Type:** DevOps
+- **Read-Only Context Files:** `AGENTS.md`, `package.json`, `deny.toml`, `.gitleaks.toml`
+- **Target Files (Create/Modify):**
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/codeql.yml`
+  - `.github/dependabot.yml`
+  - `eslint.config.js`, `package.json` (lint scripts)
+  - `tests/browser/` (Playwright)
+- **Step-by-Step Instructions:**
+  1. Add ESLint (strict TypeScript, no `any`, Solid rules) and a `lint` script in every package, so `pnpm -r run lint` from `AGENTS.md` works; fix what it reports.
+  2. On every push and pull request: install with the frozen lockfile, typecheck, lint, unit and integration tests, build, `cargo clippy`, `cargo test`, the crypto scan, `pnpm audit`, `cargo deny`, and gitleaks. Cache pnpm and cargo; pin actions to commit SHAs.
+  3. CodeQL for JavaScript/TypeScript and Rust, and Dependabot for npm, cargo and GitHub Actions.
+  4. Playwright tests of the built web app in Chromium and WebKit: create, lock and unlock a vault, write a note, export, theme, against a fake Google and Drive.
+- **Verification:**
+``` bash
+pnpm -r run lint && pnpm -r run typecheck && pnpm -r run test && cargo clippy --workspace --all-targets && cargo test --workspace
+``` 
+
+---
+
+### Task 13e: Landing Site (ankylock.com)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `README.md`, `docs/design/logo-expressions.html`, `apps/web/src/theme/colorScheme.ts`, `apps/web/src/theme/fonts.ts`
+- **Target Files (Create/Modify):**
+  - `apps/site/` (new static site: home, download, privacy, terms)
+  - `pnpm-workspace.yaml`
+- **Step-by-Step Instructions:**
+  1. A fast static site in the app's look (logo with its expressions, Fredoka wordmark, Plus Jakarta Sans): what AnkyLock does, how it works (your passphrase, your key, encrypted before it leaves the device; Google Drive holds only ciphertext), what it promises and what it does not do. Buttons: "Go to AnkyLock" (`app.ankylock.com`), "Download" (`/download`) and GitHub; room for a donation button later.
+  2. System, Light and Dark themes: follows the browser by default, the visitor can switch, and the choice is remembered on that device only.
+  3. `/download`: the Linux packages (AppImage, .deb, .rpm) linked from the latest GitHub Release with their SHA-256 checksums and install steps; Windows and macOS marked "coming later, or build from source".
+  4. `/privacy` and `/terms`, required for the Google OAuth consent screen: what Google data is used (sign-in identity, the hidden app folder in Drive) and that note content is never readable by AnkyLock.
+  5. No third-party scripts, trackers or CDNs; self-hosted fonts; accessible and readable on phones.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
+### Task 13f: Hosting on Cloudflare (ankylock.com, app.ankylock.com)
+- **Type:** DevOps/Release
+- **Read-Only Context Files:** `apps/web/vite.config.ts`, `apps/web/src/sw/cachePolicy.ts`, `apps/site/`
+- **Target Files (Create/Modify):**
+  - `apps/site/public/_headers`, `apps/site/public/_redirects`
+  - `apps/web/public/_headers`
+  - `.github/workflows/deploy.yml`
+  - `README.md` (deployment and secrets)
+- **Step-by-Step Instructions:**
+  1. Agree the Cloudflare setup with the user: two Cloudflare Pages projects, the site on `ankylock.com` (with `www.ankylock.com` redirecting to it) and the web app on `app.ankylock.com`; DNS and TLS in the existing Cloudflare account; deploys from CI on `main` with a scoped API token kept in GitHub secrets.
+  2. Security headers on both: a strict CSP (no inline scripts, `connect-src` limited to Google and an own relay set by the user), HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` and `frame-ancestors 'none'`; no source maps or dotfiles deployed. Long-lived caching for hashed assets, no caching for `index.html` and `sw.js`.
+  3. Google OAuth for production: the web client's authorized origin `https://app.ankylock.com` and its redirect URI, the consent screen with the app name, logo, `ankylock.com`, the privacy and terms pages, and Google's verification of the requested scopes (`openid email drive.appdata`).
+  4. Check the live sites with Mozilla Observatory, securityheaders.com and an OWASP ZAP baseline scan; fix what they report.
+- **Verification:**
+``` bash
+pnpm -r run build && curl -sI https://ankylock.com https://app.ankylock.com
+``` 
+
+---
+
+### Task 13g: GitHub Releases for Linux
+- **Type:** DevOps/Release
+- **Read-Only Context Files:** `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/tauri.linux.conf.json`, `README.md`
+- **Target Files (Create/Modify):**
+  - `.github/workflows/release.yml`
+  - `apps/desktop/src-tauri/tauri.conf.json`
+  - `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/package.json` (updater plugin)
+  - `CHANGELOG.md`
+  - `README.md` (release steps)
+- **Step-by-Step Instructions:**
+  1. A tag (`v*`) builds the Linux packages in CI, AppImage, .deb and .rpm, with the production web client ids compiled in from GitHub secrets, and publishes them to a GitHub Release with release notes from `CHANGELOG.md`.
+  2. Publish `SHA256SUMS` and GitHub artifact attestations (build provenance) for every file, so downloads can be verified.
+  3. Enable the Tauri updater for the AppImage: the update manifest on the GitHub Release, signed with a key kept only in CI secrets; the app checks on launch and asks before installing.
+  4. Windows and macOS stay out of releases for now (see Later); the README explains building them from source.
+- **Verification:**
+``` bash
+pnpm -r run build && cargo test --workspace && pnpm --filter @ankylock/desktop tauri build --bundles appimage,deb,rpm
+``` 
+
+---
+
+## Later (Not Planned Yet)
+
+- **Hosted relay** on `relay.ankylock.com` if traffic grows: containerized stateless relay (small non-root image, `/healthz`), configured through the environment, over `wss://` with TLS.
+- **Windows and macOS releases:** signed MSI/NSIS for Windows (system rounded corners, see 12l) and a signed, notarized DMG for macOS (transparent rounded window), both with the updater.
+- **Flatpak** on Flathub.
+- **Donation button** on the site and in the app.
 
 ---
 
@@ -921,5 +1054,11 @@ Task 1 (Workspace & Config)
                            │       └──► Task 12k (App Fonts)
                            │               └──► Task 12l (Rounded Corners)
                            │                       └──► Task 12m (Status Bar Buttons)
-                           └──► Task 13 (Production Release, after 12c–12m)
+                           └──► Task 13a (Drive-Only Sync, after 12c–12m)
+                                   └──► Task 13b (Security Review & Hardening)
+                                           └──► Task 13c (License & Documentation)
+                                                   └──► Task 13d (CI Pipeline & Security Checks)
+                                                           ├──► Task 13e (Landing Site)
+                                                           │       └──► Task 13f (Cloudflare Hosting)
+                                                           └──► Task 13g (GitHub Releases for Linux)
 ``` 
