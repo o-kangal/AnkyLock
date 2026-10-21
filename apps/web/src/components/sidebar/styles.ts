@@ -18,12 +18,19 @@ export const tokens = {
   brandFamily: `"${BRAND_FAMILY}", "${UI_FAMILY}", system-ui, sans-serif`,
   /** Headings and emphasis. */
   strongWeight: '600',
+  /** Corner radii: rows, buttons and fields; popovers, menus and dialogs; tabs and small chips. */
+  radiusControl: '8px',
+  radiusPanel: '12px',
+  radiusChip: '6px',
   background: color('background'),
   surface: color('surface'),
   text: color('text'),
   muted: color('muted'),
   border: color('border'),
   rowBorder: color('rowBorder'),
+  fieldBorder: color('fieldBorder'),
+  fieldBackground: color('fieldBackground'),
+  buttonBackground: color('buttonBackground'),
   hoverBackground: color('hoverBackground'),
   activeBackground: color('activeBackground'),
   accent: color('accent'),
@@ -31,6 +38,29 @@ export const tokens = {
   overlay: color('overlay'),
   shadow: color('shadow'),
 } as const;
+
+/**
+ * Fields and buttons drawn by the app instead of the platform: native controls ignore a radius,
+ * and WebKit falls back to bevelled borders when given one. Focus rings follow the corners.
+ */
+export const fieldStyle: JSX.CSSProperties = {
+  appearance: 'none',
+  border: `1px solid ${tokens.fieldBorder}`,
+  'border-radius': tokens.radiusControl,
+  background: tokens.fieldBackground,
+  color: tokens.text,
+};
+
+export const buttonStyle: JSX.CSSProperties = { ...fieldStyle, background: tokens.buttonBackground, cursor: 'pointer' };
+
+/** A field-styled `<select>`, with its arrow drawn back in (`appearance: none` removes it). */
+export const selectStyle: JSX.CSSProperties = {
+  ...fieldStyle,
+  'background-image': `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E")`,
+  'background-repeat': 'no-repeat',
+  'background-position': 'right 10px center',
+  'padding-right': '28px',
+};
 
 /** Space around each framed sidebar item, inside its fixed-height row. */
 export const ROW_GAP_PX = 2;
@@ -72,7 +102,7 @@ export function itemStyle(depth: number, state: ItemState, rowHeight: number = t
     margin: `${ROW_GAP_PX}px 6px ${ROW_GAP_PX}px ${6 + depth * tokens.indent}px`,
     'padding-left': '7px',
     border: `1px solid ${state.active ? tokens.accent : tokens.rowBorder}`,
-    'border-radius': '5px',
+    'border-radius': tokens.radiusControl,
     background: state.active ? tokens.activeBackground : state.hovered ? tokens.hoverBackground : 'transparent',
     color: tokens.text,
   };

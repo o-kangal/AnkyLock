@@ -5,7 +5,7 @@ import type { ExportScope } from '../export/exportPlan.js';
 import { useSaveFile } from '../export/saveFile.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import type { Runtime } from '../runtime/createRuntime.js';
-import { tokens } from './sidebar/styles.js';
+import { buttonStyle, fieldStyle, tokens } from './sidebar/styles.js';
 
 /**
  * Confirms an export: it says the files leave AnkyLock's protection, and offers an AES-256 zip
@@ -49,8 +49,8 @@ export function ExportDialog(props: {
   };
 
   const field = (): JSX.CSSProperties =>
-    touchSized({ display: 'block', width: '100%', 'box-sizing': 'border-box', padding: '5px 8px', 'margin-top': '6px', font: tokens.font }, narrow());
-  const button = (): JSX.CSSProperties => touchSized({ font: tokens.font, padding: '6px 14px', cursor: 'pointer' }, narrow());
+    touchSized({ ...fieldStyle, display: 'block', width: '100%', 'box-sizing': 'border-box', padding: '5px 8px', 'margin-top': '6px', font: tokens.font }, narrow());
+  const button = (): JSX.CSSProperties => touchSized({ ...buttonStyle, font: tokens.font, padding: '6px 14px' }, narrow());
 
   return (
     <Portal>
@@ -74,7 +74,7 @@ export function ExportDialog(props: {
             color: tokens.text,
             background: tokens.surface,
             border: `1px solid ${tokens.border}`,
-            'border-radius': '6px',
+            'border-radius': tokens.radiusPanel,
             'box-shadow': `0 8px 24px ${tokens.shadow}`,
           }}
         >

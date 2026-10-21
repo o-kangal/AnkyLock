@@ -4,6 +4,8 @@ mod b64;
 mod commands;
 mod db;
 mod error;
+#[cfg(target_os = "linux")]
+mod window_frame;
 
 use tauri::Manager;
 
@@ -23,6 +25,10 @@ fn main() {
             std::fs::create_dir_all(&data_dir)?;
             vaults::adopt_legacy_database(&data_dir, commands::now_ms())?;
             app.manage(Vaults::new(data_dir));
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                window_frame::round_corners(&window)?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

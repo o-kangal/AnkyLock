@@ -5,8 +5,9 @@ import { bytesToBase64, createWorkerSealer, type MessagePortLike } from '@ankylo
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { TauriVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
-import { AnkyLockApp, CLOSE_BACKUP_WAIT_MS, createRuntime, tokens } from '@ankylock/web/workspace';
+import { AnkyLockApp, buttonStyle, CLOSE_BACKUP_WAIT_MS, createRuntime, tokens } from '@ankylock/web/workspace';
 import { guardWindowClose, type CloseState, type WindowCloseGuard } from './closeGuard.js';
+import { drawsWindowCorners, frameStyle, watchWindowFill } from './windowFrame.js';
 import { createTauriAuthTransport } from './googleAuthTransport.js';
 import { TitleBar } from './TitleBar.jsx';
 
@@ -27,6 +28,9 @@ export function App(): JSX.Element {
     onError: (message) => console.error(message),
   });
   const [closing, setClosing] = createSignal<CloseState>('open');
+  const ownCorners = drawsWindowCorners();
+  const [filled, setFilled] = createSignal(false);
+  if (ownCorners) onCleanup(watchWindowFill(getCurrentWindow(), setFilled));
   const closeGuard = guardWindowClose(getCurrentWindow(), runtime, setClosing, CLOSE_BACKUP_WAIT_MS);
   onCleanup(() => {
     closeGuard.dispose();
@@ -36,7 +40,7 @@ export function App(): JSX.Element {
   });
 
   return (
-    <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%' }}>
+    <div style={frameStyle(tokens, ownCorners, filled())}>
       <TitleBar logoFace={runtime.logoFace} />
       <div style={{ flex: '1', 'min-height': '0' }}>
         <AnkyLockApp
@@ -53,7 +57,7 @@ export function App(): JSX.Element {
   );
 }
 
-const dialogButton: JSX.CSSProperties = { font: tokens.font, padding: '6px 14px', cursor: 'pointer' };
+const dialogButton: JSX.CSSProperties = { ...buttonStyle, font: tokens.font, padding: '6px 14px' };
 
 /** Shown while the last backup runs on close, and when it could not finish. */
 function CloseDialog(props: { readonly state: CloseState; readonly guard: WindowCloseGuard }): JSX.Element {
@@ -75,7 +79,7 @@ function CloseDialog(props: { readonly state: CloseState; readonly guard: Window
               color: tokens.text,
               background: tokens.surface,
               border: `1px solid ${tokens.border}`,
-              'border-radius': '6px',
+              'border-radius': tokens.radiusPanel,
               'box-shadow': `0 8px 24px ${tokens.shadow}`,
             }}
           >

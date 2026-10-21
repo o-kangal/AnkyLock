@@ -5,7 +5,7 @@ import type { RemoteVault } from '@ankylock/sync';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { AnkyLogo } from './AnkyLogo.jsx';
-import { tokens } from './sidebar/styles.js';
+import { buttonStyle, fieldStyle as drawnField, selectStyle, tokens } from './sidebar/styles.js';
 
 /** Passphrases are the only thing protecting the vault; short ones fall to offline guessing. */
 export const MIN_PASSPHRASE_LENGTH = 8;
@@ -65,7 +65,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   onMount(() => queueMicrotask(focusFirst));
 
   const narrow = useNarrowScreen();
-  const fieldStyle = (): JSX.CSSProperties => touchSized(baseFieldStyle, narrow());
+  const fieldStyle = (): JSX.CSSProperties => touchSized({ ...drawnField, ...baseFieldStyle }, narrow());
+  const pickerStyle = (): JSX.CSSProperties => touchSized({ ...selectStyle, ...baseFieldStyle }, narrow());
   const [chosenMode, setMode] = createSignal<Mode>('unlock');
   const mode = (): Mode =>
     chosenMode() === 'unlock' && props.runtime.status() === 'uninitialized' ? 'create' : chosenMode();
@@ -232,7 +233,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   const showSubmit = (): boolean => mode() !== 'remote' || (remote().kind === 'ready' && remoteId() !== null);
   const submitDisabled = (): boolean =>
     busy() || (confirming() && (!confirmed() || (mode() === 'remove' && targetOnDrive() === null)));
-  const submitStyle = (): JSX.CSSProperties => ({ ...fieldStyle(), cursor: 'pointer', ...(confirming() ? { color: tokens.danger } : {}) });
+  const submitStyle = (): JSX.CSSProperties =>
+    touchSized({ ...buttonStyle, ...baseFieldStyle, ...(confirming() ? { color: tokens.danger } : {}) }, narrow());
 
   return (
     <main style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>
@@ -257,7 +259,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
                   setSelected(e.currentTarget.value as VaultId);
                   setError(null);
                 }}
-                style={fieldStyle()}
+                style={pickerStyle()}
               >
                 <For each={props.runtime.vaults()}>{(entry) => <option value={entry.id}>{vaultLabel(entry)}</option>}</For>
               </select>
@@ -319,7 +321,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
                     setSelectedRemote(e.currentTarget.value as VaultId);
                     setError(null);
                   }}
-                  style={fieldStyle()}
+                  style={pickerStyle()}
                 >
                   <For each={(remote() as { vaults: readonly RemoteVault[] }).vaults}>
                     {(vault) => <option value={vault.vaultId}>{remoteVaultLabel(vault)}</option>}

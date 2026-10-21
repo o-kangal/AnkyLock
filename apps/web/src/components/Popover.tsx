@@ -66,6 +66,7 @@ export function Popover(props: PopoverProps): JSX.Element {
           background: tokens.background,
           color: tokens.text,
           border: `1px solid ${tokens.border}`,
+          'border-radius': tokens.radiusPanel,
           'box-shadow': `0 4px 12px ${tokens.shadow}`,
           'z-index': '1000',
           font: tokens.font,

@@ -5,7 +5,7 @@ import type { MenuTarget } from './ContextMenu.jsx';
 import type { Selection, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { longPress } from './rowMenu.jsx';
-import { createHover, itemRowHeight, itemStyle, tokens, type ItemState } from './styles.js';
+import { createHover, fieldStyle, itemRowHeight, itemStyle, tokens, type ItemState } from './styles.js';
 
 /** Immutable system categories (BR-HIER-01): fixed labels, views rather than containers. */
 export const SYSTEM_CATEGORY_LABELS: Record<SystemCategoryId, string> = {
@@ -90,7 +90,7 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
           placeholder="New category"
           value={draft()}
           onInput={(e) => setDraft(e.currentTarget.value)}
-          style={touchSized({ width: '100%', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}
+          style={touchSized({ ...fieldStyle, width: '100%', padding: '3px 8px', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}
         />
         <Show when={error()}>
           <div role="alert" style={{ color: tokens.danger, font: tokens.font, 'margin-top': '2px' }}>

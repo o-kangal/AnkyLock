@@ -2,7 +2,7 @@ import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import { MAX_RETENTION_DAYS } from '@ankylock/core';
 import type { WorkspaceStore } from '../../stores/workspaceStore.js';
 import { Popover } from '../Popover.jsx';
-import { rowStyle, tokens } from './styles.js';
+import { buttonStyle, fieldStyle, rowStyle, tokens } from './styles.js';
 
 const iconButton: JSX.CSSProperties = {
   display: 'inline-flex',
@@ -14,7 +14,7 @@ const iconButton: JSX.CSSProperties = {
   cursor: 'pointer',
 };
 
-const actionButton: JSX.CSSProperties = { font: tokens.font, padding: '3px 10px', cursor: 'pointer' };
+const actionButton: JSX.CSSProperties = { ...buttonStyle, font: tokens.font, padding: '3px 10px' };
 
 const POPOVER_WIDTH = 260;
 const popoverStyle: JSX.CSSProperties = { padding: '10px 12px' };
@@ -74,7 +74,7 @@ function RetentionSettings(props: { readonly store: WorkspaceStore; readonly onD
                 disabled={manual()}
                 value={days()}
                 onInput={(e) => setDays(e.currentTarget.value)}
-                style={{ width: '56px', font: tokens.font }}
+                style={{ ...fieldStyle, width: '56px', padding: '2px 6px', font: tokens.font }}
               />{' '}
               days
             </label>

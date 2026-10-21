@@ -23,5 +23,9 @@ tauri-plugin-dialog = "2.7.3"
 thiserror = "2.0.21"
 tokio = { version = "1.53.3", features = ["net", "io-util", "time"] }
 
+# Rounds the GTK window decoration to match the app's own corners (window_frame.rs).
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18.2"
+
 [dev-dependencies]
 tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "net", "io-util", "time"] }

@@ -1,3 +1,4 @@
+import { buttonStyle, fieldStyle, itemStyle, tokens } from '../src/components/sidebar/styles.js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { NoteId } from '@ankylock/core';
@@ -74,5 +75,17 @@ describe('TabBar', () => {
     (root.querySelector('[aria-label="Close tab"]') as HTMLButtonElement).click();
     await waitFor(async () => (await storage.getNote('id-1' as NoteId)) === null, 'note discarded');
     expect(root.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+});
+
+describe('rounded corners', () => {
+  it('draws fields, buttons and rows with the radius scale', () => {
+    expect([tokens.radiusChip, tokens.radiusControl, tokens.radiusPanel]).toEqual(['6px', '8px', '12px']);
+    // Drawn by the app: native controls would ignore the radius.
+    for (const style of [fieldStyle, buttonStyle]) {
+      expect(style).toMatchObject({ appearance: 'none', 'border-radius': tokens.radiusControl });
+      expect(style.border).toContain('1px solid');
+    }
+    expect(itemStyle(0, {})['border-radius']).toBe(tokens.radiusControl);
   });
 });

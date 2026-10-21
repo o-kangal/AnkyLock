@@ -89,7 +89,7 @@ export function editorTheme(scheme: ColorScheme, fontSizePx = 14): Extension {
         backgroundColor: p.tooltipBackground,
         color: p.foreground,
         border: `1px solid ${p.tooltipBorder}`,
-        borderRadius: '4px',
+        borderRadius: '8px',
         fontFamily: UI_FONT_STACK,
         fontSize: '12px',
       },

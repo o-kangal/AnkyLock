@@ -6,7 +6,7 @@ import { useExport } from '../../export/saveFile.js';
 import type { WorkspaceState, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { TOUCH_TARGET_PX, touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { Popover } from '../Popover.jsx';
-import { tokens } from './styles.js';
+import { fieldStyle, tokens } from './styles.js';
 
 export interface MenuAction {
   readonly label: string;
@@ -169,7 +169,8 @@ const baseItemStyle: JSX.CSSProperties = {
   'text-align': 'left',
   border: 'none',
   background: 'transparent',
-  padding: '4px 12px',
+  padding: '4px 8px',
+  'border-radius': tokens.radiusChip,
   font: tokens.font,
   cursor: 'pointer',
 };
@@ -211,7 +212,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
       onClose={props.onClose}
       at={{ x: props.x, y: props.y }}
       width={200}
-      style={{ padding: '4px 0' }}
+      style={{ padding: '6px' }}
     >
       <For each={menuActions(props.store.state, props.store, props.item, props.move).filter((a) => !a.export || openExport)}>
         {(action) => (
@@ -254,7 +255,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
                   value={value()}
                   onInput={(e) => setValue(e.currentTarget.value)}
                   ref={(el) => queueMicrotask(() => el.focus())}
-                  style={touchSized({ width: '100%', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}
+                  style={touchSized({ ...fieldStyle, width: '100%', padding: '3px 8px', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}
                 />
               </form>
             </Show>

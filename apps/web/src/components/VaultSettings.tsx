@@ -3,7 +3,7 @@ import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { useExport } from '../export/saveFile.js';
 import { THEME_CHOICES, ThemeContext } from '../theme/colorScheme.js';
-import { tokens } from './sidebar/styles.js';
+import { buttonStyle, fieldStyle, tokens } from './sidebar/styles.js';
 import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
 
 export type VaultSettingsView = 'menu' | 'remove' | 'delete' | 'wipe';
@@ -34,8 +34,8 @@ export function VaultSettings(props: {
   const narrow = useNarrowScreen();
   const theme = useContext(ThemeContext);
   const openExport = useExport();
-  const field = (): JSX.CSSProperties => touchSized(baseField, narrow());
-  const button = (): JSX.CSSProperties => ({ ...field(), cursor: 'pointer', 'text-align': 'left' });
+  const field = (): JSX.CSSProperties => touchSized({ ...fieldStyle, ...baseField }, narrow());
+  const button = (): JSX.CSSProperties => touchSized({ ...buttonStyle, ...baseField, 'text-align': 'left' }, narrow());
   const danger = (): JSX.CSSProperties => ({ ...button(), color: tokens.danger });
   const displayName = (): string => props.runtime.vaultName() ?? 'Unnamed vault';
   const [view, setView] = createSignal<VaultSettingsView>(props.initialView ?? 'menu');
@@ -135,7 +135,7 @@ export function VaultSettings(props: {
                         type="button"
                         aria-pressed={current().choice() === choice}
                         style={{
-                          ...field(),
+                          ...button(),
                           'margin-top': '0',
                           display: 'inline-flex',
                           'align-items': 'center',

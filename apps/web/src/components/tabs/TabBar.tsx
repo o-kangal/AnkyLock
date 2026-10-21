@@ -19,12 +19,15 @@ const tabStyle = (active: boolean, compact: boolean): JSX.CSSProperties => ({
   'align-items': 'center',
   gap: '6px',
   padding: '0 8px 0 12px',
-  height: compact ? '40px' : '32px',
+  // Rounded on top, resting on the bar's bottom edge.
+  'align-self': 'flex-end',
+  height: compact ? '36px' : '28px',
+  margin: '0 0 0 4px',
   'max-width': '200px',
   font: tokens.font,
   cursor: 'pointer',
   'user-select': 'none',
-  'border-right': `1px solid ${tokens.border}`,
+  'border-radius': `${tokens.radiusChip} ${tokens.radiusChip} 0 0`,
   background: active ? tokens.activeBackground : 'transparent',
 });
 

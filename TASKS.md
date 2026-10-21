@@ -800,6 +800,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12l: Rounded Corners (Window and UI)
+- **Status:** ✅ Completed (2026-10-21)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/sidebar/styles.ts`, `apps/web/src/theme/colorScheme.ts`, `apps/desktop/src-tauri/tauri.conf.json`
 - **Target Files (Create/Modify):**

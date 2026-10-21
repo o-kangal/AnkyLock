@@ -141,7 +141,14 @@ export function SyncStatusBar(props: {
         </button>
         <Show when={settings()}>
           {(open) => (
-            <Popover at={open().at} placement="above" width={300} label="Vault settings" onClose={() => setSettings(null)}>
+            <Popover
+              at={open().at}
+              placement="above"
+              width={300}
+              label="Vault settings"
+              onClose={() => setSettings(null)}
+              style={{ padding: '10px 12px' }}
+            >
               <VaultSettings runtime={props.runtime} initialView={open().view} onClose={() => setSettings(null)} />
             </Popover>
           )}
@@ -252,7 +259,7 @@ export function SyncStatusBar(props: {
                 ...iconButton,
                 ...(props.compact ? { 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' } : {}),
                 padding: '6px 8px',
-                'border-radius': '3px',
+                'border-radius': tokens.radiusChip,
                 font: tokens.font,
                 'font-size': '12px',
                 color: wrap().on() ? tokens.text : 'inherit',

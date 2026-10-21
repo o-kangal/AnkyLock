@@ -18,6 +18,10 @@ export interface ThemeColors {
   readonly border: string;
   /** Outline of sidebar rows. */
   readonly rowBorder: string;
+  /** Fields and buttons, drawn by the app so they take the radius scale. */
+  readonly fieldBorder: string;
+  readonly fieldBackground: string;
+  readonly buttonBackground: string;
   readonly hoverBackground: string;
   readonly activeBackground: string;
   readonly accent: string;
@@ -35,6 +39,9 @@ export const THEME_COLORS: Record<ColorScheme, ThemeColors> = {
     muted: '#6b6b6b',
     border: '#dcdcdc',
     rowBorder: '#e1e1e1',
+    fieldBorder: '#c4c4c4',
+    fieldBackground: '#ffffff',
+    buttonBackground: '#ececec',
     hoverBackground: 'rgba(0, 0, 0, 0.05)',
     activeBackground: 'rgba(0, 120, 212, 0.14)',
     accent: '#0067c0',
@@ -49,6 +56,9 @@ export const THEME_COLORS: Record<ColorScheme, ThemeColors> = {
     muted: '#9d9d9d',
     border: '#3c3c3c',
     rowBorder: '#363636',
+    fieldBorder: '#4a4a4a',
+    fieldBackground: '#2a2a2b',
+    buttonBackground: '#333334',
     hoverBackground: 'rgba(255, 255, 255, 0.06)',
     activeBackground: 'rgba(55, 148, 255, 0.24)',
     accent: '#4fa3ff',
@@ -63,14 +73,16 @@ export const colorVar = (name: keyof ThemeColors): string => `--al-${name.replac
 
 /**
  * Sets the palette as custom properties on the root element (inline, no stylesheet), plus
- * `color-scheme` so native controls and scrollbars match, and the browser's theme color.
+ * `color-scheme` so native controls and scrollbars match, and the browser's theme color. A root
+ * marked `data-transparent-window` (the desktop app drawing its own rounded window) keeps a
+ * transparent background.
  */
 export function applyColorScheme(scheme: ColorScheme, root: HTMLElement = document.documentElement): void {
   const colors = THEME_COLORS[scheme];
   for (const name of Object.keys(colors) as (keyof ThemeColors)[]) root.style.setProperty(colorVar(name), colors[name]);
   root.style.setProperty(UI_WEIGHT_VAR, String(uiWeight(scheme)));
   root.style.colorScheme = scheme;
-  root.style.background = colors.background;
+  root.style.background = root.hasAttribute('data-transparent-window') ? 'transparent' : colors.background;
   root.style.color = colors.text;
   root.ownerDocument.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.surface);
 }
