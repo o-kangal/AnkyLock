@@ -299,15 +299,20 @@ describe('SyncStatusBar', () => {
   it('offers Sync now while syncing, and shows progress while it runs', async () => {
     const a = await withNewVault(new FakeRelay(), 'Personal', true, new FakeDrive());
     const bar = mount(a.runtime);
-    expect(bar.querySelector('[aria-label="Sync now"]')).toBeNull();
+    // The visible backup label; the box also holds hidden sizing text.
+    const label = (): string => bar.querySelector('[data-backup-label] > span:last-child')?.textContent ?? '';
+    const syncButton = (): HTMLButtonElement | null => bar.querySelector('[aria-label="Sync now"]');
+    expect(syncButton()).toBeNull();
     await a.runtime.signIn();
-    await until(() => bar.textContent?.includes('Backed up') === true, 'first backup');
+    await until(() => label().startsWith('Backed up'), 'first backup');
 
-    (bar.querySelector('[aria-label="Sync now"]') as HTMLElement).click();
-    expect(bar.querySelector('[role="progressbar"]')).not.toBeNull();
-    expect(bar.textContent).toContain('Syncing…');
-    await until(() => bar.textContent?.includes('Backed up') === true && bar.querySelector('[role="progressbar"]') === null, 'synced again');
-    expect(bar.querySelector('[aria-label="Sync now"]')).not.toBeNull();
+    syncButton()?.click();
+    // The same button spins in place while it runs.
+    expect(syncButton()?.getAttribute('aria-busy')).toBe('true');
+    expect(syncButton()?.disabled).toBe(true);
+    expect(label()).toBe('Syncing…');
+    await until(() => label().startsWith('Backed up') && syncButton()?.getAttribute('aria-busy') === 'false', 'synced again');
+    expect(syncButton()?.disabled).toBe(false);
     await a.runtime.lock();
   });
 

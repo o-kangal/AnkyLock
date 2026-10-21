@@ -825,6 +825,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && cargo test --w
 ---
 
 ### Task 12m: Status Bar Buttons and Steady Layout
+- **Status:** ✅ Completed (2026-10-21)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `apps/web/src/components/sidebar/styles.ts`, `apps/web/src/components/ThemeIcon.tsx`, `apps/web/src/layout/screen.ts`
 - **Target Files (Create/Modify):**

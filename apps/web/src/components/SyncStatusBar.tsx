@@ -1,22 +1,11 @@
-import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
+import { createSignal, Match, Show, splitProps, Switch, type JSX } from 'solid-js';
 import type { BackupStatus } from '@ankylock/sync';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
 import type { ThemePreference } from '../theme/colorScheme.js';
 import { Popover, type PopoverPosition } from './Popover.jsx';
 import { VaultSettings, type VaultSettingsView } from './VaultSettings.jsx';
-import { tokens } from './sidebar/styles.js';
-
-const linkButton: JSX.CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-  // Vertical padding widens the click target without changing how the link looks.
-  padding: '6px 2px',
-  color: tokens.accent,
-  cursor: 'pointer',
-  font: tokens.font,
-  'text-decoration': 'underline',
-};
+import { buttonStyle, createHover, tokens } from './sidebar/styles.js';
 
 function backupLabel(backup: BackupStatus, compact: boolean): string | null {
   switch (backup.kind) {
@@ -57,14 +46,78 @@ function SyncIcon(props: { readonly spinning: boolean }): JSX.Element {
   );
 }
 
-const iconButton: JSX.CSSProperties = {
-  display: 'inline-flex',
-  border: 'none',
-  background: 'transparent',
-  padding: '6px',
-  color: 'inherit',
-  cursor: 'pointer',
+/** Height of a status bar button, inside the 46 px bar; touch screens get 40 px targets. */
+const BUTTON_HEIGHT_PX = 30;
+
+type BarButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+  readonly compact?: boolean | undefined;
+  /** Danger actions keep the danger color. */
+  readonly danger?: boolean;
+  /** A toggle that is on (Word wrap). */
+  readonly pressed?: boolean;
 };
+
+/** A drawn status bar button (12l), with a hover background; touch never hovers. */
+function BarButton(props: BarButtonProps): JSX.Element {
+  const [own, rest] = splitProps(props, ['compact', 'danger', 'pressed', 'style', 'children']);
+  const [hovered, hover] = createHover();
+  return (
+    <button
+      type="button"
+      {...hover}
+      {...rest}
+      aria-pressed={own.pressed}
+      style={{
+        ...buttonStyle,
+        display: 'inline-flex',
+        'align-items': 'center',
+        'justify-content': 'center',
+        gap: '5px',
+        'flex-shrink': '0',
+        'box-sizing': 'border-box',
+        height: own.compact ? '40px' : `${BUTTON_HEIGHT_PX}px`,
+        'min-width': own.compact ? '40px' : '0',
+        padding: '0 10px',
+        font: tokens.font,
+        'font-size': '12px',
+        'white-space': 'nowrap',
+        color: own.danger ? tokens.danger : tokens.text,
+        'border-color': own.pressed ? tokens.accent : tokens.fieldBorder,
+        background: own.pressed
+          ? tokens.activeBackground
+          : hovered() && !rest.disabled
+            ? tokens.buttonHoverBackground
+            : tokens.buttonBackground,
+        cursor: rest.disabled ? 'default' : 'pointer',
+        ...(typeof own.style === 'object' ? own.style : {}),
+      }}
+    >
+      {own.children}
+    </button>
+  );
+}
+
+/**
+ * The backup label, in a box as wide as its longest regular text, so the buttons beside it never
+ * move as it changes. Longer messages (errors) are cut with an ellipsis; the tooltip has them whole.
+ */
+function BackupLabel(props: { readonly text: string | null; readonly compact: boolean }): JSX.Element {
+  const longest = (): readonly string[] => (props.compact ? ['12:00 PM'] : ['Backed up 12:00 PM', 'Backing up…', 'Syncing…']);
+  return (
+    <span
+      data-backup-label
+      title={props.text ?? undefined}
+      style={{ display: 'inline-grid', 'max-width': '320px', 'white-space': 'nowrap' }}
+    >
+      {longest().map((text) => (
+        <span aria-hidden="true" style={{ 'grid-area': '1 / 1', visibility: 'hidden' }}>
+          {text}
+        </span>
+      ))}
+      <span style={{ 'grid-area': '1 / 1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'min-width': '0' }}>{props.text ?? ''}</span>
+    </span>
+  );
+}
 
 /**
  * Non-intrusive status line (SPEC §7): the open vault, sign-in, relay connection and Drive backup
@@ -92,6 +145,7 @@ export function SyncStatusBar(props: {
     const rect = vaultButton.getBoundingClientRect();
     setSettings({ at: { x: rect.left, y: rect.top - 4 }, view });
   };
+  const syncing = (): boolean => status().catchingUp || status().backup.kind === 'running';
 
   const signIn = async (): Promise<void> => {
     setError(null);
@@ -106,8 +160,8 @@ export function SyncStatusBar(props: {
         'justify-content': 'space-between',
         'align-items': 'center',
         gap: '12px',
-        // Tall enough for easy clicks, with links clear of the frameless window's bottom resize edge.
-        'min-height': '40px',
+        // Tall enough for easy clicks, with buttons clear of the frameless window's bottom resize edge.
+        'min-height': '46px',
         'box-sizing': 'border-box',
         padding: '0 12px',
         'border-top': `1px solid ${tokens.border}`,
@@ -119,26 +173,18 @@ export function SyncStatusBar(props: {
         background: tokens.surface,
       }}
     >
-      <span style={{ display: 'flex', gap: '8px', 'align-items': 'center' }}>
-        <button
+      <span style={{ display: 'flex', gap: '8px', 'align-items': 'center', 'min-width': '0' }}>
+        <BarButton
           ref={vaultButton}
-          type="button"
+          compact={props.compact}
           aria-haspopup="dialog"
           title="Vault settings: rename, remove or delete"
-          style={{
-            ...linkButton,
-            color: tokens.text,
-            'text-decoration': 'none',
-            'white-space': 'nowrap',
-            overflow: 'hidden',
-            'text-overflow': 'ellipsis',
-            'max-width': props.compact ? '40vw' : 'none',
-            ...(props.compact ? { 'min-height': '40px' } : {}),
-          }}
+          style={{ overflow: 'hidden', 'text-overflow': 'ellipsis', 'max-width': props.compact ? '40vw' : '240px' }}
           onClick={() => openSettings('menu')}
         >
-          {props.runtime.vaultName() ?? 'Unnamed vault'} ▾
-        </button>
+          <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis' }}>{props.runtime.vaultName() ?? 'Unnamed vault'}</span>
+          <span aria-hidden="true">▾</span>
+        </BarButton>
         <Show when={settings()}>
           {(open) => (
             <Popover
@@ -153,89 +199,73 @@ export function SyncStatusBar(props: {
             </Popover>
           )}
         </Show>
-        <Show when={props.compact} fallback={<>
-        <button
-          type="button"
-          style={linkButton}
-          title="Lock this vault and return to the vault list"
-          onClick={() => void props.runtime.lock()}
+        <Show
+          when={props.compact}
+          fallback={
+            <>
+              <BarButton title="Lock this vault and return to the vault list" onClick={() => void props.runtime.lock()}>
+                Lock
+              </BarButton>
+              <Switch>
+                <Match when={status().vaultDrive === 'deleted'}>
+                  <span style={{ color: tokens.danger }}>Deleted from Google Drive on another device</span>
+                  <BarButton onClick={() => void props.runtime.keepLocalOnly()}>Keep local only</BarButton>
+                  <BarButton danger onClick={() => openSettings('remove')}>
+                    Remove from this device
+                  </BarButton>
+                </Match>
+                <Match when={status().vaultDrive === 'local-only'}>Local only (this vault)</Match>
+                <Match when={status().auth === 'unavailable'}>Local only</Match>
+                <Match when={status().auth === 'signed-out'}>
+                  Not syncing
+                  <BarButton onClick={() => void signIn()}>Sign in with Google</BarButton>
+                </Match>
+                <Match when={status().auth === 'signing-in'}>Waiting for Google sign-in in your browser…</Match>
+                <Match when={status().auth === 'expired'}>
+                  <span style={{ color: tokens.danger }}>Google sign-in expired</span>
+                  <BarButton onClick={() => void signIn()}>Sign in again</BarButton>
+                </Match>
+                <Match when={status().auth === 'stale'}>
+                  {status().connection === 'open' ? 'Synced' : 'Offline; changes are queued'}
+                  <BarButton title="Google access expired; renewing takes one click and no new consent" onClick={() => void signIn()}>
+                    Renew Google access
+                  </BarButton>
+                </Match>
+                <Match when={status().auth === 'signed-in'}>
+                  {status().connection === 'open'
+                    ? 'Synced'
+                    : status().connection === 'connecting'
+                      ? 'Connecting…'
+                      : 'Offline; changes are queued'}
+                  <BarButton onClick={() => void props.runtime.signOut()}>Sign out</BarButton>
+                </Match>
+              </Switch>
+            </>
+          }
         >
-          Lock
-        </button>
-        <span aria-hidden="true">|</span>
-        <Switch>
-          <Match when={status().vaultDrive === 'deleted'}>
-            <span style={{ color: tokens.danger }}>Deleted from Google Drive on another device</span> ·
-            <button type="button" style={linkButton} onClick={() => void props.runtime.keepLocalOnly()}>
-              Keep local only
-            </button>
-            ·
-            <button type="button" style={linkButton} onClick={() => openSettings('remove')}>
-              Remove from this device
-            </button>
-          </Match>
-          <Match when={status().vaultDrive === 'local-only'}>Local only (this vault)</Match>
-          <Match when={status().auth === 'unavailable'}>Local only</Match>
-          <Match when={status().auth === 'signed-out'}>
-            Not syncing ·
-            <button type="button" style={linkButton} onClick={() => void signIn()}>
-              Sign in with Google
-            </button>
-          </Match>
-          <Match when={status().auth === 'signing-in'}>Waiting for Google sign-in in your browser…</Match>
-          <Match when={status().auth === 'expired'}>
-            <span style={{ color: tokens.danger }}>Google sign-in expired</span> ·
-            <button type="button" style={linkButton} onClick={() => void signIn()}>
-              Sign in again
-            </button>
-          </Match>
-          <Match when={status().auth === 'stale'}>
-            {status().connection === 'open' ? 'Synced' : 'Offline; changes are queued'} ·
-            <button
-              type="button"
-              style={linkButton}
-              title="Google access expired; renewing takes one click and no new consent"
-              onClick={() => void signIn()}
-            >
-              Renew Google access
-            </button>
-          </Match>
-          <Match when={status().auth === 'signed-in'}>
-            {status().connection === 'open'
-              ? 'Synced'
-              : status().connection === 'connecting'
-                ? 'Connecting…'
-                : 'Offline; changes are queued'}{' '}
-            ·
-            <button type="button" style={linkButton} onClick={() => void props.runtime.signOut()}>
-              Sign out
-            </button>
-          </Match>
-        </Switch>
-        </>}>
-          <span style={{ 'white-space': 'nowrap' }}>
+          <span style={{ display: 'flex', gap: '8px', 'align-items': 'center', 'white-space': 'nowrap' }}>
             <Switch>
               <Match when={status().vaultDrive === 'deleted'}>
-                <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => openSettings('menu')}>
+                <BarButton compact danger onClick={() => openSettings('menu')}>
                   Deleted elsewhere
-                </button>
+                </BarButton>
               </Match>
               <Match when={status().vaultDrive === 'local-only' || status().auth === 'unavailable'}>Local only</Match>
               <Match when={status().auth === 'signed-out'}>
-                <button type="button" style={linkButton} onClick={() => void signIn()}>
+                <BarButton compact onClick={() => void signIn()}>
                   Sign in
-                </button>
+                </BarButton>
               </Match>
               <Match when={status().auth === 'signing-in'}>Signing in…</Match>
               <Match when={status().auth === 'expired'}>
-                <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => void signIn()}>
+                <BarButton compact danger onClick={() => void signIn()}>
                   Sign in again
-                </button>
+                </BarButton>
               </Match>
               <Match when={status().auth === 'stale'}>
-                <button type="button" style={linkButton} onClick={() => void signIn()}>
+                <BarButton compact onClick={() => void signIn()}>
                   Renew
-                </button>
+                </BarButton>
               </Match>
               <Match when={status().auth === 'signed-in'}>
                 {status().connection === 'open' ? 'Synced' : status().connection === 'connecting' ? 'Connecting…' : 'Offline'}
@@ -247,84 +277,59 @@ export function SyncStatusBar(props: {
           <span style={{ color: tokens.danger }}>{error()}</span>
         </Show>
       </span>
-      <span style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+      <span style={{ display: 'flex', gap: '6px', 'align-items': 'center', 'flex-shrink': '0' }}>
         <Show when={props.wordWrap}>
           {(wrap) => (
-            <button
-              type="button"
-              aria-pressed={wrap().on()}
+            <BarButton
+              compact={props.compact}
+              pressed={wrap().on()}
               {...(props.compact ? { 'aria-label': `Word wrap (${wrap().shortcut})` } : {})}
               title="Wrap long lines in the editor"
-              style={{
-                ...iconButton,
-                ...(props.compact ? { 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' } : {}),
-                padding: '6px 8px',
-                'border-radius': tokens.radiusChip,
-                font: tokens.font,
-                'font-size': '12px',
-                color: wrap().on() ? tokens.text : 'inherit',
-                background: wrap().on() ? tokens.activeBackground : 'transparent',
-              }}
               onClick={() => wrap().toggle()}
             >
               <span aria-hidden="true">↵</span>
               <Show when={!props.compact}>
-                <span style={{ 'margin-left': '4px' }}>Wrap ({wrap().shortcut})</span>
+                <span>Wrap ({wrap().shortcut})</span>
               </Show>
-            </button>
+            </BarButton>
           )}
         </Show>
         <Show when={props.theme}>
           {(theme) => (
-            <button
-              type="button"
+            <BarButton
+              compact={props.compact}
               {...(props.compact ? { 'aria-label': `Theme: ${THEME_LABELS[theme().choice()]}` } : {})}
               title="Color theme: System, Light or Dark"
-              style={{
-                ...iconButton,
-                ...(props.compact ? { 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' } : {}),
-                padding: '6px 8px',
-                'align-items': 'center',
-                gap: '4px',
-                font: tokens.font,
-                'font-size': '12px',
-              }}
               onClick={() => theme().cycle()}
             >
               <ThemeIcon choice={theme().choice()} />
               <Show when={!props.compact}>
                 <span>{THEME_LABELS[theme().choice()]}</span>
               </Show>
-            </button>
+            </BarButton>
           )}
         </Show>
-        <Show
-          when={status().catchingUp || status().backup.kind === 'running'}
-          fallback={
-            <Show when={status().connection !== 'off'}>
-              <button
-                type="button"
-                aria-label="Sync now"
-                title="Sync now: merge other devices' backups from Google Drive and back up"
-                style={
-                  props.compact
-                    ? { ...iconButton, 'min-width': '40px', 'min-height': '40px', 'justify-content': 'center', 'align-items': 'center' }
-                    : iconButton
-                }
-                onClick={() => void props.runtime.syncNow()}
-              >
-                <SyncIcon spinning={false} />
-              </button>
-            </Show>
-          }
-        >
-          <span role="progressbar" aria-label="Syncing" style={{ display: 'inline-flex', padding: '6px' }}>
-            <SyncIcon spinning={true} />
-          </span>
+        {/* One button that spins while sync runs, so nothing beside it changes size. */}
+        <Show when={status().connection !== 'off' || syncing()}>
+          <BarButton
+            compact={props.compact}
+            aria-label="Sync now"
+            aria-busy={syncing()}
+            disabled={syncing()}
+            title="Sync now: merge other devices' backups from Google Drive and back up"
+            style={{ padding: '0 7px' }}
+            onClick={() => void props.runtime.syncNow()}
+          >
+            <SyncIcon spinning={syncing()} />
+          </BarButton>
         </Show>
-        <span style={{ 'white-space': 'nowrap' }}>
-          {status().catchingUp ? (props.compact ? '' : 'Syncing…') : backupLabel(status().backup, props.compact ?? false)}
-        </span>
+        {/* Reserved while syncing or backed up; nothing to show leaves no gap at the edge. */}
+        <Show when={status().connection !== 'off' || status().backup.kind !== 'never' || syncing()}>
+          <BackupLabel
+            compact={props.compact ?? false}
+            text={status().catchingUp ? (props.compact ? null : 'Syncing…') : backupLabel(status().backup, props.compact ?? false)}
+          />
+        </Show>
       </span>
     </footer>
   );

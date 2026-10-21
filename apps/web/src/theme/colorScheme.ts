@@ -22,6 +22,7 @@ export interface ThemeColors {
   readonly fieldBorder: string;
   readonly fieldBackground: string;
   readonly buttonBackground: string;
+  readonly buttonHoverBackground: string;
   readonly hoverBackground: string;
   readonly activeBackground: string;
   readonly accent: string;
@@ -42,6 +43,7 @@ export const THEME_COLORS: Record<ColorScheme, ThemeColors> = {
     fieldBorder: '#c4c4c4',
     fieldBackground: '#ffffff',
     buttonBackground: '#ececec',
+    buttonHoverBackground: '#e0e0e0',
     hoverBackground: 'rgba(0, 0, 0, 0.05)',
     activeBackground: 'rgba(0, 120, 212, 0.14)',
     accent: '#0067c0',
@@ -59,6 +61,7 @@ export const THEME_COLORS: Record<ColorScheme, ThemeColors> = {
     fieldBorder: '#4a4a4a',
     fieldBackground: '#2a2a2b',
     buttonBackground: '#333334',
+    buttonHoverBackground: '#3d3d3e',
     hoverBackground: 'rgba(255, 255, 255, 0.06)',
     activeBackground: 'rgba(55, 148, 255, 0.24)',
     accent: '#4fa3ff',

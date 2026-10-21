@@ -31,6 +31,7 @@ export const tokens = {
   fieldBorder: color('fieldBorder'),
   fieldBackground: color('fieldBackground'),
   buttonBackground: color('buttonBackground'),
+  buttonHoverBackground: color('buttonHoverBackground'),
   hoverBackground: color('hoverBackground'),
   activeBackground: color('activeBackground'),
   accent: color('accent'),
