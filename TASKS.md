@@ -719,6 +719,27 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
+### Task 12i: Tab Indents in the Editor
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `packages/editor/src/components/CodeMirrorView.tsx`, `packages/editor/src/extensions/wordWrap.ts`, `apps/web/src/keyboard/shortcuts.ts`
+- **Target Files (Create/Modify):**
+  - `packages/editor/src/extensions/indentation.ts`
+  - `packages/editor/src/extensions/theme.ts`
+  - `packages/editor/src/index.ts`
+  - `packages/editor/tests/indentation.test.ts`
+- **Step-by-Step Instructions:**
+  1. While typing in a note, Tab indents instead of moving focus to the next button. With no selection it inserts spaces up to the next tab stop at the cursor; with a selection spanning lines it indents every selected line. Shift+Tab outdents the current or selected lines.
+  2. Indent with 4 spaces; a tab character already in a note (e.g. pasted) is shown 4 columns wide. Enter keeps the current line's indentation.
+  3. Keep the editor escapable from the keyboard: Escape, then Tab, moves focus out of the editor as before. Tab outside the editor (sidebar, dialogs, tab bar) and the Ctrl+Tab tab switching stay unchanged.
+  4. Every indent is an ordinary edit: it syncs through Yjs, undoes in one step, and wrapped indented lines stay aligned (11j).
+  5. Test Tab with and without a selection, Shift+Tab, Enter after an indented line, Escape then Tab, and undo.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 13: Production Release (Web, Relay & Desktop Distribution)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
@@ -791,5 +812,6 @@ Task 1 (Workspace & Config)
                            ├──► Task 12f (Export with Optional Zip Password)
                            ├──► Task 12g (Delete All Drive Data)
                            ├──► Task 12h (Remove a Locked Vault from the Picker)
-                           └──► Task 13 (Production Release, after 12c–12h)
+                           ├──► Task 12i (Tab Indents in the Editor)
+                           └──► Task 13 (Production Release, after 12c–12i)
 ``` 
