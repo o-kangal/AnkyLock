@@ -10,6 +10,7 @@ import {
   lineNumbers,
   scrollPastEnd,
 } from '@codemirror/view';
+import { indentation } from './indentation.js';
 
 export type ColorScheme = 'light' | 'dark';
 
@@ -107,6 +108,7 @@ export function editorTheme(scheme: ColorScheme, fontSizePx = 13): Extension {
 /**
  * Plain-text editing basics. CodeMirror already renders only the lines in the viewport,
  * so multi-megabyte scratchpads stay cheap. Syntax highlighting is out of MVP scope.
+ * Tab indents (before the default keymap, so it wins).
  */
 export const editorBasics: Extension = [
   lineNumbers(),
@@ -115,5 +117,6 @@ export const editorBasics: Extension = [
   drawSelection(),
   highlightActiveLine(),
   scrollPastEnd(),
+  indentation,
   keymap.of(defaultKeymap),
 ];

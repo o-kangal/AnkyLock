@@ -720,6 +720,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12i: Tab Indents in the Editor
+- **Status:** ✅ Completed (2026-10-21)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `packages/editor/src/components/CodeMirrorView.tsx`, `packages/editor/src/extensions/wordWrap.ts`, `apps/web/src/keyboard/shortcuts.ts`
 - **Target Files (Create/Modify):**
