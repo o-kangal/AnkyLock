@@ -824,6 +824,25 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && cargo test --w
 
 ---
 
+### Task 12m: Status Bar Buttons and Steady Layout
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/components/sidebar/styles.ts`, `apps/web/src/components/ThemeIcon.tsx`, `apps/web/src/layout/screen.ts`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/components/SyncStatusBar.tsx`
+  - `apps/web/src/components/sidebar/styles.ts`
+  - `apps/web/tests/statusBar.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Every action in the status bar looks like a button, not a link: the vault menu, Lock, Sign in / Sign out / Sign in again / Renew Google access, Keep local only, Remove from this device, Word wrap, Theme and Sync now. Use the drawn button style (12l) 30 px tall in a 46 px bar, with the icon and label side by side; danger actions keep the danger color. Plain states ("Synced", "Offline; changes are queued", "Local only") stay text, and spacing replaces the `|` and `·` separators.
+  2. Buttons react to the mouse (hover background) without a stylesheet, as sidebar rows do (`createHover`); touch never hovers. The Word wrap button shows its pressed state clearly. Narrow screens keep 40 px touch targets and icon-only buttons (11k).
+  3. The right side never shifts while sync runs: the Sync now button keeps its place and size while it spins (disabled, not swapped for another element), and the backup label reserves the width of its longest regular text ("Backed up 12:00 PM", "Backing up…", "Syncing…"), so Wrap and Theme stay put. Longer error messages are cut with an ellipsis and shown in full as a tooltip.
+  4. Test that the actions are buttons with the shared style, the hover state, the pressed Wrap state, and that the Wrap and Theme buttons do not move between "Syncing…" and "Backed up …" (the label keeps a fixed width).
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 13: Production Release (Web, Relay & Desktop Distribution)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `AGENTS.md`, `README.md`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/vite.config.ts`, `apps/relay/src/config.rs`
@@ -900,5 +919,6 @@ Task 1 (Workspace & Config)
                            ├──► Task 12j (Animated Logo with Lock/Unlock Expressions)
                            │       └──► Task 12k (App Fonts)
                            │               └──► Task 12l (Rounded Corners)
-                           └──► Task 13 (Production Release, after 12c–12l)
+                           │                       └──► Task 12m (Status Bar Buttons)
+                           └──► Task 13 (Production Release, after 12c–12m)
 ``` 
