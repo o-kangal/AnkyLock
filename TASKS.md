@@ -784,15 +784,40 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
   - `packages/editor/src/components/CodeMirrorView.tsx`
   - `apps/web/tests/fonts.test.ts`
 - **Step-by-Step Instructions:**
-  1. Use three self-hosted variable fonts from Fontsource at exact versions: `@fontsource-variable/fredoka` for the brand wordmark "AnkyLock" (600, 700 for emphasis; `letter-spacing: 0`), `@fontsource-variable/plus-jakarta-sans` for the UI, sidebar and tabs (500, 600 for emphasis; 12.5–13 px), and `@fontsource-variable/jetbrains-mono` for the editor (400, 500; 13.5–14 px, `line-height: 1.65`). Narrow screens keep their 16 px editor text (11k).
-  2. Never load fonts from a CDN: the files ship in the app bundle, so the desktop app and the offline PWA work without network and no third party sees the user's visits. Check that the strict CSP allows them (`font-src` falls back to `'self'`) and that the ServiceWorker precaches them.
-  3. No global CSS file (AGENTS.md): instead of importing Fontsource's CSS, import the `.woff2` files as asset URLs and register them with the `FontFace` API, with `latin` and `latin-ext` subsets (Turkish ş, ğ, ı, İ are in `latin-ext`) and their `unicode-range`. Every font stack ends in system fallbacks, and text shows right away in the fallback until the font loads (`font-display: swap`).
-  4. Once the editor font has loaded, have CodeMirror re-measure, so the cursor, selections and wrapped lines line up with the new glyph widths.
-  5. Show the wordmark in Fredoka next to the logo (12j): in the desktop title bar, above the vault picker and at the top of the sidebar.
-  6. Test that the fonts are registered with the right weights and subsets, that the UI, editor and wordmark use their stacks with the fallbacks, and that the editor re-measures after loading.
+  1. Use three self-hosted variable fonts from Fontsource at exact versions: `@fontsource-variable/fredoka` for the brand wordmark "AnkyLock" only (600; `letter-spacing: 0`), `@fontsource-variable/plus-jakarta-sans` for the UI, sidebar, tabs and headings (500, 600 for emphasis and headings; 13 px), and `@fontsource-variable/jetbrains-mono` for the editor (400, 500; 14 px, `line-height: 1.6`, ligatures off so `->` stays two characters). Whole pixel sizes stay sharp on 1x Linux screens. Narrow screens keep their 16 px editor text (11k). These are the values to try first; the user tunes them in the app.
+  2. In the dark theme, light text on dark looks heavier: use UI weight 450 there (the variable axis allows it) and 500 in the light theme. Times such as "Backed up 05:20 PM" use tabular figures, so they do not shift as they change.
+  3. Never load fonts from a CDN: the files ship in the app bundle, so the desktop app and the offline PWA work without network and no third party sees the user's visits. Check that the strict CSP allows them (`font-src` falls back to `'self'`) and that the ServiceWorker precaches them.
+  4. No global CSS file (AGENTS.md): instead of importing Fontsource's CSS, import the `.woff2` files as asset URLs and register them with the `FontFace` API, with `latin` and `latin-ext` subsets (Turkish ş, ğ, ı, İ are in `latin-ext`) and their `unicode-range`. Every font stack ends in system fallbacks, and text shows right away in the fallback until the font loads (`font-display: swap`).
+  5. Once the editor font has loaded, have CodeMirror re-measure, so the cursor, selections and wrapped lines line up with the new glyph widths.
+  6. Show the wordmark in Fredoka next to the logo (12j): in the desktop title bar, above the vault picker and at the top of the sidebar.
+  7. Test that the fonts are registered with the right weights and subsets, that the UI, editor and wordmark use their stacks with the fallbacks, and that the editor re-measures after loading.
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
+### Task 12l: Rounded Corners (Window and UI)
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `apps/web/src/components/sidebar/styles.ts`, `apps/web/src/theme/colorScheme.ts`, `apps/desktop/src-tauri/tauri.conf.json`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/components/sidebar/styles.ts`
+  - `apps/web/src/components/**/*.tsx` (rows, buttons, inputs, popovers, dialogs, tabs, status bar)
+  - `packages/editor/src/extensions/theme.ts`
+  - `apps/desktop/src/App.tsx`
+  - `apps/desktop/src/TitleBar.tsx`
+  - `apps/desktop/src-tauri/tauri.conf.json`
+  - `apps/web/tests/components.test.tsx`
+- **Step-by-Step Instructions:**
+  1. Add a radius scale to the shared tokens and use it everywhere instead of ad-hoc values. Starting point, to be tried in the app and tuned with the user: 8 px for sidebar rows, buttons and inputs; 12 px for popovers, menus, settings and dialogs; 6 px for tabs and small chips (e.g. "Wrap"). Focus rings follow the rounded shapes.
+  2. Round the desktop window itself. The window is frameless, so the OS draws square corners: make the window transparent and draw the app inside a rounded, clipped container with its own border and shadow; when maximized or fullscreen, drop the radius, border and margin so the app fills the screen. Resizing from the edges and dragging by the title bar keep working.
+  3. Settle per platform: Linux (GNOME/Wayland) is tried now; on Windows 11 prefer the system's rounded corners and shadow for frameless windows over transparency; macOS follows the transparent approach. Windows and macOS are verified with the signed builds of Task 13.
+  4. The web app keeps the browser's window; only its contents get the radius scale.
+  5. Test that components use the radius tokens and that the desktop container drops its corners when maximized.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build && cargo test --workspace
 ``` 
 
 ---
@@ -872,5 +897,6 @@ Task 1 (Workspace & Config)
                            ├──► Task 12i (Tab Indents in the Editor)
                            ├──► Task 12j (Animated Logo with Lock/Unlock Expressions)
                            │       └──► Task 12k (App Fonts)
-                           └──► Task 13 (Production Release, after 12c–12k)
+                           │               └──► Task 12l (Rounded Corners)
+                           └──► Task 13 (Production Release, after 12c–12l)
 ``` 
