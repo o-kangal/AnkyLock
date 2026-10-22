@@ -18,7 +18,18 @@ export interface LinkOptions {
   readonly modifier: LinkModifier;
   /** Called only with http(s) URLs (`www.` addresses arrive with `https://`); the app decides how to open them (system browser, new tab). */
   readonly open: (url: string) => void;
+  /** The texts shown, in the app's language; English by default. */
+  readonly labels?: LinkLabels;
 }
+
+export interface LinkLabels {
+  /** The touch button that opens a link. */
+  readonly open: string;
+  /** The hover hint; `{key}` becomes Ctrl or ⌘. */
+  readonly hint: string;
+}
+
+const ENGLISH_LABELS: LinkLabels = { open: 'Open link', hint: '{key}+Click to open' };
 
 // http(s) URLs, plus `www.` addresses as people type them. Bare names like `index.ts` or
 // `console.log` are code far more often than links, so they stay plain text. Stops at
@@ -120,7 +131,7 @@ function touchLinkButton(options: LinkOptions): Extension {
           const dom = document.createElement('button');
           dom.type = 'button';
           dom.className = 'cm-link-open';
-          dom.textContent = 'Open link';
+          dom.textContent = (options.labels ?? ENGLISH_LABELS).open;
           dom.title = link.url;
           dom.addEventListener('click', () => options.open(link.url));
           return { dom };
@@ -149,7 +160,7 @@ const held = (event: MouseEvent, modifier: LinkModifier): boolean => (modifier =
  * A plain click still places the cursor, so link text stays editable.
  */
 export function links(options: LinkOptions): Extension {
-  const hint = `${options.modifier === 'meta' ? '⌘' : 'Ctrl'}+Click to open`;
+  const hint = (options.labels ?? ENGLISH_LABELS).hint.replace('{key}', options.modifier === 'meta' ? '⌘' : 'Ctrl');
   return [
     linkDecorations,
     hoverTooltip(

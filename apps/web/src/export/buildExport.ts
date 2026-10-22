@@ -29,7 +29,7 @@ export async function buildExport(job: ExportJob): Promise<ExportFile> {
     const key = item.dir.join('/');
     const names = taken.get(key) ?? new Set<string>();
     taken.set(key, names);
-    return { path: [...item.dir, uniqueName(names, noteFileName(text))].join('/'), text };
+    return { path: [...item.dir, uniqueName(names, noteFileName(text, job.untitled))].join('/'), text };
   });
 
   const [first] = files;

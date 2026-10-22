@@ -10,6 +10,7 @@ import { TOUCH_TARGET_PX, useNarrowScreen } from '../../layout/screen.js';
 import { longPress, RowMenuButton } from './rowMenu.jsx';
 import { createHover, itemRowHeight, itemStyle, rowStyle, tokens } from './styles.js';
 import { buildTreeRows, type TreeRow } from './treeRows.js';
+import { t } from '../../i18n/index.js';
 
 export interface FolderTreeProps {
   readonly store: WorkspaceStore;
@@ -55,11 +56,11 @@ export function FolderTree(props: FolderTreeProps): JSX.Element {
         when={props.store.state.selection.kind === 'system' && props.store.state.selection.id === 'system_trash'}
         fallback={
           <div style={{ ...rowStyle(0, headerHeight()), cursor: 'default', color: tokens.muted, 'justify-content': 'space-between' }}>
-            <span>Folders</span>
+            <span>{t('sidebar.folders')}</span>
             <Show when={canCreate()}>
               <button
                 type="button"
-                aria-label="New folder"
+                aria-label={t('menu.newFolder')}
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', font: tokens.font, color: 'inherit' }}
                 onClick={(event) => props.onItemMenu?.(event, { kind: 'root' })}
               >

@@ -1,7 +1,8 @@
 import { createSignal, Match, Show, splitProps, Switch, type JSX } from 'solid-js';
 import type { BackupStatus } from '@ankylock/sync';
 import type { Runtime } from '../runtime/createRuntime.js';
-import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
+import { formatTime, t, type MessageKey } from '../i18n/index.js';
+import { themeLabel, ThemeIcon } from './ThemeIcon.jsx';
 import type { ThemePreference } from '../theme/colorScheme.js';
 import { Popover, type PopoverPosition } from './Popover.jsx';
 import { VaultSettings, type VaultSettingsView } from './VaultSettings.jsx';
@@ -12,24 +13,26 @@ function backupLabel(backup: BackupStatus, compact: boolean): string | null {
     case 'never':
       return null;
     case 'running':
-      return compact ? null : 'Backing up…';
+      return compact ? null : t('backup.running');
     case 'ok': {
-      const time = new Date(backup.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      return compact ? time : `Backed up ${time}`;
+      const time = formatTime(backup.at);
+      return compact ? time : t('backup.ok', { time });
     }
     case 'error':
-      if (compact) return 'Backup paused';
-      return {
-        quota: 'Google Drive is full; backup paused',
-        auth: 'Drive access denied; sign in again',
-        network: 'Backup waiting for a connection',
-        http: 'Backup failed; will retry',
-        snapshot: 'Backup failed; will retry',
-        conflict: 'Google Drive holds a different vault with this id; backup stopped',
-        deleted: 'Deleted from Google Drive on another device',
-      }[backup.reason];
+      if (compact) return t('backup.paused');
+      return t(BACKUP_ERRORS[backup.reason]);
   }
 }
+
+const BACKUP_ERRORS = {
+  quota: 'backup.errorQuota',
+  auth: 'backup.errorAuth',
+  network: 'backup.errorNetwork',
+  http: 'backup.errorRetry',
+  snapshot: 'backup.errorRetry',
+  conflict: 'backup.errorConflict',
+  deleted: 'sync.deletedElsewhere',
+} as const satisfies Record<Extract<BackupStatus, { kind: 'error' }>['reason'], MessageKey>;
 
 /** Circular-arrow icon; spins (SVG animation, no stylesheet needed) while sync work runs. */
 function SyncIcon(props: { readonly spinning: boolean }): JSX.Element {
@@ -102,7 +105,10 @@ function BarButton(props: BarButtonProps): JSX.Element {
  * move as it changes. Longer messages (errors) are cut with an ellipsis; the tooltip has them whole.
  */
 function BackupLabel(props: { readonly text: string | null; readonly compact: boolean }): JSX.Element {
-  const longest = (): readonly string[] => (props.compact ? ['12:00 PM'] : ['Backed up 12:00 PM', 'Backing up…', 'Syncing…']);
+  // Digits are tabular, so any time is as wide as noon.
+  const noon = (): string => formatTime(new Date(2000, 0, 1, 12, 0).getTime());
+  const longest = (): readonly string[] =>
+    props.compact ? [noon()] : [t('backup.ok', { time: noon() }), t('backup.running'), t('sync.syncing')];
   return (
     <span
       data-backup-label
@@ -148,16 +154,15 @@ export function SyncStatusBar(props: {
   const syncing = (): boolean => status().catchingUp || status().backup.kind === 'running';
   /** Signed in and syncing: through Drive only, or live through a relay. */
   const syncText = (): string => {
-    if (status().mode === 'drive') return status().auth === 'stale' ? 'Waiting for Google access' : 'Synced via Google Drive';
-    if (status().connection === 'open') return 'Synced';
-    if (status().auth === 'stale') return 'Offline; changes are queued';
-    return status().connection === 'connecting' ? 'Connecting…' : 'Offline; changes are queued';
+    if (status().mode === 'drive') return status().auth === 'stale' ? t('sync.waitingForGoogle') : t('sync.viaDrive');
+    if (status().connection === 'open') return t('sync.synced');
+    if (status().auth === 'stale') return t('sync.offlineQueued');
+    return status().connection === 'connecting' ? t('sync.connecting') : t('sync.offlineQueued');
   };
   const catchUpTitle = (): string | undefined => {
     const at = status().lastCatchUpAt;
     if (status().mode !== 'drive' || at === null) return undefined;
-    const time = new Date(at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    return `Checked your other devices' backups at ${time}; their changes arrive within minutes.`;
+    return t('sync.checkedAt', { time: formatTime(at) });
   };
 
   const signIn = async (): Promise<void> => {
@@ -191,11 +196,11 @@ export function SyncStatusBar(props: {
           ref={vaultButton}
           compact={props.compact}
           aria-haspopup="dialog"
-          title="Vault settings: rename, remove or delete"
+          title={t('sync.vaultSettingsTitle')}
           style={{ overflow: 'hidden', 'text-overflow': 'ellipsis', 'max-width': props.compact ? '40vw' : '240px' }}
           onClick={() => openSettings('menu')}
         >
-          <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis' }}>{props.runtime.vaultName() ?? 'Unnamed vault'}</span>
+          <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis' }}>{props.runtime.vaultName() ?? t('vault.unnamed')}</span>
           <span aria-hidden="true">▾</span>
         </BarButton>
         <Show when={settings()}>
@@ -204,7 +209,7 @@ export function SyncStatusBar(props: {
               at={open().at}
               placement="above"
               width={300}
-              label="Vault settings"
+              label={t('sync.vaultSettings')}
               onClose={() => setSettings(null)}
               style={{ padding: '10px 12px' }}
             >
@@ -216,37 +221,37 @@ export function SyncStatusBar(props: {
           when={props.compact}
           fallback={
             <>
-              <BarButton title="Lock this vault and return to the vault list" onClick={() => void props.runtime.lock()}>
-                Lock
+              <BarButton title={t('sync.lockTitle')} onClick={() => void props.runtime.lock()}>
+                {t('sync.lock')}
               </BarButton>
               <Switch>
                 <Match when={status().vaultDrive === 'deleted'}>
-                  <span style={{ color: tokens.danger }}>Deleted from Google Drive on another device</span>
-                  <BarButton onClick={() => void props.runtime.keepLocalOnly()}>Keep local only</BarButton>
+                  <span style={{ color: tokens.danger }}>{t('sync.deletedElsewhere')}</span>
+                  <BarButton onClick={() => void props.runtime.keepLocalOnly()}>{t('sync.keepLocalOnly')}</BarButton>
                   <BarButton danger onClick={() => openSettings('remove')}>
-                    Remove from this device
+                    {t('vault.removeFromDevice')}
                   </BarButton>
                 </Match>
-                <Match when={status().vaultDrive === 'local-only'}>Local only (this vault)</Match>
-                <Match when={status().auth === 'unavailable'}>Local only</Match>
+                <Match when={status().vaultDrive === 'local-only'}>{t('sync.localOnlyVault')}</Match>
+                <Match when={status().auth === 'unavailable'}>{t('sync.localOnly')}</Match>
                 <Match when={status().auth === 'signed-out'}>
-                  Not syncing
-                  <BarButton onClick={() => void signIn()}>Sign in with Google</BarButton>
+                  {t('sync.notSyncing')}
+                  <BarButton onClick={() => void signIn()}>{t('sync.signInWithGoogle')}</BarButton>
                 </Match>
-                <Match when={status().auth === 'signing-in'}>Waiting for Google sign-in in your browser…</Match>
+                <Match when={status().auth === 'signing-in'}>{t('sync.waitingForSignIn')}</Match>
                 <Match when={status().auth === 'expired'}>
-                  <span style={{ color: tokens.danger }}>Google sign-in expired</span>
-                  <BarButton onClick={() => void signIn()}>Sign in again</BarButton>
+                  <span style={{ color: tokens.danger }}>{t('sync.signInExpired')}</span>
+                  <BarButton onClick={() => void signIn()}>{t('sync.signInAgain')}</BarButton>
                 </Match>
                 <Match when={status().auth === 'stale'}>
                   <span title={catchUpTitle()}>{syncText()}</span>
-                  <BarButton title="Google access expired; renewing takes one click and no new consent" onClick={() => void signIn()}>
-                    Renew Google access
+                  <BarButton title={t('sync.renewTitle')} onClick={() => void signIn()}>
+                    {t('sync.renewAccess')}
                   </BarButton>
                 </Match>
                 <Match when={status().auth === 'signed-in'}>
                   <span title={catchUpTitle()}>{syncText()}</span>
-                  <BarButton onClick={() => void props.runtime.signOut()}>Sign out</BarButton>
+                  <BarButton onClick={() => void props.runtime.signOut()}>{t('sync.signOut')}</BarButton>
                 </Match>
               </Switch>
             </>
@@ -256,33 +261,33 @@ export function SyncStatusBar(props: {
             <Switch>
               <Match when={status().vaultDrive === 'deleted'}>
                 <BarButton compact danger onClick={() => openSettings('menu')}>
-                  Deleted elsewhere
+                  {t('sync.deletedElsewhereShort')}
                 </BarButton>
               </Match>
-              <Match when={status().vaultDrive === 'local-only' || status().auth === 'unavailable'}>Local only</Match>
+              <Match when={status().vaultDrive === 'local-only' || status().auth === 'unavailable'}>{t('sync.localOnly')}</Match>
               <Match when={status().auth === 'signed-out'}>
                 <BarButton compact onClick={() => void signIn()}>
-                  Sign in
+                  {t('sync.signIn')}
                 </BarButton>
               </Match>
-              <Match when={status().auth === 'signing-in'}>Signing in…</Match>
+              <Match when={status().auth === 'signing-in'}>{t('sync.signingIn')}</Match>
               <Match when={status().auth === 'expired'}>
                 <BarButton compact danger onClick={() => void signIn()}>
-                  Sign in again
+                  {t('sync.signInAgain')}
                 </BarButton>
               </Match>
               <Match when={status().auth === 'stale'}>
                 <BarButton compact onClick={() => void signIn()}>
-                  Renew
+                  {t('sync.renew')}
                 </BarButton>
               </Match>
               <Match when={status().auth === 'signed-in'}>
                 <span title={catchUpTitle()}>
                   {status().mode === 'drive' || status().connection === 'open'
-                    ? 'Synced'
+                    ? t('sync.synced')
                     : status().connection === 'connecting'
-                      ? 'Connecting…'
-                      : 'Offline'}
+                      ? t('sync.connecting')
+                      : t('sync.offline')}
                 </span>
               </Match>
             </Switch>
@@ -298,13 +303,13 @@ export function SyncStatusBar(props: {
             <BarButton
               compact={props.compact}
               pressed={wrap().on()}
-              {...(props.compact ? { 'aria-label': `Word wrap (${wrap().shortcut})` } : {})}
-              title="Wrap long lines in the editor"
+              {...(props.compact ? { 'aria-label': t('sync.wordWrapLabel', { shortcut: wrap().shortcut }) } : {})}
+              title={t('sync.wordWrapTitle')}
               onClick={() => wrap().toggle()}
             >
               <span aria-hidden="true">↵</span>
               <Show when={!props.compact}>
-                <span>Wrap ({wrap().shortcut})</span>
+                <span>{t('sync.wrap', { shortcut: wrap().shortcut })}</span>
               </Show>
             </BarButton>
           )}
@@ -313,13 +318,13 @@ export function SyncStatusBar(props: {
           {(theme) => (
             <BarButton
               compact={props.compact}
-              {...(props.compact ? { 'aria-label': `Theme: ${THEME_LABELS[theme().choice()]}` } : {})}
-              title="Color theme: System, Light or Dark"
+              {...(props.compact ? { 'aria-label': t('sync.themeLabel', { theme: themeLabel(theme().choice()) }) } : {})}
+              title={t('sync.themeTitle')}
               onClick={() => theme().cycle()}
             >
               <ThemeIcon choice={theme().choice()} />
               <Show when={!props.compact}>
-                <span>{THEME_LABELS[theme().choice()]}</span>
+                <span>{themeLabel(theme().choice())}</span>
               </Show>
             </BarButton>
           )}
@@ -328,10 +333,10 @@ export function SyncStatusBar(props: {
         <Show when={status().mode !== 'off' || syncing()}>
           <BarButton
             compact={props.compact}
-            aria-label="Sync now"
+            aria-label={t('sync.syncNow')}
             aria-busy={syncing()}
             disabled={syncing()}
-            title="Sync now: merge other devices' backups from Google Drive and back up"
+            title={t('sync.syncNowTitle')}
             style={{ padding: '0 7px' }}
             onClick={() => void props.runtime.syncNow()}
           >
@@ -342,7 +347,7 @@ export function SyncStatusBar(props: {
         <Show when={status().mode !== 'off' || status().backup.kind !== 'never' || syncing()}>
           <BackupLabel
             compact={props.compact ?? false}
-            text={status().catchingUp ? (props.compact ? null : 'Syncing…') : backupLabel(status().backup, props.compact ?? false)}
+            text={status().catchingUp ? (props.compact ? null : t('sync.syncing')) : backupLabel(status().backup, props.compact ?? false)}
           />
         </Show>
       </span>

@@ -6,6 +6,7 @@ import { useExport } from '../../export/saveFile.js';
 import type { WorkspaceState, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { TOUCH_TARGET_PX, touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { Popover } from '../Popover.jsx';
+import { compareNames, errorText, t } from '../../i18n/index.js';
 import { fieldStyle, tokens } from './styles.js';
 
 export interface MenuAction {
@@ -38,7 +39,7 @@ export type MoveItem = (item: DragItem, target: DropTarget) => Promise<Result<vo
 function moveChoices(state: WorkspaceState, store: WorkspaceStore, item: DragItem, move: MoveItem): MoveChoice[] {
   const links = new Map(state.folders.map((f) => [f.id, { id: f.id, parentId: f.parentId }]));
   const top: MoveChoice = {
-    label: 'Top level (no folder)',
+    label: t('menu.topLevel'),
     depth: 0,
     run: () => {
       if (item.kind === 'folder') return store.moveFolder(item.id, null);
@@ -47,14 +48,14 @@ function moveChoices(state: WorkspaceState, store: WorkspaceStore, item: DragIte
     },
   };
   const categories = state.categories.map((c) => ({
-    label: `Category: ${c.name}`,
+    label: t('menu.categoryChoice', { name: c.name }),
     depth: 0,
     target: { kind: 'category', id: c.id } as const,
   }));
   const live = state.folders.filter((f) => f.deletedAt === null && !f.isArchived);
   const folders: { label: string; depth: number; target: DropTarget }[] = [];
   const visit = (parentId: FolderId | null, depth: number): void => {
-    for (const f of live.filter((x) => x.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const f of live.filter((x) => x.parentId === parentId).sort((a, b) => compareNames(a.name, b.name))) {
       folders.push({ label: f.name, depth, target: { kind: 'folder', id: f.id } });
       visit(f.id, depth + 1);
     }
@@ -67,7 +68,7 @@ function moveChoices(state: WorkspaceState, store: WorkspaceStore, item: DragIte
 }
 
 const moveTo = (choices: MoveChoice[]): MenuAction => ({
-  label: 'Move to…',
+  label: t('menu.moveTo'),
   choices,
   run: () => Promise.resolve(ok(undefined)),
 });
@@ -76,14 +77,14 @@ const moveTo = (choices: MoveChoice[]): MenuAction => ({
 export type MenuTarget = DragItem | { readonly kind: 'category'; readonly id: CategoryId } | { readonly kind: 'root' };
 
 const exportAction = (scope: ExportScope, label: string): MenuAction => ({
-  label: 'Export…',
+  label: t('menu.export'),
   export: { scope, label },
   run: () => Promise.resolve(ok(undefined)),
 });
 
 const newFolder = (run: (name: string) => Promise<Result<void>>): MenuAction => ({
-  label: 'New folder',
-  input: { placeholder: 'Folder name', initial: '' },
+  label: t('menu.newFolder'),
+  input: { placeholder: t('menu.folderName'), initial: '' },
   run,
 });
 
@@ -102,11 +103,11 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
     return [
       newFolder((name) => store.createFolder(name, null, category.id)),
       {
-        label: 'Rename',
-        input: { placeholder: 'Category name', initial: category.name },
+        label: t('menu.rename'),
+        input: { placeholder: t('menu.categoryName'), initial: category.name },
         run: (name) => store.renameCategory(category.id, name),
       },
-      { label: 'Delete category', confirm: true, run: () => store.deleteCategory(category.id) },
+      { label: t('menu.deleteCategory'), confirm: true, run: () => store.deleteCategory(category.id) },
     ];
   }
   if (item.kind === 'folder') {
@@ -114,22 +115,22 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
     if (!folder) return [];
     if (folder.deletedAt !== null) {
       return [
-        { label: 'Restore', run: () => store.restoreFolder(folder.id) },
-        { label: 'Delete permanently', confirm: true, run: () => store.purgeFolder(folder.id) },
+        { label: t('menu.restore'), run: () => store.restoreFolder(folder.id) },
+        { label: t('menu.deletePermanently'), confirm: true, run: () => store.purgeFolder(folder.id) },
       ];
     }
-    const trash: MenuAction = { label: 'Move to Trash', run: () => store.trashFolder(folder.id) };
+    const trash: MenuAction = { label: t('menu.moveToTrash'), run: () => store.trashFolder(folder.id) };
     const exportFolder = exportAction({ kind: 'folder', id: folder.id }, `“${folder.name}”`);
-    if (folder.isArchived) return [{ label: 'Unarchive', run: () => store.unarchiveFolder(folder.id) }, exportFolder, trash];
+    if (folder.isArchived) return [{ label: t('menu.unarchive'), run: () => store.unarchiveFolder(folder.id) }, exportFolder, trash];
     return [
       {
-        label: 'New subfolder',
-        input: { placeholder: 'Folder name', initial: '' },
+        label: t('menu.newSubfolder'),
+        input: { placeholder: t('menu.folderName'), initial: '' },
         run: (name) => store.createFolder(name, folder.id, null),
       },
-      { label: 'Rename', input: { placeholder: 'Folder name', initial: folder.name }, run: (name) => store.renameFolder(folder.id, name) },
+      { label: t('menu.rename'), input: { placeholder: t('menu.folderName'), initial: folder.name }, run: (name) => store.renameFolder(folder.id, name) },
       ...(move ? [moveTo(moveChoices(state, store, { kind: 'folder', id: folder.id }, move))] : []),
-      { label: 'Archive', run: () => store.archiveFolder(folder.id) },
+      { label: t('menu.archive'), run: () => store.archiveFolder(folder.id) },
       exportFolder,
       trash,
     ];
@@ -139,18 +140,18 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
   if (!note) return [];
   if (note.deletedAt !== null) {
     return [
-      { label: 'Restore', run: () => store.restoreNote(note.id) },
-      { label: 'Delete permanently', confirm: true, run: () => store.purgeNote(note.id) },
+      { label: t('menu.restore'), run: () => store.restoreNote(note.id) },
+      { label: t('menu.deletePermanently'), confirm: true, run: () => store.purgeNote(note.id) },
     ];
   }
-  const trash: MenuAction = { label: 'Move to Trash', run: () => store.trashNote(note.id) };
-  const exportNote = exportAction({ kind: 'note', id: note.id }, `“${note.title ?? 'Untitled'}”`);
-  if (note.isArchived) return [{ label: 'Unarchive', run: () => store.setNoteArchived(note.id, false) }, exportNote, trash];
+  const trash: MenuAction = { label: t('menu.moveToTrash'), run: () => store.trashNote(note.id) };
+  const exportNote = exportAction({ kind: 'note', id: note.id }, `“${note.title ?? t('note.untitled')}”`);
+  if (note.isArchived) return [{ label: t('menu.unarchive'), run: () => store.setNoteArchived(note.id, false) }, exportNote, trash];
   const moves = move ? [moveTo(moveChoices(state, store, { kind: 'note', id: note.id }, move))] : [];
   // Scratchpads must be filed into a folder or category before they can be archived (SPEC §3).
   return note.isEphemeral
     ? [...moves, exportNote, trash]
-    : [...moves, { label: 'Archive', run: () => store.setNoteArchived(note.id, true) }, exportNote, trash];
+    : [...moves, { label: t('menu.archive'), run: () => store.setNoteArchived(note.id, true) }, exportNote, trash];
 }
 
 export interface ContextMenuProps {
@@ -188,7 +189,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
   const execute = async (action: MenuAction, input: string): Promise<void> => {
     const result = await action.run(input);
     if (result.ok) props.onClose();
-    else setError(result.error.message);
+    else setError(errorText(result.error));
   };
 
   const choose = (action: MenuAction): void => {
@@ -223,17 +224,17 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
               style={{ ...itemStyle(), color: action.confirm && pending() === action ? tokens.danger : 'inherit' }}
               onClick={() => choose(action)}
             >
-              {action.confirm && pending() === action ? `${action.label}? Click again to confirm` : action.label}
+              {action.confirm && pending() === action ? t('menu.confirmAgain', { action: action.label }) : action.label}
             </button>
             <Show when={action.choices && pending() === action}>
-              <div role="group" aria-label="Destinations" style={{ 'max-height': '240px', overflow: 'auto', padding: '0 0 4px' }}>
+              <div role="group" aria-label={t('menu.destinations')} style={{ 'max-height': '240px', overflow: 'auto', padding: '0 0 4px' }}>
                 <For each={action.choices}>
                   {(choice) => (
                     <button
                       type="button"
                       role="menuitem"
                       style={{ ...itemStyle(), 'padding-left': `${24 + choice.depth * tokens.indent}px` }}
-                      onClick={() => void choice.run().then((r) => (r.ok ? props.onClose() : setError(r.error.message)))}
+                      onClick={() => void choice.run().then((r) => (r.ok ? props.onClose() : setError(errorText(r.error))))}
                     >
                       {choice.label}
                     </button>

@@ -1,5 +1,6 @@
 import { createSignal, Show, type JSX } from 'solid-js';
 import { tokens } from '../components/sidebar/styles.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Bottom-corner notice that a new app version is ready. Reload saves open notes first, then
@@ -38,9 +39,9 @@ export function UpdateBanner(props: {
             'z-index': '1000',
           }}
         >
-          A new version of AnkyLock is available.
+          {t('update.available')}
           <button type="button" disabled={busy()} style={{ font: tokens.font, cursor: 'pointer' }} onClick={() => void reload(activate())}>
-            {busy() ? 'Saving…' : 'Reload'}
+            {busy() ? t('update.saving') : t('update.reload')}
           </button>
         </div>
       )}

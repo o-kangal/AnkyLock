@@ -1,6 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Accessor, JSX } from 'solid-js';
-import { AnkyLogo, tokens, type LogoFace } from '@ankylock/web/workspace';
+import { AnkyLogo, t, tokens, type LogoFace } from '@ankylock/web/workspace';
 
 const buttonStyle: JSX.CSSProperties = {
   width: '44px',
@@ -38,13 +38,13 @@ export function TitleBar(props: { readonly logoFace: Accessor<LogoFace> }): JSX.
       <span data-tauri-drag-region style={{ flex: '1', 'font-family': tokens.brandFamily, 'font-size': '14px', 'font-weight': '600' }}>
         AnkyLock
       </span>
-      <button type="button" aria-label="Minimize" style={buttonStyle} onClick={() => void appWindow.minimize()}>
+      <button type="button" aria-label={t('window.minimize')} style={buttonStyle} onClick={() => void appWindow.minimize()}>
         –
       </button>
-      <button type="button" aria-label="Maximize" style={buttonStyle} onClick={() => void appWindow.toggleMaximize()}>
+      <button type="button" aria-label={t('window.maximize')} style={buttonStyle} onClick={() => void appWindow.toggleMaximize()}>
         □
       </button>
-      <button type="button" aria-label="Close" style={buttonStyle} onClick={() => void appWindow.close()}>
+      <button type="button" aria-label={t('window.close')} style={buttonStyle} onClick={() => void appWindow.close()}>
         ×
       </button>
     </header>

@@ -1,4 +1,5 @@
 import type { JSX } from 'solid-js';
+import { t } from '../../i18n/index.js';
 import { tokens } from './styles.js';
 
 type PointerHandlers = Pick<JSX.HTMLAttributes<HTMLElement>, 'onPointerDown' | 'onPointerUp' | 'onPointerCancel' | 'onPointerMove'>;
@@ -53,7 +54,7 @@ export function RowMenuButton(props: { readonly label: string; readonly onOpen: 
   return (
     <button
       type="button"
-      aria-label={`Actions for ${props.label}`}
+      aria-label={t('menu.actionsFor', { name: props.label })}
       style={{
         'margin-left': 'auto',
         'min-width': '40px',

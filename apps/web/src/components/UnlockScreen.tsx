@@ -1,10 +1,11 @@
 import { createEffect, createSignal, For, Match, on, onMount, Show, Switch, type JSX } from 'solid-js';
-import type { EpochMs, VaultId } from '@ankylock/core';
+import type { VaultId } from '@ankylock/core';
 import type { VaultEntry } from '@ankylock/storage';
 import type { RemoteVault } from '@ankylock/sync';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { AnkyLogo } from './AnkyLogo.jsx';
+import { formatDateTime, t } from '../i18n/index.js';
 import { buttonStyle, fieldStyle as drawnField, selectStyle, tokens } from './sidebar/styles.js';
 
 /** Passphrases are the only thing protecting the vault; short ones fall to offline guessing. */
@@ -31,22 +32,18 @@ const linkButton: JSX.CSSProperties = {
   'text-decoration': 'underline',
 };
 
-const when = (at: EpochMs): string => new Date(at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-
 /** Vault names are encrypted, so before unlocking a vault is told apart by when it was created. */
 export function vaultLabel(entry: VaultEntry): string {
-  return `Vault created ${when(entry.createdAt)}`;
+  return t('unlock.vaultCreated', { when: formatDateTime(entry.createdAt) });
 }
 
 export function remoteVaultLabel(vault: RemoteVault): string {
-  const backup = vault.lastBackupAt === null ? 'no backup yet' : `last backup ${when(vault.lastBackupAt)}`;
-  return `Vault created ${when(vault.createdAt)} · ${backup}`;
+  const backup = vault.lastBackupAt === null ? t('unlock.noBackupYet') : t('unlock.lastBackup', { when: formatDateTime(vault.lastBackupAt) });
+  return `${t('unlock.vaultCreated', { when: formatDateTime(vault.createdAt) })} · ${backup}`;
 }
 
 type Mode = 'unlock' | 'create' | 'remote' | 'remove' | 'remote-delete';
 
-/** Typed to confirm removing a vault, whose name stays encrypted while it is locked. */
-const REMOVE_CONFIRMATION = 'DELETE';
 type RemoteList = { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly vaults: readonly RemoteVault[] };
 
 /**
@@ -91,7 +88,9 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   const [targetOnDrive, setTargetOnDrive] = createSignal<boolean | null>(null);
   const [typed, setTyped] = createSignal('');
   const confirming = (): boolean => mode() === 'remove' || mode() === 'remote-delete';
-  const confirmed = (): boolean => typed().trim() === REMOVE_CONFIRMATION;
+  /** Typed to confirm removing a vault, whose name stays encrypted while it is locked. */
+  const confirmWord = (): string => t('common.confirmWord');
+  const confirmed = (): boolean => typed().trim() === confirmWord();
   const targetLabel = (): string => {
     const id = target();
     const list = remote();
@@ -138,9 +137,9 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   );
 
   const validateNew = (): string | null => {
-    if (name().trim() === '') return 'Give the vault a name.';
-    if ([...passphrase()].length < MIN_PASSPHRASE_LENGTH) return `Use at least ${MIN_PASSPHRASE_LENGTH} characters.`;
-    if (passphrase() !== confirmation()) return 'The passphrases do not match.';
+    if (name().trim() === '') return t('vault.nameRequired');
+    if ([...passphrase()].length < MIN_PASSPHRASE_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_PASSPHRASE_LENGTH });
+    if (passphrase() !== confirmation()) return t('unlock.passphraseMismatch');
     return null;
   };
 
@@ -150,19 +149,19 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
         return props.runtime.createVault(name(), passphrase());
       case 'remote': {
         const id = remoteId();
-        return id === null ? Promise.resolve('Choose a vault.') : props.runtime.openRemoteVault(id, passphrase());
+        return id === null ? Promise.resolve(t('unlock.chooseVault')) : props.runtime.openRemoteVault(id, passphrase());
       }
       case 'unlock': {
         const id = vaultId();
-        return id === null ? Promise.resolve('Choose a vault.') : props.runtime.unlock(id, passphrase());
+        return id === null ? Promise.resolve(t('unlock.chooseVault')) : props.runtime.unlock(id, passphrase());
       }
       case 'remove': {
         const id = target();
-        return id === null ? Promise.resolve('Choose a vault.') : props.runtime.removeLockedVault(id, { everywhere: false });
+        return id === null ? Promise.resolve(t('unlock.chooseVault')) : props.runtime.removeLockedVault(id, { everywhere: false });
       }
       case 'remote-delete': {
         const id = target();
-        return id === null ? Promise.resolve('Choose a vault.') : props.runtime.deleteRemoteVault(id);
+        return id === null ? Promise.resolve(t('unlock.chooseVault')) : props.runtime.deleteRemoteVault(id);
       }
     }
   };
@@ -186,7 +185,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   const submit = async (event: SubmitEvent): Promise<void> => {
     event.preventDefault();
     const invalid =
-      mode() === 'create' ? validateNew() : confirming() && !confirmed() ? `Type ${REMOVE_CONFIRMATION} to confirm.` : null;
+      mode() === 'create' ? validateNew() : confirming() && !confirmed() ? t('common.typeToConfirm', { word: confirmWord() }) : null;
     if (invalid !== null) {
       setError(invalid);
       return;
@@ -197,8 +196,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   const confirmationInput = (): JSX.Element => (
     <input
       ref={(el) => (firstField = el)}
-      aria-label={`Type ${REMOVE_CONFIRMATION} to confirm`}
-      placeholder={REMOVE_CONFIRMATION}
+      aria-label={t('common.typeToConfirm', { word: confirmWord() })}
+      placeholder={confirmWord()}
       value={typed()}
       onInput={(e) => setTyped(e.currentTarget.value)}
       style={fieldStyle()}
@@ -211,8 +210,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
         if (first) firstField = el;
       }}
       type="password"
-      aria-label="Passphrase"
-      placeholder="Passphrase"
+      aria-label={t('unlock.passphrase')}
+      placeholder={t('unlock.passphrase')}
       autocomplete={mode() === 'create' ? 'new-password' : 'current-password'}
       value={passphrase()}
       onInput={(e) => setPassphrase(e.currentTarget.value)}
@@ -221,13 +220,21 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
   );
 
   const submitLabel = (): string => {
-    if (busy()) return { unlock: 'Deriving key…', create: 'Deriving key…', remote: 'Restoring…', remove: 'Removing…', 'remote-delete': 'Deleting…' }[mode()];
+    if (busy()) {
+      return {
+        unlock: t('unlock.derivingKey'),
+        create: t('unlock.derivingKey'),
+        remote: t('unlock.restoring'),
+        remove: t('common.removing'),
+        'remote-delete': t('common.deleting'),
+      }[mode()];
+    }
     return {
-      unlock: 'Unlock',
-      create: 'Create vault',
-      remote: 'Open vault',
-      remove: 'Remove from this device',
-      'remote-delete': 'Delete from Google Drive',
+      unlock: t('unlock.unlock'),
+      create: t('unlock.createVault'),
+      remote: t('unlock.openVault'),
+      remove: t('vault.removeFromDevice'),
+      'remote-delete': t('unlock.deleteFromDrive'),
     }[mode()];
   };
   const showSubmit = (): boolean => mode() !== 'remote' || (remote().kind === 'ready' && remoteId() !== null);
@@ -247,13 +254,13 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
         </div>
         <Switch>
           <Match when={mode() === 'unlock'}>
-            <h1 style={headingStyle}>Unlock your vault</h1>
+            <h1 style={headingStyle}>{t('unlock.title')}</h1>
             <Show
               when={props.runtime.vaults().length > 1}
-              fallback={<p style={{ margin: '0', color: tokens.muted }}>Enter your passphrase to decrypt your notes.</p>}
+              fallback={<p style={{ margin: '0', color: tokens.muted }}>{t('unlock.enterPassphrase')}</p>}
             >
               <select
-                aria-label="Vault"
+                aria-label={t('unlock.vault')}
                 value={vaultId() ?? ''}
                 onChange={(e) => {
                   setSelected(e.currentTarget.value as VaultId);
@@ -267,14 +274,12 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             {passphraseInput(true)}
           </Match>
           <Match when={mode() === 'create'}>
-            <h1 style={headingStyle}>Create a vault</h1>
-            <p style={{ margin: '0', color: tokens.muted }}>
-              A vault keeps its notes apart, under its own passphrase. The passphrase cannot be recovered if lost.
-            </p>
+            <h1 style={headingStyle}>{t('unlock.createTitle')}</h1>
+            <p style={{ margin: '0', color: tokens.muted }}>{t('unlock.createIntro')}</p>
             <input
               ref={(el) => (firstField = el)}
-              aria-label="Vault name"
-              placeholder="Vault name, e.g. Personal"
+              aria-label={t('vault.name')}
+              placeholder={t('unlock.vaultNamePlaceholder')}
               maxLength={MAX_VAULT_NAME_LENGTH}
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
@@ -283,8 +288,8 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             {passphraseInput(false)}
             <input
               type="password"
-              aria-label="Confirm passphrase"
-              placeholder="Confirm passphrase"
+              aria-label={t('unlock.confirmPassphrase')}
+              placeholder={t('unlock.confirmPassphrase')}
               autocomplete="new-password"
               value={confirmation()}
               onInput={(e) => setConfirmation(e.currentTarget.value)}
@@ -292,14 +297,12 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             />
           </Match>
           <Match when={mode() === 'remote'}>
-            <h1 style={headingStyle}>Open a vault from Google Drive</h1>
-            <p style={{ margin: '0', color: tokens.muted }}>
-              Vaults that your other devices back up to Google Drive. Each one opens with its own passphrase.
-            </p>
+            <h1 style={headingStyle}>{t('unlock.remoteTitle')}</h1>
+            <p style={{ margin: '0', color: tokens.muted }}>{t('unlock.remoteIntro')}</p>
             <Switch>
               <Match when={remote().kind === 'loading'}>
                 <p role="status" style={{ color: tokens.muted }}>
-                  Looking for your vaults in Google Drive…
+                  {t('unlock.remoteLoading')}
                 </p>
               </Match>
               <Match when={remote().kind === 'error'}>
@@ -307,15 +310,15 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
                   {(remote() as { message: string }).message}
                 </div>
                 <button type="button" style={{ ...linkButton, 'margin-top': '8px' }} onClick={() => void loadRemote()}>
-                  Try again
+                  {t('common.tryAgain')}
                 </button>
               </Match>
               <Match when={remote().kind === 'ready' && remoteId() === null}>
-                <p style={{ color: tokens.muted }}>No other vaults were found in your Google Drive.</p>
+                <p style={{ color: tokens.muted }}>{t('unlock.remoteNone')}</p>
               </Match>
               <Match when={remote().kind === 'ready'}>
                 <select
-                  aria-label="Vault in Google Drive"
+                  aria-label={t('unlock.remoteVault')}
                   value={remoteId() ?? ''}
                   onChange={(e) => {
                     setSelectedRemote(e.currentTarget.value as VaultId);
@@ -332,28 +335,23 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             </Switch>
           </Match>
           <Match when={mode() === 'remove'}>
-            <h1 style={headingStyle}>Remove this vault?</h1>
-            <p style={{ margin: '0', color: tokens.muted }}>
-              {targetLabel()}. Without its passphrase, its notes cannot be recovered or exported first.
-            </p>
+            <h1 style={headingStyle}>{t('unlock.removeTitle')}</h1>
+            <p style={{ margin: '0', color: tokens.muted }}>{t('unlock.removeIntro', { vault: targetLabel() })}</p>
             <p role="note" style={{ margin: '8px 0 0', color: tokens.muted }}>
               <Switch>
-                <Match when={targetOnDrive() === null}>Checking for a copy in Google Drive…</Match>
+                <Match when={targetOnDrive() === null}>{t('unlock.removeChecking')}</Match>
                 <Match when={targetOnDrive()}>
-                  Its copy in Google Drive stays, so it can be opened again with “Use my existing vault”.
-                  <Show when={canUseDrive()}> “Delete everywhere” deletes that copy too, and other devices stop syncing it.</Show>
+                  {t('unlock.removeKeepsDrive', { useExisting: t('unlock.useExisting') })}
+                  <Show when={canUseDrive()}> {t('unlock.removeEverywhereNote', { everywhere: t('vault.deleteEverywhere') })}</Show>
                 </Match>
-                <Match when={true}>It has no copy in Google Drive, so removing it deletes its notes for good.</Match>
+                <Match when={true}>{t('unlock.removeNoDrive')}</Match>
               </Switch>
             </p>
             {confirmationInput()}
           </Match>
           <Match when={mode() === 'remote-delete'}>
-            <h1 style={headingStyle}>Delete this vault from Google Drive?</h1>
-            <p style={{ margin: '0', color: tokens.muted }}>
-              {targetLabel()}. Its header and every device’s backup are deleted from Google Drive, without its passphrase.
-              Other devices with this vault stop syncing it and can keep their copy locally. This cannot be undone.
-            </p>
+            <h1 style={headingStyle}>{t('unlock.remoteDeleteTitle')}</h1>
+            <p style={{ margin: '0', color: tokens.muted }}>{t('unlock.remoteDeleteIntro', { vault: targetLabel() })}</p>
             {confirmationInput()}
           </Match>
         </Switch>
@@ -377,41 +375,41 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
               if (id !== null) void execute(() => props.runtime.removeLockedVault(id, { everywhere: true }));
             }}
           >
-            Delete everywhere
+            {t('vault.deleteEverywhere')}
           </button>
         </Show>
         <div style={{ display: 'flex', gap: '16px', 'margin-top': '16px', 'flex-wrap': 'wrap' }}>
           <Show when={confirming()}>
             <button type="button" style={linkButton} disabled={busy()} onClick={leaveRemoval}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </Show>
           <Show when={!confirming() && mode() !== 'unlock' && (props.runtime.status() === 'locked' || mode() === 'remote')}>
             <button type="button" style={linkButton} disabled={busy()} onClick={() => setMode('unlock')}>
-              {props.runtime.status() === 'locked' ? 'Back to my vaults' : 'Back'}
+              {props.runtime.status() === 'locked' ? t('unlock.backToVaults') : t('common.back')}
             </button>
           </Show>
           <Show when={mode() === 'unlock'}>
             <button type="button" style={linkButton} onClick={() => setMode('create')}>
-              Create a new vault
+              {t('unlock.createNew')}
             </button>
           </Show>
           <Show when={!confirming() && mode() !== 'remote' && canUseDrive()}>
             <button type="button" style={linkButton} onClick={() => setMode('remote')}>
-              Use my existing vault
+              {t('unlock.useExisting')}
             </button>
           </Show>
           <Show when={mode() === 'unlock' ? vaultId() : null}>
             {(id) => (
               <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => confirmRemoval('remove', id())}>
-                Remove this vault…
+                {t('unlock.removeVault')}
               </button>
             )}
           </Show>
           <Show when={mode() === 'remote' && !busy() ? remoteId() : null}>
             {(id) => (
               <button type="button" style={{ ...linkButton, color: tokens.danger }} onClick={() => confirmRemoval('remote-delete', id())}>
-                Delete from Google Drive…
+                {t('unlock.deleteFromDriveMenu')}
               </button>
             )}
           </Show>

@@ -1,7 +1,7 @@
 export * from './stores/workspaceStore.js';
 export * from './dnd/dragDropManager.js';
 export { Sidebar } from './components/sidebar/Sidebar.jsx';
-export { CategoryList, SYSTEM_CATEGORY_LABELS } from './components/sidebar/CategoryList.jsx';
+export { CategoryList, systemCategoryLabel } from './components/sidebar/CategoryList.jsx';
 export { FolderTree } from './components/sidebar/FolderTree.jsx';
 export { NoteItem } from './components/sidebar/NoteItem.jsx';
 export { TabBar } from './components/tabs/TabBar.jsx';
@@ -24,3 +24,14 @@ export {
   type RuntimeOptions,
   type VaultStatus,
 } from './runtime/createRuntime.js';
+export {
+  chooseLocale,
+  errorText,
+  formatTime,
+  locale,
+  localeChoice,
+  t,
+  type Locale,
+  type LocaleChoice,
+  type MessageKey,
+} from './i18n/index.js';

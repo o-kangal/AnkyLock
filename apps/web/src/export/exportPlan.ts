@@ -59,10 +59,23 @@ export function uniqueName(taken: Set<string>, name: string): string {
 // A title that already ends in an extension (`README.md`, `config.yaml`) keeps it.
 const HAS_EXTENSION = /\.[A-Za-z0-9]{1,8}$/;
 
+/**
+ * Names for things without one, in the user's language. Passed in rather than translated here:
+ * this module also runs in the export worker.
+ */
+export interface ExportNames {
+  readonly untitled: string;
+  readonly untitledFolder: string;
+  readonly folder: string;
+  readonly vault: string;
+}
+
+export const ENGLISH_EXPORT_NAMES: ExportNames = { untitled: 'Untitled', untitledFolder: 'Untitled folder', folder: 'Folder', vault: 'vault' };
+
 /** The file name of a note: its title (line 1, BR-NOTE-03), with `.txt` unless it has an extension. */
-export function noteFileName(text: string): string {
+export function noteFileName(text: string, untitled = ENGLISH_EXPORT_NAMES.untitled): string {
   const firstLine = text.slice(0, 400).split('\n', 1)[0] ?? '';
-  const title = safeName(deriveTitle(firstLine) ?? 'Untitled');
+  const title = safeName(deriveTitle(firstLine) ?? untitled, untitled);
   return HAS_EXTENSION.test(title) ? title : `${title}.txt`;
 }
 
@@ -76,6 +89,7 @@ export function planExport(
   scope: ExportScope,
   vaultName: string | null,
   date: string,
+  names: ExportNames = ENGLISH_EXPORT_NAMES,
 ): ExportPlan {
   const folders = new Map(state.folders.filter((f) => f.deletedAt === null).map((f) => [f.id, f]));
   const notes = Object.values(state.notes).filter((n) => n.deletedAt === null);
@@ -92,7 +106,7 @@ export function planExport(
     const key = parent.join('/');
     const siblings = taken.get(key) ?? new Set<string>();
     taken.set(key, siblings);
-    return [...parent, uniqueName(siblings, safeName(name, 'Untitled folder'))];
+    return [...parent, uniqueName(siblings, safeName(name, names.untitledFolder))];
   };
 
   const root = scope.kind === 'folder' ? folders.get(scope.id) : undefined;
@@ -129,7 +143,7 @@ export function planExport(
   }
 
   return {
-    archiveName: root ? safeName(root.name, 'Folder') : safeName(`AnkyLock ${vaultName ?? 'vault'} ${date}`),
+    archiveName: root ? safeName(root.name, names.folder) : safeName(`AnkyLock ${vaultName ?? names.vault} ${date}`, names.untitled),
     items,
     dirs: [...categoryDirs.values(), ...folderDirs.values()],
     single: false,

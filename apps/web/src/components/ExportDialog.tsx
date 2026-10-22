@@ -5,6 +5,7 @@ import type { ExportScope } from '../export/exportPlan.js';
 import { useSaveFile } from '../export/saveFile.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import type { Runtime } from '../runtime/createRuntime.js';
+import { t } from '../i18n/index.js';
 import { buttonStyle, fieldStyle, tokens } from './sidebar/styles.js';
 
 /**
@@ -28,8 +29,8 @@ export function ExportDialog(props: {
 
   const problem = (): string | null => {
     if (!protect()) return null;
-    if (password().length < MIN_EXPORT_PASSWORD_LENGTH) return `Use at least ${MIN_EXPORT_PASSWORD_LENGTH} characters.`;
-    if (confirm() !== password()) return 'The passwords do not match.';
+    if (password().length < MIN_EXPORT_PASSWORD_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_EXPORT_PASSWORD_LENGTH });
+    if (confirm() !== password()) return t('export.passwordMismatch');
     return null;
   };
 
@@ -61,7 +62,7 @@ export function ExportDialog(props: {
       >
         <form
           role="dialog"
-          aria-label="Export"
+          aria-label={t('export.title')}
           onSubmit={(event) => void submit(event)}
           style={{
             width: '380px',
@@ -78,20 +79,20 @@ export function ExportDialog(props: {
             'box-shadow': `0 8px 24px ${tokens.shadow}`,
           }}
         >
-          <strong>Export {props.label}</strong>
+          <strong>{t('export.heading', { what: props.label })}</strong>
           <p role="note" style={{ margin: '8px 0', color: tokens.danger }}>
-            Exported files are not protected by AnkyLock. Anyone who gets them can read these notes.
+            {t('export.warning')}
           </p>
-          <p style={{ margin: '0 0 10px', color: tokens.muted }}>Notes in Trash are left out. The file is saved on this device only.</p>
+          <p style={{ margin: '0 0 10px', color: tokens.muted }}>{t('export.note')}</p>
           <label style={{ display: 'flex', gap: '8px', 'align-items': 'center', cursor: 'pointer' }}>
             <input type="checkbox" checked={protect()} onChange={(e) => setProtect(e.currentTarget.checked)} />
-            Protect with a password (AES-256 zip)
+            {t('export.protect')}
           </label>
           <Show when={protect()}>
             <input
               type="password"
-              aria-label="Zip password"
-              placeholder="Password"
+              aria-label={t('export.zipPassword')}
+              placeholder={t('export.password')}
               autocomplete="new-password"
               value={password()}
               onInput={(e) => setPassword(e.currentTarget.value)}
@@ -99,16 +100,15 @@ export function ExportDialog(props: {
             />
             <input
               type="password"
-              aria-label="Confirm zip password"
-              placeholder="Confirm password"
+              aria-label={t('export.confirmZipPassword')}
+              placeholder={t('export.confirmPassword')}
               autocomplete="new-password"
               value={confirm()}
               onInput={(e) => setConfirm(e.currentTarget.value)}
               style={field()}
             />
             <p role="note" style={{ margin: '8px 0 0', color: tokens.muted, 'font-size': '12px' }}>
-              Opening it needs a tool such as 7-Zip; the built-in Windows and macOS zip tools usually cannot. File and
-              folder names inside the zip stay readable.
+              {t('export.zipNote')}
             </p>
             <Show when={password() !== '' && problem()}>
               <p role="alert" style={{ margin: '6px 0 0', color: tokens.danger }}>
@@ -123,10 +123,10 @@ export function ExportDialog(props: {
           </Show>
           <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end', 'margin-top': '14px' }}>
             <button type="button" style={button()} disabled={busy()} onClick={() => props.onClose()}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" style={button()} disabled={busy() || problem() !== null}>
-              {busy() ? 'Exporting…' : 'Export'}
+              {busy() ? t('export.exporting') : t('export.submit')}
             </button>
           </div>
         </form>

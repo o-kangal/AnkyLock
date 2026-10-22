@@ -4,6 +4,7 @@ import type { NoteView, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { useNarrowScreen } from '../../layout/screen.js';
 import { longPress, RowMenuButton } from './rowMenu.jsx';
 import { createHover, itemRowHeight, itemStyle } from './styles.js';
+import { t } from '../../i18n/index.js';
 
 export interface NoteItemProps {
   readonly store: WorkspaceStore;
@@ -35,7 +36,7 @@ export function NoteItem(props: NoteItemProps): JSX.Element {
       {...hover}
       data-note-id={props.note.id}
       style={itemStyle(props.depth, { active: active(), hovered: hovered() }, itemRowHeight(narrow()))}
-      title={props.note.title ?? 'Untitled'}
+      title={props.note.title ?? t('note.untitled')}
       onClick={() => props.store.openNote(props.note.id)}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -44,10 +45,10 @@ export function NoteItem(props: NoteItemProps): JSX.Element {
       }}
     >
       <span style={{ opacity: props.note.title ? '1' : '0.6', overflow: 'hidden', 'text-overflow': 'ellipsis' }}>
-        {props.note.title ?? 'Untitled'}
+        {props.note.title ?? t('note.untitled')}
       </span>
       <Show when={narrow() && props.onItemMenu}>
-        <RowMenuButton label={props.note.title ?? 'Untitled'} onOpen={openMenu} />
+        <RowMenuButton label={props.note.title ?? t('note.untitled')} onOpen={openMenu} />
       </Show>
     </div>
   );

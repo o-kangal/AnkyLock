@@ -9,6 +9,7 @@ import { createReducedMotion, LOGO_TRANSITION_MS } from './AnkyLogo.jsx';
 import { tokens } from './sidebar/styles.js';
 import { UnlockScreen } from './UnlockScreen.jsx';
 import { Workspace } from './Workspace.jsx';
+import { locale, t } from '../i18n/index.js';
 
 /** Root UI shared by desktop and web: the vault must be unlocked before any note is shown. */
 export function AnkyLockApp(props: {
@@ -30,6 +31,8 @@ export function AnkyLockApp(props: {
   const theme = props.theme ?? createThemePreference();
   // The whole document follows, including the desktop title bar outside this tree.
   createEffect(() => applyColorScheme(theme.scheme()));
+  // Screen readers, hyphenation and spell checking follow the UI language.
+  createEffect(() => document.documentElement.setAttribute('lang', locale() === 'tr' ? 'tr' : 'en'));
   // An unlock plays on the vault picker's logo before the workspace replaces it. Locking shows
   // the picker right away; its logo then plays the lock.
   const reducedMotion = createReducedMotion();
@@ -51,7 +54,7 @@ export function AnkyLockApp(props: {
         <ScreenContext.Provider value={narrow}>
           <Switch>
             <Match when={screen() === 'loading'}>
-              <div style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>Loading…</div>
+              <div style={{ display: 'grid', 'place-items': 'center', height: '100%', font: tokens.font }}>{t('common.loading')}</div>
             </Match>
             <Match when={screen() === 'unlocked' && props.runtime.status() === 'unlocked'}>
               <Workspace runtime={props.runtime} platform={props.platform ?? 'web'} {...(props.openLink ? { openLink: props.openLink } : {})} />

@@ -2,6 +2,7 @@ import { createSignal, For, Show, type JSX } from 'solid-js';
 import type { NoteId } from '@ankylock/core';
 import { tabLabel, type WorkspaceStore } from '../../stores/workspaceStore.js';
 import { tokens } from '../sidebar/styles.js';
+import { t } from '../../i18n/index.js';
 
 export interface TabBarProps {
   readonly store: WorkspaceStore;
@@ -66,7 +67,7 @@ export function TabBar(props: TabBarProps): JSX.Element {
         {(openNavigation) => (
           <button
             type="button"
-            aria-label="Open navigation"
+            aria-label={t('tabs.openNavigation')}
             style={{ ...buttonStyle, 'min-width': '40px', 'font-size': '18px', 'flex-shrink': '0' }}
             onClick={() => openNavigation()()}
           >
@@ -98,7 +99,7 @@ export function TabBar(props: TabBarProps): JSX.Element {
             </span>
             <button
               type="button"
-              aria-label="Close tab"
+              aria-label={t('tabs.close')}
               style={props.compact ? { ...buttonStyle, 'min-width': '32px', height: '100%' } : buttonStyle}
               onClick={(e) => {
                 e.stopPropagation();
@@ -112,7 +113,7 @@ export function TabBar(props: TabBarProps): JSX.Element {
       </For>
       <button
         type="button"
-        aria-label="New tab"
+        aria-label={t('tabs.new')}
         style={props.compact ? { ...buttonStyle, 'min-width': '40px', 'flex-shrink': '0' } : buttonStyle}
         onClick={() => void props.store.createTab()}
       >

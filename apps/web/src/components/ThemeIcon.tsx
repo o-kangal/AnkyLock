@@ -1,7 +1,10 @@
 import { Match, Switch, type JSX } from 'solid-js';
+import { t, type MessageKey } from '../i18n/index.js';
 import type { ThemeChoice } from '../theme/colorScheme.js';
 
-export const THEME_LABELS: Record<ThemeChoice, string> = { system: 'System', light: 'Light', dark: 'Dark' };
+const THEME_KEYS = { system: 'theme.system', light: 'theme.light', dark: 'theme.dark' } as const satisfies Record<ThemeChoice, MessageKey>;
+
+export const themeLabel = (choice: ThemeChoice): string => t(THEME_KEYS[choice]);
 
 /** Half-filled circle for System, sun for Light, moon for Dark (inline SVG, follows text color). */
 export function ThemeIcon(props: { readonly choice: ThemeChoice }): JSX.Element {

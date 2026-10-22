@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 /** Passwords for protected exports: long enough that guessing them offline is impractical. */
 export const MIN_EXPORT_PASSWORD_LENGTH = 8;
 
@@ -9,6 +11,8 @@ export interface ExportJob {
   readonly items: readonly { readonly dir: readonly string[]; readonly state: Uint8Array | null }[];
   /** Encrypts the zip with WinZip AES-256 when set. */
   readonly password: string | null;
+  /** File name for a note without a title, in the user's language. */
+  readonly untitled: string;
 }
 
 export interface ExportFile {
@@ -25,7 +29,7 @@ export function runExportInWorker(job: ExportJob): Promise<ExportFile> {
       if (event.data.ok) resolve(event.data.file);
       else reject(new Error(event.data.message));
     });
-    worker.addEventListener('error', (event) => reject(new Error(event.message || 'Export failed.')));
+    worker.addEventListener('error', (event) => reject(new Error(event.message || t('export.failed'))));
     const buffers = new Set(job.items.flatMap((item) => (item.state ? [item.state.buffer as ArrayBuffer] : [])));
     worker.postMessage(job, [...buffers]);
   }).finally(() => worker.terminate());

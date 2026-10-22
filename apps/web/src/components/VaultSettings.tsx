@@ -4,7 +4,8 @@ import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { useExport } from '../export/saveFile.js';
 import { THEME_CHOICES, ThemeContext } from '../theme/colorScheme.js';
 import { buttonStyle, fieldStyle, tokens } from './sidebar/styles.js';
-import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
+import { chooseLocale, LOCALE_CHOICES, localeChoice, t, type LocaleChoice } from '../i18n/index.js';
+import { themeLabel, ThemeIcon } from './ThemeIcon.jsx';
 
 export type VaultSettingsView = 'menu' | 'remove' | 'delete' | 'wipe' | 'relay';
 
@@ -17,14 +18,15 @@ const baseField: JSX.CSSProperties = {
   font: tokens.font,
 };
 
-/** Typed to confirm deleting all Drive data. */
-const WIPE_CONFIRMATION = 'DELETE';
+/** Languages are named in their own language, so anyone can find theirs. */
+const localeLabel = (choice: LocaleChoice): string => (choice === 'en' ? 'English' : choice === 'tr' ? 'Türkçe' : t('settings.languageSystem'));
 
 /**
  * The open vault's settings: rename it, remove it from this device, or delete it everywhere.
  * Removing asks for confirmation that spells out what happens to the notes; deleting everywhere,
  * and removing a vault that has no copy in Google Drive, ask for the vault's name to be typed.
- * The danger zone also deletes all AnkyLock data from Google Drive, confirmed by typing DELETE.
+ * The danger zone also deletes all AnkyLock data from Google Drive, confirmed by typing DELETE
+ * (in the current language). Theme and language are preferences of this device.
  */
 export function VaultSettings(props: {
   readonly runtime: Runtime;
@@ -37,7 +39,9 @@ export function VaultSettings(props: {
   const field = (): JSX.CSSProperties => touchSized({ ...fieldStyle, ...baseField }, narrow());
   const button = (): JSX.CSSProperties => touchSized({ ...buttonStyle, ...baseField, 'text-align': 'left' }, narrow());
   const danger = (): JSX.CSSProperties => ({ ...button(), color: tokens.danger });
-  const displayName = (): string => props.runtime.vaultName() ?? 'Unnamed vault';
+  const displayName = (): string => props.runtime.vaultName() ?? t('vault.unnamed');
+  /** Typed to confirm deleting all Drive data. */
+  const confirmWord = (): string => t('common.confirmWord');
   const [view, setView] = createSignal<VaultSettingsView>(props.initialView ?? 'menu');
   const [name, setName] = createSignal(props.runtime.vaultName() ?? '');
   const [typed, setTyped] = createSignal('');
@@ -77,9 +81,9 @@ export function VaultSettings(props: {
             }}
           >
             <label style={{ color: tokens.muted, 'font-size': '12px' }}>
-              Vault name
+              {t('vault.name')}
               <input
-                aria-label="Vault name"
+                aria-label={t('vault.name')}
                 maxLength={MAX_VAULT_NAME_LENGTH}
                 value={name()}
                 onInput={(e) => setName(e.currentTarget.value)}
@@ -87,28 +91,28 @@ export function VaultSettings(props: {
               />
             </label>
             <button type="submit" disabled={busy() || name().trim() === (props.runtime.vaultName() ?? '')} style={button()}>
-              Rename
+              {t('settings.rename')}
             </button>
           </form>
           <Show when={status().vaultDrive === 'deleted'}>
             <p role="note" style={{ margin: '8px 0 0', color: tokens.danger }}>
-              This vault was deleted from Google Drive on another device. Sync is off.
+              {t('settings.deletedElsewhere')}
             </p>
             <button type="button" disabled={busy()} style={button()} onClick={() => void props.runtime.keepLocalOnly().then(props.onClose)}>
-              Keep local only
+              {t('sync.keepLocalOnly')}
             </button>
           </Show>
           <button type="button" disabled={busy()} style={button()} onClick={() => void props.runtime.lock().then(props.onClose)}>
-            Lock
+            {t('sync.lock')}
           </button>
           <Show when={signedIn() || status().auth === 'stale'}>
             <button type="button" disabled={busy()} style={button()} onClick={() => void props.runtime.signOut().then(props.onClose)}>
-              Sign out of Google
+              {t('settings.signOutOfGoogle')}
             </button>
           </Show>
           <Show when={status().vaultDrive === 'local-only'}>
             <button type="button" disabled={busy() || !signedIn()} style={button()} onClick={() => void props.runtime.backUpAgain().then(props.onClose)}>
-              Back up to Google Drive again
+              {t('settings.backUpAgain')}
             </button>
           </Show>
           <Show when={openExport}>
@@ -119,20 +123,20 @@ export function VaultSettings(props: {
                 style={button()}
                 onClick={() => {
                   props.onClose();
-                  open()({ kind: 'vault' }, `the vault “${displayName()}”`);
+                  open()({ kind: 'vault' }, t('export.vaultLabel', { name: displayName() }));
                 }}
               >
-                Export vault…
+                {t('settings.exportVault')}
               </button>
             )}
           </Show>
           <button type="button" disabled={busy()} style={button()} onClick={() => open('relay')}>
-            {props.runtime.ownRelayUrl() === null ? 'Instant sync (own relay)…' : 'Instant sync: on…'}
+            {props.runtime.ownRelayUrl() === null ? t('settings.instantSync') : t('settings.instantSyncOn')}
           </button>
           <Show when={theme}>
             {(current) => (
-              <div role="group" aria-label="Theme" style={{ 'margin-top': '10px' }}>
-                <span style={{ color: tokens.muted, 'font-size': '12px' }}>Theme (this device)</span>
+              <div role="group" aria-label={t('settings.theme')} style={{ 'margin-top': '10px' }}>
+                <span style={{ color: tokens.muted, 'font-size': '12px' }}>{t('settings.themeThisDevice')}</span>
                 <div style={{ display: 'flex', gap: '4px', 'margin-top': '6px' }}>
                   <For each={THEME_CHOICES}>
                     {(choice) => (
@@ -152,7 +156,7 @@ export function VaultSettings(props: {
                         onClick={() => current().choose(choice)}
                       >
                         <ThemeIcon choice={choice} />
-                        {THEME_LABELS[choice]}
+                        {themeLabel(choice)}
                       </button>
                     )}
                   </For>
@@ -160,27 +164,50 @@ export function VaultSettings(props: {
               </div>
             )}
           </Show>
+          <div role="group" aria-label={t('settings.language')} style={{ 'margin-top': '10px' }}>
+            <span style={{ color: tokens.muted, 'font-size': '12px' }}>{t('settings.languageThisDevice')}</span>
+            <div style={{ display: 'flex', gap: '4px', 'margin-top': '6px' }}>
+              <For each={LOCALE_CHOICES}>
+                {(choice) => (
+                  <button
+                    type="button"
+                    aria-pressed={localeChoice() === choice}
+                    style={{
+                      ...button(),
+                      'margin-top': '0',
+                      display: 'inline-flex',
+                      'justify-content': 'center',
+                      'border-color': localeChoice() === choice ? tokens.accent : undefined,
+                    }}
+                    onClick={() => chooseLocale(choice)}
+                  >
+                    {localeLabel(choice)}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
           <hr style={{ border: 'none', 'border-top': `1px solid ${tokens.border}`, margin: '10px 0 4px' }} />
           <button type="button" style={danger()} onClick={() => open('remove')}>
-            Remove from this device…
+            {t('settings.removeFromDeviceMenu')}
           </button>
           <button
             type="button"
             style={danger()}
             disabled={!signedIn() || !status().onDrive}
-            title={signedIn() ? undefined : 'Sign in with Google to delete the vault from Google Drive too.'}
+            title={signedIn() ? undefined : t('settings.signInToDeleteEverywhere')}
             onClick={() => open('delete')}
           >
-            Delete everywhere…
+            {t('settings.deleteEverywhereMenu')}
           </button>
           <button
             type="button"
             style={danger()}
             disabled={!signedIn()}
-            title={signedIn() ? undefined : 'Sign in with Google to delete your data from Google Drive.'}
+            title={signedIn() ? undefined : t('settings.signInToWipe')}
             onClick={() => open('wipe')}
           >
-            Delete all Google Drive data…
+            {t('settings.wipeMenu')}
           </button>
         </Match>
         <Match when={view() === 'relay'}>
@@ -190,43 +217,39 @@ export function VaultSettings(props: {
               void run(() => props.runtime.setOwnRelay(relayInput()), true);
             }}
           >
-            <strong>Instant sync with your own relay</strong>
+            <strong>{t('relay.title')}</strong>
             <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
-              Without a relay, your devices sync through Google Drive: changes from another device arrive within a few
-              minutes. A relay you run makes it instant.
+              {t('relay.intro')}
             </p>
             <Show
               when={props.runtime.ownRelaySupported}
               fallback={
                 <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
-                  The web app connects only to the relay it was built with, so no other server can be reached from this
-                  page. Use the desktop app to set your own relay, or host the web app yourself with{' '}
-                  <code>VITE_RELAY_URL</code>.
+                  {t('relay.webOnly')} <code>VITE_RELAY_URL</code>.
                 </p>
               }
             >
               <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
-                It is set for this device. The relay only ever sees encrypted data, but it receives your short-lived Google
-                sign-in token, so use only a relay you trust. A self-hosted relay must accept AnkyLock's Google client ids.
+                {t('relay.warning')}
               </p>
               <input
-                aria-label="Relay address"
+                aria-label={t('relay.address')}
                 placeholder="wss://relay.example.com/ws"
                 value={relayInput()}
                 onInput={(e) => setRelayInput(e.currentTarget.value)}
                 style={field()}
               />
               <button type="submit" disabled={busy()} style={button()}>
-                Save
+                {t('common.save')}
               </button>
               <Show when={props.runtime.ownRelayUrl() !== null}>
                 <button type="button" disabled={busy()} style={button()} onClick={() => void run(() => props.runtime.setOwnRelay(''), true)}>
-                  Turn off instant sync
+                  {t('relay.turnOff')}
                 </button>
               </Show>
             </Show>
             <button type="button" disabled={busy()} style={button()} onClick={() => open('menu')}>
-              {props.runtime.ownRelaySupported ? 'Cancel' : 'Back'}
+              {props.runtime.ownRelaySupported ? t('common.cancel') : t('common.back')}
             </button>
           </form>
         </Match>
@@ -234,27 +257,25 @@ export function VaultSettings(props: {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (typed().trim() === WIPE_CONFIRMATION) void run(() => props.runtime.deleteAllDriveData(), true);
+              if (typed().trim() === confirmWord()) void run(() => props.runtime.deleteAllDriveData(), true);
             }}
           >
-            <strong>Delete all AnkyLock data from Google Drive?</strong>
+            <strong>{t('wipe.title')}</strong>
             <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
-              Every vault’s header and every device’s backups in Google Drive are deleted, for all your vaults. Notes on this
-              device stay, and this vault is kept on this device only. Other devices stop syncing and can keep their copies
-              locally. Then AnkyLock’s access to your Google account is revoked and you are signed out. This cannot be undone.
+              {t('wipe.intro')}
             </p>
             <input
-              aria-label="Type DELETE to confirm"
-              placeholder={WIPE_CONFIRMATION}
+              aria-label={t('common.typeToConfirm', { word: confirmWord() })}
+              placeholder={confirmWord()}
               value={typed()}
               onInput={(e) => setTyped(e.currentTarget.value)}
               style={field()}
             />
-            <button type="submit" disabled={busy() || typed().trim() !== WIPE_CONFIRMATION} style={danger()}>
-              {busy() ? 'Deleting…' : 'Delete all Drive data'}
+            <button type="submit" disabled={busy() || typed().trim() !== confirmWord()} style={danger()}>
+              {busy() ? t('common.deleting') : t('wipe.submit')}
             </button>
             <button type="button" disabled={busy()} style={button()} onClick={() => open('menu')}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </form>
         </Match>
@@ -265,25 +286,17 @@ export function VaultSettings(props: {
               if (confirmed()) void run(() => props.runtime.removeVault({ everywhere: view() === 'delete' }), true);
             }}
           >
-            <strong>{view() === 'delete' ? `Delete “${displayName()}” everywhere?` : `Remove “${displayName()}” from this device?`}</strong>
+            <strong>{view() === 'delete' ? t('remove.deleteTitle', { name: displayName() }) : t('remove.removeTitle', { name: displayName() })}</strong>
             <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
               <Switch>
-                <Match when={view() === 'delete'}>
-                  Its notes are deleted from this device and from Google Drive. Other devices with this vault stop syncing it
-                  and can keep their copy locally. This cannot be undone.
-                </Match>
-                <Match when={status().onDrive}>
-                  Its notes are removed from this device. The copy in Google Drive stays: open it again any time with “Use my
-                  existing vault”.
-                </Match>
-                <Match when={true}>
-                  This vault has no copy in Google Drive. Removing it deletes its notes for good.
-                </Match>
+                <Match when={view() === 'delete'}>{t('remove.deleteIntro')}</Match>
+                <Match when={status().onDrive}>{t('remove.keepsDrive', { useExisting: t('unlock.useExisting') })}</Match>
+                <Match when={true}>{t('remove.noDrive')}</Match>
               </Switch>
             </p>
             <Show when={needsTypedName()}>
               <input
-                aria-label="Type the vault name to confirm"
+                aria-label={t('remove.typeName')}
                 placeholder={displayName()}
                 value={typed()}
                 onInput={(e) => setTyped(e.currentTarget.value)}
@@ -291,10 +304,10 @@ export function VaultSettings(props: {
               />
             </Show>
             <button type="submit" disabled={busy() || !confirmed()} style={danger()}>
-              {busy() ? 'Removing…' : view() === 'delete' ? 'Delete everywhere' : 'Remove from this device'}
+              {busy() ? t('common.removing') : view() === 'delete' ? t('vault.deleteEverywhere') : t('vault.removeFromDevice')}
             </button>
             <button type="button" disabled={busy()} style={button()} onClick={() => open('menu')}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </form>
         </Match>

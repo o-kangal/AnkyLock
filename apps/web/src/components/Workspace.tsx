@@ -14,6 +14,7 @@ import { Sidebar } from './sidebar/Sidebar.jsx';
 import { SyncStatusBar } from './SyncStatusBar.jsx';
 import { tokens } from './sidebar/styles.js';
 import { TabBar } from './tabs/TabBar.jsx';
+import { t } from '../i18n/index.js';
 
 /**
  * Main layout: sidebar, tab bar and a single editor for the active tab. Background tabs keep
@@ -120,7 +121,7 @@ export function Workspace(props: {
             'min-height': '0',
           }}
         >
-          <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? 'Navigation' : undefined} style={sidebarStyle()}>
+          <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? t('tabs.navigation') : undefined} style={sidebarStyle()}>
             <Sidebar store={store} logoFace={props.runtime.logoFace} />
           </div>
           <Show when={narrow() && drawer()}>
@@ -144,8 +145,8 @@ export function Workspace(props: {
                 fallback={
                   <div style={{ display: 'grid', 'place-items': 'center', height: '100%', color: tokens.muted }}>
                     {narrow()
-                      ? 'Tap + to open a new scratchpad.'
-                      : `Press ${shortcutLabel('new-tab', props.platform)} to open a new scratchpad.`}
+                      ? t('workspace.emptyTouch')
+                      : t('workspace.empty', { shortcut: shortcutLabel('new-tab', props.platform) })}
                   </div>
                 }
               >
@@ -158,7 +159,12 @@ export function Workspace(props: {
                     colorScheme={theme.scheme()}
                     wordWrap={wrap.wordWrap()}
                     fontSize={narrow() ? 16 : 14}
-                    links={{ modifier: linkModifier(), open: (url) => (props.openLink ?? openInNewTab)(url) }}
+                    readOnlyNotice={t('editor.readOnly')}
+                    links={{
+                      modifier: linkModifier(),
+                      open: (url) => (props.openLink ?? openInNewTab)(url),
+                      labels: { open: t('editor.openLink'), hint: t('editor.linkHint') },
+                    }}
                     onTitleChange={(title) => store.setTitle(open().id, title)}
                   />
                 )}

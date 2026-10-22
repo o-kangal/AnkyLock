@@ -193,7 +193,7 @@ describe('delete all Drive data', () => {
       init?.method === 'DELETE' && failDeletes-- > 0 ? Promise.reject(new TypeError('offline')) : drive.fetch(input, init);
     const { a, b } = await sharedVault(drive, flaky);
     failDeletes = 1;
-    expect(await a.runtime.deleteAllDriveData()).toMatch(/^3 file\(s\) could not be deleted from Google Drive/);
+    expect(await a.runtime.deleteAllDriveData()).toMatch(/^3 files could not be deleted from Google Drive/);
     expect(a.google.calls).toEqual([]);
     expect(a.runtime.syncStatus()).toMatchObject({ auth: 'signed-in', connection: 'off', vaultDrive: 'ok' });
 

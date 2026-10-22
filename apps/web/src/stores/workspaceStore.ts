@@ -19,6 +19,7 @@ import {
 } from '@ankylock/core';
 import { StorageError, type IStorageEngine } from '@ankylock/storage';
 import { changeTrashRetention } from '@ankylock/sync';
+import { t } from '../i18n/index.js';
 
 /** Encrypts and decrypts short names and titles; backed by the crypto worker in the app. */
 export interface NameCodec {
@@ -126,7 +127,7 @@ export function nextUntitledNumber(tabs: readonly Tab[]): number {
 
 export function tabLabel(tab: Tab, note: NoteView | undefined): string {
   if (note?.title) return note.title;
-  return tab.untitledNumber === null ? 'Untitled' : `Untitled-${tab.untitledNumber}`;
+  return tab.untitledNumber === null ? t('note.untitled') : t('note.untitledN', { n: tab.untitledNumber });
 }
 
 export type WorkspaceStore = ReturnType<typeof createWorkspaceStore>;

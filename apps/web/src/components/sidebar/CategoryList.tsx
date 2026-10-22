@@ -5,14 +5,17 @@ import type { MenuTarget } from './ContextMenu.jsx';
 import type { Selection, WorkspaceStore } from '../../stores/workspaceStore.js';
 import { touchSized, useNarrowScreen } from '../../layout/screen.js';
 import { longPress } from './rowMenu.jsx';
+import { errorText, t } from '../../i18n/index.js';
 import { createHover, fieldStyle, itemRowHeight, itemStyle, tokens, type ItemState } from './styles.js';
 
+const SYSTEM_CATEGORY_KEYS = {
+  [SYSTEM_ALL]: 'sidebar.allNotes',
+  [SYSTEM_ARCHIVE]: 'sidebar.archive',
+  [SYSTEM_TRASH]: 'sidebar.trash',
+} as const;
+
 /** Immutable system categories (BR-HIER-01): fixed labels, views rather than containers. */
-export const SYSTEM_CATEGORY_LABELS: Record<SystemCategoryId, string> = {
-  [SYSTEM_ALL]: 'All Notes',
-  [SYSTEM_ARCHIVE]: 'Archive',
-  [SYSTEM_TRASH]: 'Trash',
-};
+export const systemCategoryLabel = (id: SystemCategoryId): string => t(SYSTEM_CATEGORY_KEYS[id]);
 
 const SYSTEM_ORDER: SystemCategoryId[] = [SYSTEM_ALL, SYSTEM_ARCHIVE, SYSTEM_TRASH];
 
@@ -37,7 +40,7 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
       setDraft('');
       setError(null);
     } else {
-      setError(result.error.message);
+      setError(errorText(result.error));
     }
   };
 
@@ -45,7 +48,7 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
   const style = (state: ItemState): JSX.CSSProperties => itemStyle(0, state, itemRowHeight(narrow()));
 
   return (
-    <nav aria-label="Categories" style={{ 'border-bottom': `1px solid ${tokens.border}`, 'padding': '4px 0' }}>
+    <nav aria-label={t('sidebar.categories')} style={{ 'border-bottom': `1px solid ${tokens.border}`, 'padding': '4px 0' }}>
       <For each={SYSTEM_ORDER}>
         {(id) => {
           const [hovered, hover] = createHover();
@@ -57,7 +60,7 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
               style={style({ active: isSelected(props.store.state.selection, 'system', id), hovered: hovered() })}
               onClick={() => props.store.select({ kind: 'system', id })}
             >
-              {SYSTEM_CATEGORY_LABELS[id]}
+              {systemCategoryLabel(id)}
             </div>
           );
         }}
@@ -86,8 +89,8 @@ export function CategoryList(props: CategoryListProps): JSX.Element {
       </For>
       <form onSubmit={(e) => void submit(e)} style={{ padding: '4px 8px' }}>
         <input
-          aria-label="New category"
-          placeholder="New category"
+          aria-label={t('sidebar.newCategory')}
+          placeholder={t('sidebar.newCategory')}
           value={draft()}
           onInput={(e) => setDraft(e.currentTarget.value)}
           style={touchSized({ ...fieldStyle, width: '100%', padding: '3px 8px', font: tokens.font, 'box-sizing': 'border-box' }, narrow())}

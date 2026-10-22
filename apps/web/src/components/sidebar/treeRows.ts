@@ -1,11 +1,12 @@
 import type { FolderId } from '@ankylock/core';
 import type { FolderView, NoteView, WorkspaceState } from '../../stores/workspaceStore.js';
+import { compareNames } from '../../i18n/index.js';
 
 export type TreeRow =
   | { readonly kind: 'folder'; readonly folder: FolderView; readonly depth: number; readonly expanded: boolean }
   | { readonly kind: 'note'; readonly note: NoteView; readonly depth: number };
 
-const byName = (a: FolderView, b: FolderView): number => a.name.localeCompare(b.name, 'en-US');
+const byName = (a: FolderView, b: FolderView): number => compareNames(a.name, b.name);
 const byRecent = (a: NoteView, b: NoteView): number => b.updatedAt - a.updatedAt;
 
 type Item = Pick<FolderView, 'isArchived' | 'deletedAt'>;

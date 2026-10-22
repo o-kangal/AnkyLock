@@ -1,5 +1,6 @@
 import type { EpochMs } from '@ankylock/core';
 import { AuthError, type AuthTokens, type AuthTransport } from '@ankylock/sync';
+import { t } from '../i18n/index.js';
 
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
@@ -43,7 +44,7 @@ const randomToken = (): string => {
 /** Reads the (unverified) claims of a JWT; the relay verifies the signature. */
 function claims(jwt: string): Record<string, unknown> {
   const payload = jwt.split('.')[1];
-  if (payload === undefined) throw new AuthError('ERR_AUTH', 'Google returned a malformed ID token.');
+  if (payload === undefined) throw new AuthError('ERR_AUTH', t('auth.malformedToken'));
   try {
     const base64 = payload.replaceAll('-', '+').replaceAll('_', '/');
     const json = new TextDecoder().decode(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)));
@@ -51,7 +52,7 @@ function claims(jwt: string): Record<string, unknown> {
     if (typeof value !== 'object' || value === null) throw new Error();
     return value as Record<string, unknown>;
   } catch {
-    throw new AuthError('ERR_AUTH', 'Google returned a malformed ID token.');
+    throw new AuthError('ERR_AUTH', t('auth.malformedToken'));
   }
 }
 
@@ -118,7 +119,7 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
         closedSince ??= Date.now();
         if (Date.now() - closedSince >= pollMs * 2) {
           finish();
-          reject(new AuthError('ERR_AUTH', 'Google sign-in was cancelled.'));
+          reject(new AuthError('ERR_AUTH', t('auth.cancelled')));
         }
       }, pollMs);
       channel.onmessage = (event) => {
@@ -136,20 +137,20 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
   function tokensFrom(params: URLSearchParams, nonce: string): AuthTokens {
     const error = params.get('error');
     if (error !== null) {
-      throw new AuthError('ERR_AUTH', error === 'access_denied' ? 'Google sign-in was cancelled.' : `Google sign-in failed (${error}).`);
+      throw new AuthError('ERR_AUTH', error === 'access_denied' ? t('auth.cancelled') : t('auth.failed', { error }));
     }
     const idToken = params.get('id_token');
     const token = params.get('access_token');
     const expiresIn = Number(params.get('expires_in'));
     if (!idToken || !token || !Number.isFinite(expiresIn) || expiresIn <= 0) {
-      throw new AuthError('ERR_AUTH', 'Google returned an incomplete sign-in response.');
+      throw new AuthError('ERR_AUTH', t('auth.incomplete'));
     }
     if (!(params.get('scope') ?? '').split(' ').includes(DRIVE_APPDATA_SCOPE)) {
-      throw new AuthError('ERR_AUTH', 'AnkyLock needs access to its own Google Drive folder to back up your vaults.');
+      throw new AuthError('ERR_AUTH', t('auth.needsDrive'));
     }
     const { aud, iss, nonce: tokenNonce, email } = claims(idToken);
     if (aud !== options.clientId || typeof iss !== 'string' || !ISSUERS.has(iss) || tokenNonce !== nonce) {
-      throw new AuthError('ERR_AUTH', 'Google returned an ID token that was not issued for this sign-in.');
+      throw new AuthError('ERR_AUTH', t('auth.wrongToken'));
     }
     if (typeof email === 'string' && storage) safely(() => storage.setItem(HINT_KEY, email));
     accessToken = token;
@@ -163,7 +164,7 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
       const state = randomToken();
       const nonce = randomToken();
       const popup = openPopup(authorizeUrl(state, nonce));
-      if (!popup) throw new AuthError('ERR_AUTH', 'Allow pop-ups for AnkyLock to sign in with Google.');
+      if (!popup) throw new AuthError('ERR_AUTH', t('auth.allowPopups'));
       try {
         return tokensFrom(await awaitResult(popup, state), nonce);
       } finally {
@@ -174,7 +175,7 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
     // Without a refresh token there is nothing to restore silently after a reload.
     restore: async () => null,
 
-    refresh: () => Promise.reject(new AuthError('ERR_AUTH_EXPIRED', 'Renew Google access to continue syncing.')),
+    refresh: () => Promise.reject(new AuthError('ERR_AUTH_EXPIRED', t('auth.renewToSync'))),
 
     async signOut() {
       if (storage) safely(() => storage.removeItem(HINT_KEY));
@@ -190,9 +191,9 @@ export function createWebAuthTransport(options: WebAuthOptions): AuthTransport {
         try {
           response = await postRevoke(accessToken);
         } catch {
-          throw new AuthError('ERR_NETWORK', 'Could not reach Google to revoke AnkyLock’s access.');
+          throw new AuthError('ERR_NETWORK', t('auth.revokeUnreachable'));
         }
-        if (!response.ok) throw new AuthError('ERR_AUTH', `Google did not revoke AnkyLock’s access (HTTP ${response.status}).`);
+        if (!response.ok) throw new AuthError('ERR_AUTH', t('auth.revokeRefused', { status: response.status }));
       }
       accessToken = null;
     },

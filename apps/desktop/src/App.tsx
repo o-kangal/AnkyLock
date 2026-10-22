@@ -12,6 +12,7 @@ import {
   createRelayPreference,
   createRuntime,
   buildRelayUrl,
+  t,
   tokens,
 } from '@ankylock/web/workspace';
 import { guardWindowClose, type CloseState, type WindowCloseGuard } from './closeGuard.js';
@@ -78,7 +79,7 @@ function CloseDialog(props: { readonly state: CloseState; readonly guard: Window
         >
           <div
             role={props.state === 'unbacked' ? 'alertdialog' : 'status'}
-            aria-label={props.state === 'unbacked' ? 'Not backed up' : 'Backing up'}
+            aria-label={props.state === 'unbacked' ? t('close.notBackedUp') : t('close.backingUp')}
             style={{
               width: '360px',
               'max-width': 'calc(100% - 32px)',
@@ -93,19 +94,16 @@ function CloseDialog(props: { readonly state: CloseState; readonly guard: Window
             }}
           >
             <Switch>
-              <Match when={props.state === 'backing-up'}>Backing up to Google Drive before closing…</Match>
+              <Match when={props.state === 'backing-up'}>{t('close.backingUpLong')}</Match>
               <Match when={props.state === 'unbacked'}>
-                <strong>Your latest changes are not in Google Drive yet</strong>
-                <p style={{ margin: '8px 0 14px', color: tokens.muted }}>
-                  They are saved on this device and will be backed up the next time AnkyLock runs. Wait to keep the app
-                  open while it retries in the background.
-                </p>
+                <strong>{t('close.unbackedTitle')}</strong>
+                <p style={{ margin: '8px 0 14px', color: tokens.muted }}>{t('close.unbackedIntro')}</p>
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button type="button" style={dialogButton} onClick={() => void props.guard.quit()}>
-                    Quit anyway
+                    {t('close.quitAnyway')}
                   </button>
                   <button type="button" style={dialogButton} autofocus onClick={() => props.guard.stay()}>
-                    Wait
+                    {t('close.wait')}
                   </button>
                 </div>
               </Match>

@@ -1,6 +1,7 @@
 import { err, ok, validateFolderMove, type CategoryId, type FolderId, type FolderLink, type NoteId, type Result } from '@ankylock/core';
 import type { JSX } from 'solid-js';
 import type { WorkspaceStore } from '../stores/workspaceStore.js';
+import { errorText } from '../i18n/index.js';
 
 export type DragItem = { readonly kind: 'note'; readonly id: NoteId } | { readonly kind: 'folder'; readonly id: FolderId };
 
@@ -153,7 +154,7 @@ export function createDragDropManager(store: WorkspaceStore, onError: (message: 
           current = null;
           if (!item) return;
           void drop(item, target).then((result) => {
-            if (!result.ok) onError(result.error.message);
+            if (!result.ok) onError(errorText(result.error));
           });
         },
       };

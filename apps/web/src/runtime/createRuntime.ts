@@ -55,7 +55,8 @@ import {
 import { runExportInWorker, type ExportFile, type ExportJob } from '../export/exportNotes.js';
 import { planExport, type ExportScope } from '../export/exportPlan.js';
 import { createWorkspaceStore, type PurgedItem, type WorkspaceStore } from '../stores/workspaceStore.js';
-import { parseRelayUrl, type RelayPreference } from '../preferences/devicePreferences.js';
+import { errorText, t, tn, type MessageKey } from '../i18n/index.js';
+import { parseRelayUrl, type RelayPreference, type RelayUrlProblem } from '../preferences/devicePreferences.js';
 import { DEFAULT_LOGO_FACE, nextLogoFace, type LogoFace } from './logoFace.js';
 
 export type VaultStatus = 'loading' | 'uninitialized' | 'locked' | 'unlocked';
@@ -86,6 +87,12 @@ export interface RuntimeOptions {
   /** Test seam for the logo's random expressions; returns a number in [0, 1). */
   readonly random?: () => number;
 }
+
+const RELAY_URL_PROBLEMS = {
+  invalid: 'relay.errorInvalid',
+  insecure: 'relay.errorInsecure',
+  extras: 'relay.errorExtras',
+} as const satisfies Record<RelayUrlProblem, MessageKey>;
 
 /** How often a Drive-only device looks for other devices' backups (they back up every 5 minutes). */
 export const CATCH_UP_INTERVAL_MS = 2 * 60 * 1000;
@@ -216,8 +223,9 @@ const LOCK_BACKUP_WAIT_MS = 5_000;
 /** Long enough for any sensible label, short enough for the title bar and vault list. */
 export const MAX_VAULT_NAME_LENGTH = 64;
 
+/** Coded errors in the user's language; others as they are. */
 const message = (error: unknown): string =>
-  error instanceof CryptoError || error instanceof StorageError || error instanceof Error ? error.message : String(error);
+  error instanceof CryptoError || error instanceof StorageError ? errorText(error) : error instanceof Error ? error.message : String(error);
 
 /**
  * Composition root shared by desktop and web: storage, the crypto worker, the vault key, the
@@ -372,7 +380,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       }
       const result = await catchUp.run();
       updateSync({ lastCatchUpAt: Date.now() as EpochMs });
-      if (result.unreadable > 0) report(`${result.unreadable} backup(s) of this vault could not be read and were skipped.`);
+      if (result.unreadable > 0) report(tn('runtime.unreadableBackups', result.unreadable));
       if (result.changed) reloadSoon(result.changedNotes);
     } catch (error) {
       // Expired web access waits for a renewal; the next connect retries.
@@ -562,8 +570,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     async createVault(name, passphrase) {
       const trimmed = name.trim();
-      if (trimmed === '') return 'Give the vault a name.';
-      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return `Use at most ${MAX_VAULT_NAME_LENGTH} characters for the name.`;
+      if (trimmed === '') return t('vault.nameRequired');
+      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
       try {
         const id = crypto.randomUUID() as VaultId;
         const header = serializeVaultHeader(await vault.initialize(passphrase));
@@ -580,7 +588,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       try {
         const opened = await directory.open(id);
         const header = await opened.getVaultHeader();
-        if (header === null) return 'This vault has no header and cannot be unlocked.';
+        if (header === null) return t('runtime.noHeader');
         await vault.unlock(passphrase, parseVaultHeader(header));
         const failure = await start(opened, id, header);
         return failure === null ? null : failed(failure);
@@ -593,9 +601,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     async renameVault(name) {
       const trimmed = name.trim();
-      if (trimmed === '') return 'Give the vault a name.';
-      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return `Use at most ${MAX_VAULT_NAME_LENGTH} characters for the name.`;
-      if (!storage || !syncState) return 'No vault is open.';
+      if (trimmed === '') return t('vault.nameRequired');
+      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
+      if (!storage || !syncState) return t('runtime.noVaultOpen');
       try {
         const ciphertext = await names.encrypt(trimmed);
         const updatedAt = Date.now() as EpochMs;
@@ -616,10 +624,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     async removeVault({ everywhere }) {
       const id = vaultId;
-      if (id === null) return 'No vault is open.';
+      if (id === null) return t('runtime.noVaultOpen');
       try {
         if (everywhere) {
-          if (!drive || auth?.state().kind !== 'signed-in') return 'Sign in with Google to delete the vault from Google Drive too.';
+          if (!drive || auth?.state().kind !== 'signed-in') return t('settings.signInToDeleteEverywhere');
           await deleteVaultFromDrive(drive, id);
         }
         // Kept in Drive: back up the last changes first. Deleted everywhere: nothing to keep.
@@ -639,10 +647,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     },
 
     async removeLockedVault(id, { everywhere }) {
-      if (status() === 'unlocked') return 'Lock the open vault first.';
+      if (status() === 'unlocked') return t('runtime.lockFirst');
       try {
         if (everywhere) {
-          if (!auth || !drive) return 'Google sign-in is not available in this app.';
+          if (!auth || !drive) return t('runtime.noGoogle');
           if (auth.state().kind !== 'signed-in') {
             const failure = await auth.signIn();
             if (failure !== null) return failure;
@@ -659,7 +667,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     },
 
     async deleteRemoteVault(id) {
-      if (!drive || !remoteVaults.has(id)) return 'This vault was not found in Google Drive.';
+      if (!drive || !remoteVaults.has(id)) return t('runtime.notOnDrive');
       try {
         await deleteVaultFromDrive(drive, id);
         remoteVaults.delete(id);
@@ -682,30 +690,30 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     },
 
     async deleteAllDriveData() {
-      if (!auth || !drive) return 'Google sign-in is not available in this app.';
-      if (auth.state().kind !== 'signed-in') return 'Sign in with Google to delete your data from Google Drive.';
+      if (!auth || !drive) return t('runtime.noGoogle');
+      if (auth.state().kind !== 'signed-in') return t('settings.signInToWipe');
       try {
         // Sync stays off from here on: a backup now would put files back into Drive.
         await stopSync();
         const { remaining } = await deleteAllFromDrive(drive);
         if (remaining > 0) {
-          return `${remaining} file(s) could not be deleted from Google Drive. Sync is paused; try again.`;
+          return tn('runtime.wipeRemaining', remaining);
         }
         if (syncState) {
           await saveSyncState({ localOnly: true, headerOnDrive: false });
           updateSync({ vaultDrive: 'local-only', backup: { kind: 'never' } });
         }
       } catch (error) {
-        return `Could not delete your data from Google Drive: ${message(error)} Sync is paused; try again.`;
+        return t('runtime.wipeFailed', { reason: message(error) });
       }
       const failure = await auth.revokeAndSignOut();
       return failure === null
         ? null
-        : `Your data was deleted from Google Drive, but AnkyLock's Google access could not be revoked: ${failure} Try again, or remove AnkyLock from your Google Account's third-party access.`;
+        : t('runtime.revokeFailed', { reason: failure });
     },
 
     async findRemoteVaults() {
-      if (!auth || !drive) return { error: 'Google sign-in is not available in this app.' };
+      if (!auth || !drive) return { error: t('runtime.noGoogle') };
       if (auth.state().kind !== 'signed-in') {
         const failure = await auth.signIn();
         if (failure !== null) return { error: failure };
@@ -722,12 +730,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     async openRemoteVault(id, passphrase) {
       const remote = remoteVaults.get(id);
-      if (!remote || !drive) return 'This vault was not found in Google Drive.';
+      if (!remote || !drive) return t('runtime.notOnDrive');
       try {
         await vault.unlock(passphrase, parseVaultHeader(remote.header));
         await sealer.setKey(vault.getKey());
         const { snapshots, unreadable } = await downloadSnapshots(drive, sealer, remote);
-        if (unreadable > 0) report(`${unreadable} backup(s) of this vault could not be read and were skipped.`);
+        if (unreadable > 0) report(tn('runtime.unreadableBackups', unreadable));
         const data = await mergeSnapshots(sealer, snapshots);
         const created = await directory.create(id, remote.header, remote.nameCiphertext, remote.createdAt);
         await created.importVault(data);
@@ -780,7 +788,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     syncStatus,
 
     async signIn() {
-      if (!auth) return 'Google sign-in is not available in this app.';
+      if (!auth) return t('runtime.noGoogle');
       return auth.signIn();
     },
 
@@ -798,8 +806,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     async setOwnRelay(input) {
       const parsed = parseRelayUrl(input);
-      if ('error' in parsed) return parsed.error;
-      if (!options.relayPreference) return 'An own relay can be set in the desktop app only.';
+      if ('error' in parsed) return t(RELAY_URL_PROBLEMS[parsed.error]);
+      if (!options.relayPreference) return t('runtime.relayDesktopOnly');
       if (parsed.url === ownRelayUrl()) return null;
       options.relayPreference.set(parsed.url);
       // Restart with or without the relay; Drive sync continues either way.
@@ -815,11 +823,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       // Pending edits first, so the export has what the user sees.
       await Promise.all([...persisters.values()].map((persister) => persister.flush()));
       const date = new Date().toISOString().slice(0, 10);
-      const plan = planExport(openStore().state, scope, vaultName(), date);
+      const untitled = t('note.untitled');
+      const names = { untitled, untitledFolder: t('export.untitledFolder'), folder: t('export.folder'), vault: t('export.vault') };
+      const plan = planExport(openStore().state, scope, vaultName(), date, names);
       const items = await Promise.all(
         plan.items.map(async (item) => ({ dir: item.dir, state: (await loadNoteState({ storage: vaultStorage, sealer }, item.noteId)) ?? null })),
       );
-      const job: ExportJob = { archiveName: plan.archiveName, single: plan.single, dirs: plan.dirs, items, password };
+      const job: ExportJob = { archiveName: plan.archiveName, single: plan.single, dirs: plan.dirs, items, password, untitled };
       return (options.runExport ?? runExportInWorker)(job);
     },
 

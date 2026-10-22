@@ -16,6 +16,8 @@ export interface CodeMirrorViewProps {
   readonly active: boolean;
   /** Trashed notes are read-only (BR-LIFE-02). */
   readonly readOnly?: boolean;
+  /** Shown above a read-only note, in the app's language (default: the English message). */
+  readonly readOnlyNotice?: string;
   readonly colorScheme: ColorScheme;
   /** BR-NOTE-03 title from line 1, or null when line 1 is empty. */
   readonly onTitleChange?: (title: string | null) => void;
@@ -94,7 +96,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
     <div style={containerStyle}>
       <Show when={props.readOnly}>
         <div role="status" style={noticeStyle}>
-          {TRASHED_READ_ONLY_MESSAGE}
+          {props.readOnlyNotice ?? TRASHED_READ_ONLY_MESSAGE}
         </div>
       </Show>
       <div ref={host} style={{ flex: '1', 'min-height': '0' }} />

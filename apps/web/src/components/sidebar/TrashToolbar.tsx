@@ -2,6 +2,7 @@ import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import { MAX_RETENTION_DAYS } from '@ankylock/core';
 import type { WorkspaceStore } from '../../stores/workspaceStore.js';
 import { Popover } from '../Popover.jsx';
+import { errorText, t, tn } from '../../i18n/index.js';
 import { buttonStyle, fieldStyle, rowStyle, tokens } from './styles.js';
 
 const iconButton: JSX.CSSProperties = {
@@ -49,7 +50,7 @@ function RetentionSettings(props: { readonly store: WorkspaceStore; readonly onD
   const apply = async (confirmed: boolean): Promise<void> => {
     setError(null);
     const result = await props.store.changeRetention(value(), confirmed);
-    if (!result.ok) setError(result.error.message);
+    if (!result.ok) setError(errorText(result.error));
     else if (result.value.kind === 'confirm_required') setAffected(result.value.affected);
     else props.onDone();
   };
@@ -65,10 +66,10 @@ function RetentionSettings(props: { readonly store: WorkspaceStore; readonly onD
             }}
           >
             <label style={{ display: 'block' }}>
-              Delete items in Trash after{' '}
+              {t('trash.retentionBefore')}{' '}
               <input
                 type="number"
-                aria-label="Retention days"
+                aria-label={t('trash.retentionDays')}
                 min="1"
                 max={MAX_RETENTION_DAYS}
                 disabled={manual()}
@@ -76,32 +77,32 @@ function RetentionSettings(props: { readonly store: WorkspaceStore; readonly onD
                 onInput={(e) => setDays(e.currentTarget.value)}
                 style={{ ...fieldStyle, width: '56px', padding: '2px 6px', font: tokens.font }}
               />{' '}
-              days
+              {t('trash.retentionAfter')}
             </label>
             <label style={{ display: 'flex', gap: '6px', 'align-items': 'center', margin: '8px 0' }}>
               <input
                 type="checkbox"
-                aria-label="Never delete automatically"
+                aria-label={t('trash.never')}
                 checked={manual()}
                 onChange={(e) => setManual(e.currentTarget.checked)}
               />
-              Never delete automatically
+              {t('trash.never')}
             </label>
             <button type="submit" style={actionButton}>
-              Save
+              {t('common.save')}
             </button>
           </form>
         </Match>
         <Match when={affected() !== null}>
           <p style={{ margin: '0 0 8px' }}>
-            {affected()} {affected() === 1 ? 'item' : 'items'} in Trash will be deleted permanently now. Continue?
+            {tn('trash.retentionConfirm', affected() ?? 0)}
           </p>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="button" style={{ ...actionButton, color: tokens.danger }} onClick={() => void apply(true)}>
-              Delete and save
+              {t('trash.deleteAndSave')}
             </button>
             <button type="button" style={actionButton} onClick={() => setAffected(null)}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </Match>
@@ -137,19 +138,25 @@ export function TrashToolbar(props: { readonly store: WorkspaceStore }): JSX.Ele
   const empty = async (): Promise<void> => {
     const result = await props.store.emptyTrash();
     if (result.ok) setOpen(null);
-    else setError(result.error.message);
+    else setError(errorText(result.error));
   };
 
   return (
     <div ref={row} style={{ ...rowStyle(0), cursor: 'default', color: tokens.muted }}>
-      <span style={{ flex: '1' }}>Trash</span>
-      <button type="button" aria-label="Trash settings" title="Trash settings" style={iconButton} onClick={() => toggle('settings')}>
+      <span style={{ flex: '1' }}>{t('sidebar.trash')}</span>
+      <button
+        type="button"
+        aria-label={t('trash.settings')}
+        title={t('trash.settings')}
+        style={iconButton}
+        onClick={() => toggle('settings')}
+      >
         <GearIcon />
       </button>
       <button
         type="button"
-        aria-label="Empty Trash"
-        title="Empty Trash"
+        aria-label={t('trash.empty')}
+        title={t('trash.empty')}
         disabled={count() === 0}
         style={{ ...iconButton, opacity: count() === 0 ? '0.4' : '1' }}
         onClick={() => toggle('empty')}
@@ -157,21 +164,21 @@ export function TrashToolbar(props: { readonly store: WorkspaceStore }): JSX.Ele
         <BinIcon />
       </button>
       <Show when={open() === 'settings'}>
-        <Popover label="Trash settings" at={anchor()} width={POPOVER_WIDTH} onClose={() => setOpen(null)} style={popoverStyle}>
+        <Popover label={t('trash.settings')} at={anchor()} width={POPOVER_WIDTH} onClose={() => setOpen(null)} style={popoverStyle}>
           <RetentionSettings store={props.store} onDone={() => setOpen(null)} />
         </Popover>
       </Show>
       <Show when={open() === 'empty'}>
-        <Popover label="Empty Trash" at={anchor()} width={POPOVER_WIDTH} onClose={() => setOpen(null)} style={popoverStyle}>
+        <Popover label={t('trash.empty')} at={anchor()} width={POPOVER_WIDTH} onClose={() => setOpen(null)} style={popoverStyle}>
           <p style={{ margin: '0 0 8px', color: tokens.text }}>
-            Permanently delete all {count()} {count() === 1 ? 'item' : 'items'} in Trash? This cannot be undone.
+            {tn('trash.emptyConfirm', count())}
           </p>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="button" style={{ ...actionButton, color: tokens.danger }} onClick={() => void empty()}>
-              Delete permanently
+              {t('menu.deletePermanently')}
             </button>
             <button type="button" style={actionButton} onClick={() => setOpen(null)}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
           <Show when={error()}>

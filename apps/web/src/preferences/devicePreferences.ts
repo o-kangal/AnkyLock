@@ -69,18 +69,20 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
  * in development. The runtime appends the vault id, so the address is a base without query or
  * fragment. Empty input means "no relay".
  */
-export function parseRelayUrl(input: string): { readonly url: string | null } | { readonly error: string } {
+export type RelayUrlProblem = 'invalid' | 'insecure' | 'extras';
+
+export function parseRelayUrl(input: string): { readonly url: string | null } | { readonly error: RelayUrlProblem } {
   const trimmed = input.trim();
   if (trimmed === '') return { url: null };
   let url: URL;
   try {
     url = new URL(trimmed);
   } catch {
-    return { error: 'Enter a relay address such as wss://relay.example.com/ws.' };
+    return { error: 'invalid' };
   }
   const local = url.protocol === 'ws:' && LOCAL_HOSTS.has(url.hostname);
-  if (url.protocol !== 'wss:' && !local) return { error: 'Use a secure relay address (wss://); ws:// works on this machine only.' };
-  if (url.username || url.password || url.search || url.hash) return { error: 'A relay address has no user name, query or fragment.' };
+  if (url.protocol !== 'wss:' && !local) return { error: 'insecure' };
+  if (url.username || url.password || url.search || url.hash) return { error: 'extras' };
   return { url: url.href.replace(/\/+$/, '') };
 }
 

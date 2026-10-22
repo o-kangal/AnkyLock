@@ -845,6 +845,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 12n: English and Turkish UI
+- **Status:** ✅ Completed (2026-10-23)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `AGENTS.md` (Primary Language Invariant), `apps/web/src/theme/colorScheme.ts`, `apps/web/src/preferences/devicePreferences.ts`, `packages/core/src/errors.ts`
 - **Target Files (Create/Modify):**
