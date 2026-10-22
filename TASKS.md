@@ -844,6 +844,29 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 
 ---
 
+### Task 12n: English and Turkish UI
+- **Type:** Frontend/UI
+- **Read-Only Context Files:** `AGENTS.md` (Primary Language Invariant), `apps/web/src/theme/colorScheme.ts`, `apps/web/src/preferences/devicePreferences.ts`, `packages/core/src/errors.ts`
+- **Target Files (Create/Modify):**
+  - `apps/web/src/i18n/` (dictionaries `en.ts`, `tr.ts`, the `t()` helper, locale preference)
+  - `apps/web/src/components/**/*.tsx`, `apps/desktop/src/*.tsx` (strings moved to the dictionaries)
+  - `apps/web/src/runtime/createRuntime.ts` (user-facing messages)
+  - `apps/web/src/components/VaultSettings.tsx` (language choice)
+  - `apps/web/tests/i18n.test.tsx`
+- **Step-by-Step Instructions:**
+  1. A small typed translation layer without a library: an English dictionary as the source of keys and a Turkish one of the same type, so a missing key fails the type check; `t(key, params)` reactive through a Solid signal. Parameters are always inserted as text, never as HTML.
+  2. Move every user-facing string of the web and desktop UI (labels, headings, notes, tooltips, placeholders, `aria-label`s, status texts, confirmations, the runtime's messages) into the dictionaries and translate them to Turkish. Packages keep their English messages; the UI maps error codes to translated text.
+  3. Language follows the system (`navigator.language`, Turkish for `tr*`, otherwise English) until the user chooses English or Türkçe in the settings; the choice is a per-device preference like the theme, and sets the document's `lang`.
+  4. Format times and dates with the chosen locale (`Intl`; "18:05" in Turkish instead of the fixed `en-US` "06:05 PM"), sort note, folder and category names with `Intl.Collator` for the locale, use locale-aware case changes (İ/ı), and handle counts with plural rules instead of "file(s)".
+  5. Turkish runs longer: check the status bar, buttons, tabs and dialogs in both languages (screenshots) so nothing overflows or shifts.
+  6. Tests run in English as before; add tests that both dictionaries have the same keys and no empty values, switching the language, the system default, locale time formats and Turkish sorting.
+- **Verification:**
+``` bash
+pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
+``` 
+
+---
+
 ### Task 13a: Drive-Only Sync (No Hosted Relay) and an Optional Own Relay
 - **Status:** ✅ Completed (2026-10-23)
 - **Type:** Backend/Service
@@ -943,9 +966,10 @@ pnpm -r run lint && pnpm -r run typecheck && pnpm -r run test && cargo clippy --
 - **Step-by-Step Instructions:**
   1. A fast static site in the app's look (logo with its expressions, Fredoka wordmark, Plus Jakarta Sans): what AnkyLock does, how it works (your passphrase, your key, encrypted before it leaves the device; Google Drive holds only ciphertext), what it promises and what it does not do. Buttons: "Go to AnkyLock" (`app.ankylock.com`), "Download" (`/download`) and GitHub; room for a donation button later.
   2. System, Light and Dark themes: follows the browser by default, the visitor can switch, and the choice is remembered on that device only.
-  3. `/download`: the Linux packages (AppImage, .deb, .rpm) linked from the latest GitHub Release with their SHA-256 checksums and install steps; Windows and macOS marked "coming later, or build from source".
-  4. `/privacy` and `/terms`, required for the Google OAuth consent screen: what Google data is used (sign-in identity, the hidden app folder in Drive) and that note content is never readable by AnkyLock.
-  5. No third-party scripts, trackers or CDNs; self-hosted fonts; accessible and readable on phones.
+  3. In English and Turkish like the app (12n), following the browser's language with a switch; the privacy and terms pages start in English, with a Turkish version after legal review.
+  4. `/download`: the Linux packages (AppImage, .deb, .rpm) linked from the latest GitHub Release with their SHA-256 checksums and install steps; Windows and macOS marked "coming later, or build from source".
+  5. `/privacy` and `/terms`, required for the Google OAuth consent screen: what Google data is used (sign-in identity, the hidden app folder in Drive) and that note content is never readable by AnkyLock.
+  6. No third-party scripts, trackers or CDNs; self-hosted fonts; accessible and readable on phones.
 - **Verification:**
 ``` bash
 pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
@@ -1055,8 +1079,9 @@ Task 1 (Workspace & Config)
                            │       └──► Task 12k (App Fonts)
                            │               └──► Task 12l (Rounded Corners)
                            │                       └──► Task 12m (Status Bar Buttons)
+                           │                               └──► Task 12n (English & Turkish UI)
                            └──► Task 13a (Drive-Only Sync, after 12c–12m)
-                                   └──► Task 13b (Security Review & Hardening)
+                                   └──► Task 13b (Security Review & Hardening, after 12n)
                                            └──► Task 13c (License & Documentation)
                                                    └──► Task 13d (CI Pipeline & Security Checks)
                                                            ├──► Task 13e (Landing Site)

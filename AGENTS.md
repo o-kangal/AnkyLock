@@ -7,7 +7,7 @@
 - **Editor Core:** CodeMirror 6 (DOM line-virtualized, headless state in workers).
 - **CRDT & Sync:** Yjs binary protocol (`Y.Doc`, `y-codemirror.next`). Hot sync via Rust Axum WebSocket Blind Relay; cold backup via Google Drive AppData (`drive.appdata`).
 - **Cryptography:** Zero-Knowledge AES-256-GCM via native Web Crypto API (`SubtleCrypto`). The server never processes or persists plaintext metadata or content.
-- **Primary Language Invariant:** All source code, interfaces, comments, database schemas, and UI strings must be written strictly in **English (en-US)**.
+- **Primary Language Invariant:** All source code, interfaces, comments, database schemas, commit messages and error messages in packages must be written strictly in **English (en-US)**. UI strings are written in English in the source and translated in locale dictionaries (English and Turkish, `apps/web/src/i18n/`); never hard-code a translated string in a component.
 
 ---
 
