@@ -189,7 +189,7 @@ All encrypted text fields and binary blobs must follow this deterministic binary
 Binary frames exchanged between clients and the Rust Axum Blind Relay must conform to:
 ``` json
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "packet_type": "CRDT_DELTA | HIERARCHY_MUTATION | TOMBSTONE | SYNC_REQUEST",
   "entity_id": "uuid-v4",
   "sender_device_id": "uuid-v4",
@@ -197,6 +197,8 @@ Binary frames exchanged between clients and the Rust Axum Blind Relay must confo
   "encrypted_envelope": "<base64(iv + ciphertext + tag)>"
 }
 ``` 
+
+`packet_type` and `entity_id` travel in the clear for routing, so they are bound to the payload as AES-GCM additional authenticated data: `ankylock.packet.v2\n<packet_type>\n<entity_id>`. A relay that changes either (to apply one note's update to another, or a purge to a different note) makes the envelope fail to open, and the packet is dropped. Version 1 frames, which had no such binding, are refused.
 
 The relay keeps no history. So that devices reconnecting at different times still converge, a device sends a `SYNC_REQUEST` on every (re)connect: its envelope seals the Yjs state vector of each note the device holds. Every other online device of the vault answers with what the requester lacks, as ordinary `CRDT_DELTA` packets (Yjs diffs) and one `HIERARCHY_MUTATION` carrying its hierarchy records and tombstones. Requests and answers are sent directly and never queued in `sync_outbox`.
 

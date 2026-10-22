@@ -67,7 +67,7 @@ If there's no Master Key yet (new device before passphrase or QR), keep receivin
 
 ```json
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "packet_type": "CRDT_DELTA | HIERARCHY_MUTATION | TOMBSTONE",
   "entity_id": "uuid-v4",
   "sender_device_id": "uuid-v4",
@@ -76,7 +76,7 @@ If there's no Master Key yet (new device before passphrase or QR), keep receivin
 }
 ```
 
-`entity_id`, `packet_type` and the timestamps are visible to the relay. That is an accepted metadata leak. Don't add anything else in the clear: no titles, no folder ids of parents, no sizes beyond what's inherent. Reject frames with an unknown `protocol_version` on the client, but don't crash.
+`entity_id`, `packet_type` and the timestamps are visible to the relay. That is an accepted metadata leak. **They are not trusted, though (Task 13b):** `packet_type` and `entity_id` are bound to the payload as AES-GCM additional data (`packetContext` in `protocol/frame.ts`), so every new packet type must seal with `packetContext(type, entityId)` and the receiver opens with the same; a relay that rewrites them only gets the packet dropped. Don't add anything else in the clear: no titles, no folder ids of parents, no sizes beyond what's inherent. Reject frames with an unknown `protocol_version` on the client, but don't crash.
 
 ## Relay (apps/relay, Rust Axum + Tokio)
 

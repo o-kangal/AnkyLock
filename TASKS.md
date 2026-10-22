@@ -894,6 +894,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 13b: Security Review and Hardening (Before Going Public)
+- **Status:** ✅ Completed (2026-10-23)
 - **Type:** Security
 - **Read-Only Context Files:** `AGENTS.md`, `SPEC.md`, `.claude/skills/crypto-audit/SKILL.md`, `apps/desktop/src-tauri/capabilities/`, `apps/desktop/src-tauri/tauri.conf.json`
 - **Target Files (Create/Modify):**
@@ -1025,6 +1026,7 @@ pnpm -r run build && cargo test --workspace && pnpm --filter @ankylock/desktop t
 - **Windows and macOS releases:** signed MSI/NSIS for Windows (system rounded corners, see 12l) and a signed, notarized DMG for macOS (transparent rounded window), both with the updater.
 - **Flatpak** on Flathub.
 - **Donation button** on the site and in the app.
+- **Change a vault's passphrase (re-key):** re-encrypt the vault under a new key, which also raises vaults created before Task 13b from 100,000 to 600,000 PBKDF2 iterations; other devices then open the vault again with the new passphrase.
 
 ---
 

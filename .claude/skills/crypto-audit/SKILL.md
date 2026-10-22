@@ -25,7 +25,7 @@ TASKS.md Task 2 types `EncryptedPayload` as three strings. Treat that as the bas
 
 1. **Use a fresh IV for every encrypt call:** `crypto.getRandomValues(new Uint8Array(12))` inside the encrypt function itself. Never take the IV as a parameter from callers, and never use a counter, a constant, `Math.random`, or an IV derived from the note id.
 2. **Use Web Crypto only.** No `node:crypto`, no JS AES libraries, no `crypto-js`. In `packages/*` there are no Node built-ins at all, and tests rely on the global `crypto` (Node 20+ provides it).
-3. **Key derivation:** PBKDF2-SHA-256 with at least 100,000 iterations. Use a random per-vault salt of 16 bytes or more, stored next to the recovery blob, never a fixed salt. Derive with `deriveKey` into an AES-GCM 256 `CryptoKey` with `extractable: false`, unless a wrap/export flow explicitly needs it.
+3. **Key derivation:** PBKDF2-SHA-256: new vaults use 600,000 iterations (OWASP), vaults from before Task 13b still open with 100,000, and headers above 10,000,000 are refused (denial of service). Use a random per-vault salt of 16 bytes or more, stored next to the recovery blob, never a fixed salt. Derive with `deriveKey` into an AES-GCM 256 `CryptoKey` with `extractable: false`, unless a wrap/export flow explicitly needs it.
 4. **Keep the MEK separate from OAuth.** The Master Encryption Key comes from the user passphrase or the device-to-device QR handshake. Never derive it from Google tokens, account ids or emails.
 5. **MEK storage:** keep it in memory as a non-extractable `CryptoKey`. On desktop, persist it only through the OS keychain (Tauri command). On web, persisting it at all is a product decision. If it's persisted, store the non-extractable `CryptoKey` object in IndexedDB, never raw bytes. Never use `localStorage` or `sessionStorage`, and never plaintext SQLite.
 6. **Encrypt before the data reaches any queue.** Plaintext titles, bodies, folder names and category names are encrypted before they reach `sync_outbox`, `note_contents`, a WebSocket send, a Drive upload or a log statement. A sync packet built from an unencrypted Yjs update is a leak, even if it gets encrypted "later".
@@ -60,7 +60,8 @@ Audit target: `$ARGUMENTS`. If it's empty, audit the current changes. This direc
 | 2 | No plaintext in sync_outbox / WS frames / Drive / logs | ... |
 | 3 | MEK never in localStorage/sessionStorage/plaintext SQLite | ... |
 | 4 | MEK not derived from OAuth material | ... |
-| 5 | KDF: PBKDF2-SHA-256 ≥100k iters, random salt | ... |
+| 5 | KDF: PBKDF2-SHA-256, 600k iters for new vaults (≥100k to open, ≤10M), random salt | ... |
+| 10 | Routing fields the relay sees (`packet_type`, `entity_id`) bound as AES-GCM additional data | ... |
 | 6 | Layout iv‖ct‖tag via shared pack/unpack | ... |
 | 7 | Crypto off main thread | ... |
 | 8 | Decrypt failure handled as hard error | ... |
