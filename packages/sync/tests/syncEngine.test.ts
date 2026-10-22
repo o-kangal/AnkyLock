@@ -67,7 +67,7 @@ interface Device {
   online: boolean;
 }
 
-function device(relay: FakeRelay, sealer: Sealer, id: string, online = true): Device {
+function device(relay: FakeRelay, sealer: Sealer, id: string, online = true, errors?: unknown[]): Device {
   const storage = new WebIndexedDbAdapter(new IDBFactory());
   const docs = new DocManager();
   const changed: NoteId[] = [];
@@ -82,7 +82,8 @@ function device(relay: FakeRelay, sealer: Sealer, id: string, online = true): De
     onRemoteChange: (ids) => changed.push(...ids),
     onStatusChange: () => undefined,
     onError: (e) => {
-      throw e;
+      if (!errors) throw e;
+      errors.push(e);
     },
     createSocket: () => new FakeSocket(relay, () => d.online),
   });
@@ -104,6 +105,61 @@ async function until(check: () => boolean | Promise<boolean>, label: string): Pr
 }
 
 const NOTE = 'n-1' as NoteId;
+
+/** A hostile relay: it cannot read payloads, but rewrites the visible entity id of every frame. */
+class RetargetingRelay extends FakeRelay {
+  constructor(readonly target: string) {
+    super();
+  }
+  override forward(from: FakeSocket, data: Uint8Array): void {
+    const frame = JSON.parse(new TextDecoder().decode(data)) as Record<string, unknown>;
+    super.forward(from, new TextEncoder().encode(JSON.stringify({ ...frame, entity_id: this.target })));
+  }
+}
+
+describe('a hostile relay', () => {
+  it('cannot turn a purge into the purge of another note', async () => {
+    const relay = new RetargetingRelay(NOTE);
+    const s = await sealer();
+    const errors: unknown[] = [];
+    // A rejects B's retargeted packets too.
+    const a = device(relay, s, 'desktop-a', true, []);
+    const b = device(relay, s, 'desktop-b', true, errors);
+    await b.storage.createNote(NOTE);
+    a.engine.start();
+    b.engine.start();
+    await until(() => relay.sockets.size === 2, 'both connected');
+
+    await a.engine.submitTombstone('n-other' as NoteId, 'note');
+    await until(() => errors.length > 0, 'rejected on B');
+    expect(errors[0]).toMatchObject({ code: 'ERR_DECRYPT_FAILED' });
+    expect(await b.storage.getNote(NOTE)).not.toBeNull();
+    expect(b.changed).toEqual([]);
+    await Promise.all([a.engine.stop(), b.engine.stop()]);
+  });
+
+  it("cannot move one note's edits into another note", async () => {
+    const relay = new RetargetingRelay(NOTE);
+    const s = await sealer();
+    const errors: unknown[] = [];
+    // A rejects B's retargeted packets too.
+    const a = device(relay, s, 'desktop-a', true, []);
+    const b = device(relay, s, 'desktop-b', true, errors);
+    const target = b.docs.open(NOTE);
+    target.getText(TEXT_FIELD).insert(0, 'mine');
+    b.engine.watch(NOTE, target);
+    a.engine.start();
+    b.engine.start();
+    await until(() => relay.sockets.size === 2, 'both connected');
+
+    const source = a.docs.open('n-other' as NoteId);
+    a.engine.watch('n-other' as NoteId, source);
+    source.getText(TEXT_FIELD).insert(0, 'not yours');
+    await until(() => errors.length > 0, 'rejected on B');
+    expect(target.getText(TEXT_FIELD).toString()).toBe('mine');
+    await Promise.all([a.engine.stop(), b.engine.stop()]);
+  });
+});
 
 describe('createSyncEngine', () => {
   it('streams edits into the same note open on another device', async () => {

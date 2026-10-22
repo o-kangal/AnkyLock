@@ -17,6 +17,10 @@ describe('export file names', () => {
     expect(safeName('lpt1.txt')).toBe('_lpt1.txt');
     expect(safeName('   ')).toBe('Untitled');
     expect(safeName('..')).toBe('Untitled');
+    // No path can leave its directory inside the zip (zip slip).
+    expect(safeName('../../etc/passwd')).toBe('.._.._etc_passwd');
+    expect(safeName('..\\..\\windows')).toBe('.._.._windows');
+    expect(safeName('.')).toBe('Untitled');
     expect([...safeName('x'.repeat(300))]).toHaveLength(100);
     expect(safeName('Plans\u0000\u0007')).toBe('Plans__');
   });

@@ -22,7 +22,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:8787 wss: https://www.googleapis.com"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost wss: https://www.googleapis.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost wss: https://www.googleapis.com ws://127.0.0.1:8787 ws://localhost:8787; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
     }
   },
   "bundle": {

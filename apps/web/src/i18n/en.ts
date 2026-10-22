@@ -218,6 +218,8 @@ export const en = {
   'unlock.noBackupYet': 'no backup yet',
   'unlock.openVault': 'Open vault',
   'unlock.passphrase': 'Passphrase',
+  'unlock.passphraseHint': 'At least {min} characters. A few words are easy to remember and hard to guess, e.g. “blue cat drinks tea”. You can use the same passphrase for several vaults.',
+  'unlock.passphraseWeak': 'This passphrase is easy to guess. Add a few unrelated words.',
   'unlock.passphraseMismatch': 'The passphrases do not match.',
   'unlock.passphraseTooShort': 'Use at least {min} characters.',
   'unlock.remoteDeleteIntro': '{vault}. Its header and every device’s backup are deleted from Google Drive, without its passphrase. Other devices with this vault stop syncing it and can keep their copy locally. This cannot be undone.',

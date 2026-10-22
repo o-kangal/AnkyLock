@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Bytes, Ciphertext } from '@ankylock/core';
 import {
   CryptoError,
+  MAX_PBKDF2_ITERATIONS,
+  MIN_PBKDF2_ITERATIONS,
   PBKDF2_ITERATIONS,
   base64ToBytes,
   bytesToBase64,
@@ -174,6 +176,20 @@ describe('deriveMasterKey', () => {
     await expectCryptoError(deriveMasterKey('pw', { ...params, iterations: 1_000 }), 'ERR_WEAK_KDF_PARAMS');
     await expectCryptoError(deriveMasterKey('pw', { ...params, salt: new Uint8Array(8) }), 'ERR_WEAK_KDF_PARAMS');
     await expectCryptoError(deriveMasterKey('', params), 'ERR_EMPTY_PASSPHRASE');
+  });
+
+  it('creates vaults with 600,000 iterations and still opens older ones with 100,000', async () => {
+    expect(PBKDF2_ITERATIONS).toBe(600_000);
+    const older = { ...generateKdfParams(), iterations: MIN_PBKDF2_ITERATIONS };
+    const key = await deriveMasterKey('pw', older);
+    expect(await decryptText(key, await encryptText(await deriveMasterKey('pw', older), 'x'))).toBe('x');
+    await expectCryptoError(deriveMasterKey('pw', { ...older, iterations: MIN_PBKDF2_ITERATIONS - 1 }), 'ERR_WEAK_KDF_PARAMS');
+  });
+
+  it('refuses a header whose iteration count would make unlocking hang', async () => {
+    const params = generateKdfParams();
+    await expectCryptoError(deriveMasterKey('pw', { ...params, iterations: MAX_PBKDF2_ITERATIONS + 1 }), 'ERR_MALFORMED_PAYLOAD');
+    await expectCryptoError(deriveMasterKey('pw', { ...params, iterations: 1e300 }), 'ERR_MALFORMED_PAYLOAD');
   });
 });
 

@@ -49,7 +49,9 @@ describe('frame encoding (SPEC §5.2)', () => {
   it('rejects unknown versions and malformed frames without throwing', () => {
     const encode = (o: unknown): Bytes => new TextEncoder().encode(JSON.stringify(o));
     const valid = JSON.parse(new TextDecoder().decode(encodeFrame(packet('n1', 1)))) as Record<string, unknown>;
-    expect(decodeFrame(encode({ ...valid, protocol_version: 2 })).ok).toBe(false);
+    expect(decodeFrame(encode({ ...valid, protocol_version: 3 })).ok).toBe(false);
+    // Version 1 payloads were not bound to their packet type and id.
+    expect(decodeFrame(encode({ ...valid, protocol_version: 1 })).ok).toBe(false);
     expect(decodeFrame(encode({ ...valid, packet_type: 'CHAT' })).ok).toBe(false);
     expect(decodeFrame(encode({ ...valid, encrypted_envelope: 'AAAA' })).ok).toBe(false);
     expect(decodeFrame(encode({ ...valid, encrypted_envelope: '%%%' })).ok).toBe(false);

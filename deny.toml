@@ -1,0 +1,49 @@
+# cargo-deny: run `cargo deny check` (CI runs it on every push, Task 13d).
+[graph]
+all-features = false
+
+[advisories]
+# Unmaintained or unsound crates that only reach us through Tauri's Linux stack (GTK 3 bindings,
+# D-Bus for the keychain) and cannot be replaced without a Tauri upgrade. None of the flagged APIs
+# are called by AnkyLock; reviewed in docs/security/review-2026.md.
+ignore = [
+  # proc-macro-error: a build-time macro helper of the GTK 3 bindings (glib-macros, gtk3-macros).
+  { id = "RUSTSEC-2024-0370", reason = "build-time only, via Tauri's GTK 3 bindings" },
+  # zbus_names, zvariant, zvariant_derive: D-Bus types used by tauri-plugin-opener and the
+  # keychain (Secret Service) on Linux; no maintained replacement in the Tauri 2 stack yet.
+  { id = "RUSTSEC-2026-0370", reason = "D-Bus types of tauri-plugin-opener and keyring on Linux" },
+  { id = "RUSTSEC-2026-0371", reason = "D-Bus names of tauri-plugin-opener and keyring on Linux" },
+  { id = "RUSTSEC-2026-0372", reason = "D-Bus derive macros of tauri-plugin-opener and keyring on Linux" },
+  # glib 0.18 VariantStrIter is unsound; AnkyLock never uses GVariant string iterators.
+  { id = "RUSTSEC-2024-0429", reason = "unused glib API, via Tauri's GTK 3 bindings" },
+]
+
+[licenses]
+# AnkyLock is AGPL-3.0-or-later: dependencies must be under licenses compatible with it.
+# Permissive licenses, plus MPL-2.0 (file-level copyleft, GPL-compatible through its Secondary
+# License clause). Anything else needs a review before it is added here.
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+]
+confidence-threshold = 0.9
+
+# AnkyLock's own crates are not published; their license is set with the project's (Task 13c).
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

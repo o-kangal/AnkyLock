@@ -1,0 +1,7 @@
+# gitleaks: run `gitleaks git` over the whole history (CI runs it on every push, Task 13d).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test-only RSA keys of the relay's auth tests: only the test JWKS trusts them; the relay verifies production tokens against Google's keys."
+paths = ['''apps/relay/tests/fixtures/(test|other)_rsa_private\.pem$''']

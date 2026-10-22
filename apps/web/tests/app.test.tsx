@@ -121,7 +121,7 @@ describe('vault screens', () => {
     type('[aria-label="Passphrase"]', 'short');
     type('[aria-label="Confirm passphrase"]', 'short');
     submit();
-    await waitFor(() => text().includes('at least 8 characters'), 'length error');
+    await waitFor(() => text().includes('Use at least 12 characters.'), 'length error');
     type('[aria-label="Passphrase"]', 'long enough passphrase');
     type('[aria-label="Confirm passphrase"]', 'different passphrase');
     submit();

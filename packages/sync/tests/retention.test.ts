@@ -11,6 +11,7 @@ import {
   startRetentionWorker,
   type DeviceId,
   type PurgedEntity,
+  packetContext,
 } from '../src/index.js';
 
 const T0 = 1_776_100_000_000;
@@ -81,7 +82,7 @@ describe('purgeExpired (BR-LIFE-04)', () => {
 
     const [entry] = await storage.listOutbox(10);
     expect(entry).toMatchObject({ entityId: 'gone', entityType: 'tombstone' });
-    const payload = await sealer.open(entry?.encryptedPayload as NonNullable<typeof entry>['encryptedPayload']);
+    const payload = await sealer.open(entry?.encryptedPayload as NonNullable<typeof entry>['encryptedPayload'], packetContext('TOMBSTONE', 'gone'));
     expect(JSON.parse(new TextDecoder().decode(payload))).toEqual({ entityType: 'note' });
   });
 

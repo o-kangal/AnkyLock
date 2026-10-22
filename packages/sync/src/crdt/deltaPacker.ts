@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import { SYNC_DEBOUNCE_MS, type EpochMs, type NoteId } from '@ankylock/core';
 import type { Sealer } from '@ankylock/crypto';
-import type { DeviceId, SyncPacket } from '../protocol/frame.js';
+import { packetContext, type DeviceId, type SyncPacket } from '../protocol/frame.js';
 import { REMOTE_ORIGIN } from './docManager.js';
 
 export interface DeltaPackerOptions {
@@ -47,7 +47,7 @@ export function watchDoc(noteId: NoteId, doc: Y.Doc, options: DeltaPackerOptions
           entityId: noteId,
           senderDeviceId: options.deviceId,
           timestampMs: now(),
-          payload: await options.sealer.seal(merged),
+          payload: await options.sealer.seal(merged, packetContext('CRDT_DELTA', noteId)),
         });
       } catch (error) {
         options.onError(error);

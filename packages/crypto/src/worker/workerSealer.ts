@@ -48,11 +48,11 @@ export function createWorkerSealer(port: MessagePortLike): WorkerSealer {
     async setKey(key) {
       await request({ op: 'setKey', key });
     },
-    async seal(plaintext) {
-      return (await requireData({ op: 'seal', data: plaintext })) as SealedBytes;
+    async seal(plaintext, context) {
+      return (await requireData({ op: 'seal', data: plaintext, ...(context === undefined ? {} : { context }) })) as SealedBytes;
     },
-    open(sealed) {
-      return requireData({ op: 'open', data: sealed });
+    open(sealed, context) {
+      return requireData({ op: 'open', data: sealed, ...(context === undefined ? {} : { context }) });
     },
     dispose() {
       port.removeEventListener('message', listener);

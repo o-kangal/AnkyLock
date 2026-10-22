@@ -5,7 +5,7 @@ import type { IStorageEngine, Tombstone } from '@ankylock/storage';
 import type { DocManager } from '../crdt/docManager.js';
 import { createHierarchyPacket } from '../hierarchy/hierarchySync.js';
 import { loadNoteState } from '../persistence/notePersistence.js';
-import type { DeviceId, SyncPacket } from '../protocol/frame.js';
+import { packetContext, type DeviceId, type SyncPacket } from '../protocol/frame.js';
 
 /**
  * Sync handshake (SPEC §5.2). The relay keeps no history, so packets sent while a device was
@@ -80,7 +80,7 @@ export async function createSyncRequest(
     entityId: deviceId as unknown as NoteId,
     senderDeviceId: deviceId,
     timestampMs: now,
-    payload: await sealer.seal(encoder.encode(JSON.stringify({ stateVectors: body, tombstones }))),
+    payload: await sealer.seal(encoder.encode(JSON.stringify({ stateVectors: body, tombstones })), packetContext('SYNC_REQUEST', deviceId)),
   };
 }
 
@@ -135,7 +135,7 @@ export async function answerSyncRequest(deps: AnswerDeps, theirs: StateVectors):
       entityId: note.id,
       senderDeviceId: deviceId,
       timestampMs: deps.now(),
-      payload: await sealer.seal(new Uint8Array(diff)),
+      payload: await sealer.seal(new Uint8Array(diff), packetContext('CRDT_DELTA', note.id)),
     });
   }
   const [categories, live, trashedFolders, tombstones] = await Promise.all([

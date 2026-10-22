@@ -29,10 +29,15 @@ impl Authenticator for StaticAuthenticator {
 }
 
 async fn start(max_frame_bytes: usize) -> (SocketAddr, Arc<RelayState>) {
+    start_with(max_frame_bytes, 8, Duration::from_secs(60)).await
+}
+
+async fn start_with(max_frame_bytes: usize, max_per_account: usize, idle_timeout: Duration) -> (SocketAddr, Arc<RelayState>) {
     let state = Arc::new(RelayState {
-        hub: Hub::new(64),
+        hub: Hub::new(64, max_per_account),
         authenticator: Box::new(StaticAuthenticator),
         max_frame_bytes,
+        idle_timeout,
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -176,4 +181,39 @@ async fn serves_a_health_check() {
     tokio::io::AsyncReadExt::read_to_string(&mut stream, &mut body).await.unwrap();
     assert!(body.starts_with("HTTP/1.1 200"));
     assert!(body.ends_with("ok"));
+}
+
+/// The close code the server sends next, waiting at most `wait`.
+async fn close_code(client: &mut Client, wait: Duration) -> Option<u16> {
+    match tokio::time::timeout(wait, client.next()).await {
+        Ok(Some(Ok(Message::Close(Some(frame))))) => Some(frame.code.into()),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn refuses_connections_beyond_the_per_account_limit() {
+    let (addr, state) = start_with(1024, 2, Duration::from_secs(60)).await;
+    let mut a1 = client(addr, "alice").await;
+    let _a2 = client(addr, "alice").await;
+    let mut a3 = client(addr, "alice").await;
+    assert_eq!(close_code(&mut a3, Duration::from_secs(2)).await, Some(1008));
+    // Another account is not affected; the two open connections still relay.
+    let _b1 = client(addr, "bob").await;
+    a1.send(Message::Text("ping".into())).await.unwrap();
+    assert_eq!(next(&mut a1).await, Some(Message::Text("pong".into())));
+    assert_eq!(state.hub.channel_count(), 2);
+}
+
+#[tokio::test]
+async fn closes_connections_that_stay_silent() {
+    let (addr, _) = start_with(1024, 8, Duration::from_millis(300)).await;
+    let mut talkative = client(addr, "alice").await;
+    let mut silent = client(addr, "alice").await;
+    for _ in 0..3 {
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        talkative.send(Message::Text("ping".into())).await.unwrap();
+        assert_eq!(next(&mut talkative).await, Some(Message::Text("pong".into())));
+    }
+    assert_eq!(close_code(&mut silent, Duration::from_secs(2)).await, Some(4002));
 }

@@ -14,6 +14,7 @@ import {
   type DeviceId,
   type PacketTransport,
   type SyncPacket,
+  packetContext,
 } from '../src/index.js';
 
 const NOTE = '3f8b2a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b' as NoteId;
@@ -86,7 +87,7 @@ describe('watchDoc (delta packer)', () => {
     expect(new TextDecoder().decode(packet.payload)).not.toContain('secret');
 
     const replica = new Y.Doc();
-    Y.applyUpdate(replica, await sealer.open(packet.payload));
+    Y.applyUpdate(replica, await sealer.open(packet.payload, packetContext('CRDT_DELTA', packet.entityId)));
     expect(textOf(replica)).toBe('const secret = 42;');
   });
 
@@ -185,9 +186,9 @@ class Device implements PacketTransport {
   receive(frame: Bytes): void {
     const decoded = decodeFrame(frame);
     if (!decoded.ok || decoded.packet.senderDeviceId === this.id) return;
-    const { entityId, payload } = decoded.packet;
+    const { entityId, payload, packetType } = decoded.packet;
     this.#received.push(
-      this.sealer.open(payload).then((update) => {
+      this.sealer.open(payload, packetContext(packetType, entityId)).then((update) => {
         this.docs.applyRemote(entityId as NoteId, update);
       }),
     );

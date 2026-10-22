@@ -22,8 +22,8 @@ export function serveCrypto(port: MessagePortLike): () => void {
       let data: Bytes | null = null;
       try {
         if (request.op === 'setKey') key = request.key;
-        else if (request.op === 'seal') data = await sealer.seal(request.data);
-        else data = await sealer.open(request.data);
+        else if (request.op === 'seal') data = await sealer.seal(request.data, request.context);
+        else data = await sealer.open(request.data, request.context);
         response = { id: request.id, ok: true, data };
       } catch (error) {
         const known = error instanceof CryptoError ? error : new CryptoError('ERR_WORKER_FAILURE', 'Crypto worker failed.');

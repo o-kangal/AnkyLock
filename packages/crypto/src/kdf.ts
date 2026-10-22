@@ -1,7 +1,15 @@
 import type { Bytes } from '@ankylock/core';
 import { CryptoError } from './errors.js';
 
-export const PBKDF2_ITERATIONS = 100_000;
+/** New vaults: OWASP's current guidance for PBKDF2-HMAC-SHA256. */
+export const PBKDF2_ITERATIONS = 600_000;
+/** The weakest vault that still opens (vaults created before the stronger default). */
+export const MIN_PBKDF2_ITERATIONS = 100_000;
+/**
+ * The strongest accepted: a vault header from Drive with a huge count would make unlocking hang
+ * (denial of service), so such a header is refused rather than run.
+ */
+export const MAX_PBKDF2_ITERATIONS = 10_000_000;
 export const SALT_LENGTH = 16;
 
 /** Stored next to the vault so iterations can be raised later without breaking existing vaults. */
@@ -24,8 +32,11 @@ export function generateKdfParams(): KdfParams {
  * Never pass OAuth tokens or account identifiers here (BR-SEC-03).
  */
 export async function deriveMasterKey(passphrase: string, params: KdfParams): Promise<CryptoKey> {
-  if (params.iterations < PBKDF2_ITERATIONS || params.salt.length < SALT_LENGTH) {
+  if (params.iterations < MIN_PBKDF2_ITERATIONS || params.salt.length < SALT_LENGTH) {
     throw new CryptoError('ERR_WEAK_KDF_PARAMS', 'KDF parameters are below the minimum strength.');
+  }
+  if (!Number.isSafeInteger(params.iterations) || params.iterations > MAX_PBKDF2_ITERATIONS) {
+    throw new CryptoError('ERR_MALFORMED_PAYLOAD', 'KDF parameters are out of range.');
   }
   if (passphrase.length === 0) {
     throw new CryptoError('ERR_EMPTY_PASSPHRASE', 'Passphrase must not be empty.');

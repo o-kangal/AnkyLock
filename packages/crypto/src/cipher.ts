@@ -7,27 +7,33 @@ const BASE64_CHUNK = 0x8000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 
+/**
+ * AES-GCM parameters. `context` is authenticated but not encrypted (GCM additional data): it binds
+ * a ciphertext to where it belongs, so it cannot be moved elsewhere unnoticed.
+ */
+const gcm = (iv: Bytes, context: Bytes | undefined): AesGcmParams =>
+  context === undefined ? { name: 'AES-GCM', iv, tagLength: TAG_BITS } : { name: 'AES-GCM', iv, tagLength: TAG_BITS, additionalData: context };
+
 /** Encrypts with AES-256-GCM under a fresh random 12-byte IV (BR-SEC-02). */
-export async function encryptPayload(key: CryptoKey, plaintext: Bytes): Promise<EncryptedPayload> {
+export async function encryptPayload(key: CryptoKey, plaintext: Bytes, context?: Bytes): Promise<EncryptedPayload> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   // Web Crypto returns `ciphertext ‖ tag`.
-  const sealed = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: TAG_BITS }, key, plaintext),
-  );
+  const sealed = new Uint8Array(await crypto.subtle.encrypt(gcm(iv, context), key, plaintext));
   const split = sealed.length - TAG_LENGTH;
   return { iv, ciphertext: sealed.slice(0, split), tag: sealed.slice(split) };
 }
 
-/** Throws `ERR_DECRYPT_FAILED` on a wrong key or tampered data; never returns partial plaintext. */
-export async function decryptPayload(key: CryptoKey, payload: EncryptedPayload): Promise<Bytes> {
+/**
+ * Throws `ERR_DECRYPT_FAILED` on a wrong key, tampered data or a different `context`; never
+ * returns partial plaintext.
+ */
+export async function decryptPayload(key: CryptoKey, payload: EncryptedPayload, context?: Bytes): Promise<Bytes> {
   assertLengths(payload);
   const sealed = new Uint8Array(payload.ciphertext.length + TAG_LENGTH);
   sealed.set(payload.ciphertext);
   sealed.set(payload.tag, payload.ciphertext.length);
   try {
-    return new Uint8Array(
-      await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payload.iv, tagLength: TAG_BITS }, key, sealed),
-    );
+    return new Uint8Array(await crypto.subtle.decrypt(gcm(payload.iv, context), key, sealed));
   } catch {
     throw new CryptoError('ERR_DECRYPT_FAILED', 'Decryption failed: wrong key or tampered data.');
   }
@@ -76,12 +82,13 @@ export function base64ToBytes(base64: string): Bytes {
 }
 
 /** Encrypts to the packed SPEC §5.1 layout; the only producer of `SealedBytes`. */
-export async function seal(key: CryptoKey, plaintext: Bytes): Promise<SealedBytes> {
-  return pack(await encryptPayload(key, plaintext)) as SealedBytes;
+export async function seal(key: CryptoKey, plaintext: Bytes, context?: Bytes): Promise<SealedBytes> {
+  return pack(await encryptPayload(key, plaintext, context)) as SealedBytes;
 }
 
-export async function open(key: CryptoKey, sealed: SealedBytes): Promise<Bytes> {
-  return decryptPayload(key, unpack(sealed));
+/** Opens what `seal` produced with the same `context`. */
+export async function open(key: CryptoKey, sealed: SealedBytes, context?: Bytes): Promise<Bytes> {
+  return decryptPayload(key, unpack(sealed), context);
 }
 
 /** Encrypts a string for a `*_ciphertext` TEXT column. */

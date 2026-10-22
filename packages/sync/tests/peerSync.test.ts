@@ -15,6 +15,7 @@ import {
   readSyncRequest,
   saveNoteState,
   type DeviceId,
+  packetContext,
 } from '../src/index.js';
 
 const now = (): EpochMs => 1_776_100_000_000 as EpochMs;
@@ -26,9 +27,9 @@ async function countingSealer(): Promise<Sealer & { opened: number }> {
   const sealer = {
     opened: 0,
     seal: inner.seal,
-    open: (data: Parameters<Sealer['open']>[0]) => {
+    open: (data: Parameters<Sealer['open']>[0], context?: Parameters<Sealer['open']>[1]) => {
       sealer.opened++;
-      return inner.open(data);
+      return inner.open(data, context);
     },
   };
   return sealer;
@@ -75,7 +76,7 @@ describe('sync handshake', () => {
       ['ahead' as NoteId, Y.encodeStateVector(theirAhead)],
     ]);
     const request = await createSyncRequest(s, 'them' as DeviceId, theirs, now());
-    const received = readSyncRequest(await s.open(request.payload)).stateVectors;
+    const received = readSyncRequest(await s.open(request.payload, packetContext('SYNC_REQUEST', request.entityId))).stateVectors;
     expect([...received.keys()].sort()).toEqual(['ahead', 'same']);
 
     s.opened = 0;
@@ -87,10 +88,10 @@ describe('sync handshake', () => {
       ['CRDT_DELTA', 'ahead'],
       ['CRDT_DELTA', 'onlyHere'],
     ]);
-    const diff = await s.open(packets[1]!.payload);
+    const diff = await s.open(packets[1]!.payload, packetContext('CRDT_DELTA', packets[1]!.entityId));
     Y.applyUpdate(theirAhead, diff);
     expect(theirAhead.getText(TEXT_FIELD).toString()).toBe('old + new');
-    const records = readHierarchyPayload(await s.open(packets[0]!.payload));
+    const records = readHierarchyPayload(await s.open(packets[0]!.payload, packetContext('HIERARCHY_MUTATION', packets[0]!.entityId)));
     expect(records.notes?.map((n) => n.id).sort()).toEqual(['ahead', 'onlyHere', 'same']);
   });
 

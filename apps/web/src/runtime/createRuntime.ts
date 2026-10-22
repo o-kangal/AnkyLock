@@ -57,6 +57,7 @@ import { planExport, type ExportScope } from '../export/exportPlan.js';
 import { createWorkspaceStore, type PurgedItem, type WorkspaceStore } from '../stores/workspaceStore.js';
 import { errorText, t, tn, type MessageKey } from '../i18n/index.js';
 import { parseRelayUrl, type RelayPreference, type RelayUrlProblem } from '../preferences/devicePreferences.js';
+import { MIN_PASSPHRASE_LENGTH } from '../components/passphrase.js';
 import { DEFAULT_LOGO_FACE, nextLogoFace, type LogoFace } from './logoFace.js';
 
 export type VaultStatus = 'loading' | 'uninitialized' | 'locked' | 'unlocked';
@@ -571,6 +572,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     async createVault(name, passphrase) {
       const trimmed = name.trim();
       if (trimmed === '') return t('vault.nameRequired');
+      // Also enforced here, not only in the form: the passphrase is the vault's only protection.
+      if ([...passphrase].length < MIN_PASSPHRASE_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_PASSPHRASE_LENGTH });
       if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
       try {
         const id = crypto.randomUUID() as VaultId;

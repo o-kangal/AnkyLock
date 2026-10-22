@@ -1,7 +1,8 @@
 import type { Brand, Bytes, EpochMs, SealedBytes, SyncOutboxEntry, SyncPacketType } from '@ankylock/core';
 import { base64ToBytes, bytesToBase64, type Sealer } from '@ankylock/crypto';
 
-export const PROTOCOL_VERSION = 1;
+/** 2: payloads are bound to their packet type and entity id (`packetContext`); 1 is refused. */
+export const PROTOCOL_VERSION = 2;
 
 /** Minimum sealed envelope: 12-byte IV + 16-byte tag. */
 const MIN_ENVELOPE_LENGTH = 28;
@@ -27,6 +28,15 @@ const PACKET_TYPES: readonly string[] = ['CRDT_DELTA', 'HIERARCHY_MUTATION', 'TO
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * The authenticated context of a packet's payload: its type and entity id, which travel in the
+ * clear for routing. A relay that changed either (sent a note's update or a purge under another
+ * id) makes the payload fail to open instead of applying it to the wrong entity.
+ */
+export function packetContext(packetType: PacketType, entityId: string): Bytes {
+  return encoder.encode(`ankylock.packet.v${PROTOCOL_VERSION}\n${packetType}\n${entityId}`) as Bytes;
+}
 
 /** Serializes the SPEC §5.2 envelope as UTF-8 JSON for a binary WebSocket frame. */
 export function encodeFrame(packet: SyncPacket): Bytes {
@@ -108,6 +118,6 @@ export async function createTombstonePacket(
     entityId,
     senderDeviceId: deviceId,
     timestampMs: now,
-    payload: await sealer.seal(encoder.encode(JSON.stringify({ entityType }))),
+    payload: await sealer.seal(encoder.encode(JSON.stringify({ entityType })), packetContext('TOMBSTONE', entityId)),
   };
 }

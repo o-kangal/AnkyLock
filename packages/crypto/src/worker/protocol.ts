@@ -11,8 +11,8 @@ export interface MessagePortLike {
 
 export type CryptoRequest =
   | { readonly id: number; readonly op: 'setKey'; readonly key: CryptoKey | null }
-  | { readonly id: number; readonly op: 'seal'; readonly data: Bytes }
-  | { readonly id: number; readonly op: 'open'; readonly data: SealedBytes };
+  | { readonly id: number; readonly op: 'seal'; readonly data: Bytes; readonly context?: Bytes }
+  | { readonly id: number; readonly op: 'open'; readonly data: SealedBytes; readonly context?: Bytes };
 
 export type CryptoResponse =
   | { readonly id: number; readonly ok: true; readonly data: Bytes | null }
@@ -30,7 +30,7 @@ export function isCryptoRequest(value: unknown): value is CryptoRequest {
       return value['key'] === null || value['key'] instanceof CryptoKey;
     case 'seal':
     case 'open':
-      return isBytes(value['data']);
+      return isBytes(value['data']) && (value['context'] === undefined || isBytes(value['context']));
     default:
       return false;
   }

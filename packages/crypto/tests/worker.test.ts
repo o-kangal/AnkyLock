@@ -26,6 +26,16 @@ describe('seal / open', () => {
     expect(sealed.length).toBe(12 + 18 + 16);
     expect(decode(await open(key, sealed))).toBe('const secret = 42;');
   });
+
+  it('opens only with the context it was sealed for', async () => {
+    const key = await newKey();
+    const sealed = await seal(key, encode('purge'), encode('TOMBSTONE\nnote-a'));
+    expect(decode(await open(key, sealed, encode('TOMBSTONE\nnote-a')))).toBe('purge');
+    await expect(open(key, sealed, encode('TOMBSTONE\nnote-b'))).rejects.toMatchObject({ code: 'ERR_DECRYPT_FAILED' });
+    await expect(open(key, sealed)).rejects.toMatchObject({ code: 'ERR_DECRYPT_FAILED' });
+    // And a payload sealed without one does not open with one.
+    await expect(open(key, await seal(key, encode('x')), encode('ctx'))).rejects.toMatchObject({ code: 'ERR_DECRYPT_FAILED' });
+  });
 });
 
 describe('createKeySealer', () => {
@@ -82,6 +92,16 @@ describe('worker bridge over MessageChannel', () => {
     const sealed = await client.seal(encode('Line A'));
     expect(decode(await open(key, sealed))).toBe('Line A');
     expect(decode(await client.open(sealed))).toBe('Line A');
+  });
+
+  it('passes the context through to the worker', async () => {
+    connect();
+    const key = await newKey();
+    await client.setKey(key);
+    const sealed = await client.seal(encode('Line B'), encode('CRDT_DELTA\nn1'));
+    expect(decode(await open(key, sealed, encode('CRDT_DELTA\nn1')))).toBe('Line B');
+    expect(decode(await client.open(sealed, encode('CRDT_DELTA\nn1')))).toBe('Line B');
+    await expect(client.open(sealed, encode('CRDT_DELTA\nn2'))).rejects.toMatchObject({ code: 'ERR_DECRYPT_FAILED' });
   });
 
   it('does not detach the caller’s input buffer', async () => {

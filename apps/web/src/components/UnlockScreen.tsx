@@ -8,8 +8,9 @@ import { AnkyLogo } from './AnkyLogo.jsx';
 import { formatDateTime, t } from '../i18n/index.js';
 import { buttonStyle, fieldStyle as drawnField, selectStyle, tokens } from './sidebar/styles.js';
 
-/** Passphrases are the only thing protecting the vault; short ones fall to offline guessing. */
-export const MIN_PASSPHRASE_LENGTH = 8;
+import { isEasyToGuess, MIN_PASSPHRASE_LENGTH } from './passphrase.js';
+
+export { MIN_PASSPHRASE_LENGTH } from './passphrase.js';
 
 const baseFieldStyle: JSX.CSSProperties = {
   display: 'block',
@@ -286,6 +287,14 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
               style={fieldStyle()}
             />
             {passphraseInput(false)}
+            <p role="note" style={{ margin: '4px 0 0', color: tokens.muted, 'font-size': '12px' }}>
+              {t('unlock.passphraseHint', { min: MIN_PASSPHRASE_LENGTH })}
+            </p>
+            <Show when={[...passphrase()].length >= MIN_PASSPHRASE_LENGTH && isEasyToGuess(passphrase())}>
+              <p role="alert" style={{ margin: '4px 0 0', color: tokens.danger, 'font-size': '12px' }}>
+                {t('unlock.passphraseWeak')}
+              </p>
+            </Show>
             <input
               type="password"
               aria-label={t('unlock.confirmPassphrase')}

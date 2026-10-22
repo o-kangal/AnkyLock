@@ -8,7 +8,7 @@ import { watchDoc, type DocWatcher } from '../crdt/deltaPacker.js';
 import { applyRemoteRecords, applyRemoteTombstone, createHierarchyPacket, readHierarchyPayload } from '../hierarchy/hierarchySync.js';
 import { mergeNoteUpdate } from '../persistence/notePersistence.js';
 import { answerSyncRequest, createSyncRequest, localStateVectors, readSyncRequest } from './peerSync.js';
-import { createTombstonePacket, decodeFrame, encodeFrame, type DeviceId, type SyncPacket } from '../protocol/frame.js';
+import { createTombstonePacket, decodeFrame, encodeFrame, packetContext, type DeviceId, type SyncPacket } from '../protocol/frame.js';
 import { OutboxQueue } from '../queue/outboxQueue.js';
 
 export interface SyncEngineOptions {
@@ -116,7 +116,8 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
 
   async function apply(packet: SyncPacket): Promise<void> {
     const noteId = packet.entityId as NoteId;
-    const plaintext = await sealer.open(packet.payload);
+    // Opens only with the type and id it was sealed for; a moved payload fails here.
+    const plaintext = await sealer.open(packet.payload, packetContext(packet.packetType, packet.entityId));
     switch (packet.packetType) {
       case 'CRDT_DELTA': {
         if (!docs.applyRemote(noteId, plaintext)) {

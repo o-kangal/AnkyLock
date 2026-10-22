@@ -11,7 +11,7 @@ import {
 } from '@ankylock/core';
 import type { Sealer } from '@ankylock/crypto';
 import type { IStorageEngine, RemoteRecords, Tombstone } from '@ankylock/storage';
-import type { DeviceId, SyncPacket } from '../protocol/frame.js';
+import { packetContext, type DeviceId, type SyncPacket } from '../protocol/frame.js';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -37,7 +37,7 @@ export async function createHierarchyPacket(
     entityId: first,
     senderDeviceId: deviceId,
     timestampMs: now,
-    payload: await sealer.seal(encoder.encode(JSON.stringify(records))),
+    payload: await sealer.seal(encoder.encode(JSON.stringify(records)), packetContext('HIERARCHY_MUTATION', first)),
   };
 }
 

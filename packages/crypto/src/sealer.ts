@@ -1,17 +1,20 @@
 import type { Bytes, Ciphertext, SealedBytes } from '@ankylock/core';
 import { base64ToBytes, bytesToBase64, open, seal } from './cipher.js';
 
-/** Encrypts and decrypts opaque payloads under the vault key. Sync code depends only on this. */
+/**
+ * Encrypts and decrypts opaque payloads under the vault key. Sync code depends only on this.
+ * `context` (authenticated, not encrypted) must be the same to open as it was to seal.
+ */
 export interface Sealer {
-  seal(plaintext: Bytes): Promise<SealedBytes>;
-  open(sealed: SealedBytes): Promise<Bytes>;
+  seal(plaintext: Bytes, context?: Bytes): Promise<SealedBytes>;
+  open(sealed: SealedBytes, context?: Bytes): Promise<Bytes>;
 }
 
 /** Same-thread sealer; runs inside the crypto worker and in tests. `getKey` throws while locked. */
 export function createKeySealer(getKey: () => CryptoKey): Sealer {
   return {
-    seal: async (plaintext) => seal(getKey(), plaintext),
-    open: async (sealed) => open(getKey(), sealed),
+    seal: async (plaintext, context) => seal(getKey(), plaintext, context),
+    open: async (sealed, context) => open(getKey(), sealed, context),
   };
 }
 

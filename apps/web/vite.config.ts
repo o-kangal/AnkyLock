@@ -13,7 +13,7 @@ function contentSecurityPolicy(relayUrl: string | undefined): string {
     "script-src 'self'",
     // CodeMirror injects its theme styles at runtime.
     "style-src 'self' 'unsafe-inline'",
-    "worker-src 'self' blob:",
+    "worker-src 'self'",
     "img-src 'self' data:",
     `connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com ${relay}`.trim(),
     "manifest-src 'self'",

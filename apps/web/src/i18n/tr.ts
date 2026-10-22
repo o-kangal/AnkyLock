@@ -219,6 +219,8 @@ export const tr: Messages = {
   'unlock.noBackupYet': 'henüz yedek yok',
   'unlock.openVault': 'Kasayı aç',
   'unlock.passphrase': 'Parola',
+  'unlock.passphraseHint': 'En az {min} karakter. Birkaç kelime hem kolay hatırlanır hem zor tahmin edilir; örneğin “mavi kedi çay içer”. Aynı parolayı birden fazla kasada kullanabilirsiniz.',
+  'unlock.passphraseWeak': 'Bu parola kolay tahmin edilir. Birbiriyle ilgisiz birkaç kelime ekleyin.',
   'unlock.passphraseMismatch': 'Parolalar eşleşmiyor.',
   'unlock.passphraseTooShort': 'En az {min} karakter kullanın.',
   'unlock.remoteDeleteIntro': '{vault}. Başlığı ve tüm cihazların yedekleri, parolası gerekmeden Google Drive\'dan silinir. Bu kasayı kullanan diğer cihazlar senkronizasyonu bırakır ve kopyalarını yerelde tutabilir. Bu işlem geri alınamaz.',

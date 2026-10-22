@@ -11,8 +11,13 @@ pub struct Config {
     /// (desktop, web), given comma-separated in `GOOGLE_CLIENT_ID`.
     pub google_client_ids: Vec<String>,
     pub max_frame_bytes: usize,
-    /// Frames buffered per account before a slow connection is dropped.
+    /// Frames buffered per channel before a slow connection is dropped. With the frame limit,
+    /// this bounds a channel's memory (32 × 14 MB at most).
     pub channel_capacity: usize,
+    /// Open connections per Google account, across its vaults and devices.
+    pub max_connections_per_account: usize,
+    /// A connection that sends nothing (clients ping every 25 s) for this long is closed.
+    pub idle_timeout_secs: u64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -25,7 +30,8 @@ pub enum ConfigError {
 
 impl Config {
     /// Reads `RELAY_BIND` (default `0.0.0.0:8787`), `GOOGLE_CLIENT_ID` (required),
-    /// `RELAY_MAX_FRAME_BYTES` and `RELAY_CHANNEL_CAPACITY`.
+    /// `RELAY_MAX_FRAME_BYTES`, `RELAY_CHANNEL_CAPACITY`, `RELAY_MAX_CONNECTIONS_PER_ACCOUNT` and
+    /// `RELAY_IDLE_TIMEOUT_SECS`.
     pub fn from_env() -> Result<Self, ConfigError> {
         Self::from_lookup(|key| std::env::var(key).ok())
     }
@@ -45,7 +51,13 @@ impl Config {
                 .filter(|ids| !ids.is_empty())
                 .ok_or(ConfigError::Missing("GOOGLE_CLIENT_ID"))?,
             max_frame_bytes: parse("RELAY_MAX_FRAME_BYTES", get("RELAY_MAX_FRAME_BYTES"), DEFAULT_MAX_FRAME_BYTES)?,
-            channel_capacity: parse("RELAY_CHANNEL_CAPACITY", get("RELAY_CHANNEL_CAPACITY"), 256)?,
+            channel_capacity: parse("RELAY_CHANNEL_CAPACITY", get("RELAY_CHANNEL_CAPACITY"), 32)?,
+            max_connections_per_account: parse(
+                "RELAY_MAX_CONNECTIONS_PER_ACCOUNT",
+                get("RELAY_MAX_CONNECTIONS_PER_ACCOUNT"),
+                8,
+            )?,
+            idle_timeout_secs: parse("RELAY_IDLE_TIMEOUT_SECS", get("RELAY_IDLE_TIMEOUT_SECS"), 60)?,
         })
     }
 }
@@ -65,7 +77,9 @@ mod tests {
         let config = Config::from_lookup(lookup(&[("GOOGLE_CLIENT_ID", "client")])).unwrap();
         assert_eq!(config.bind_addr.port(), 8787);
         assert_eq!(config.max_frame_bytes, DEFAULT_MAX_FRAME_BYTES);
-        assert_eq!(config.channel_capacity, 256);
+        assert_eq!(config.channel_capacity, 32);
+        assert_eq!(config.max_connections_per_account, 8);
+        assert_eq!(config.idle_timeout_secs, 60);
     }
 
     #[test]
