@@ -60,3 +60,56 @@ export function createWordWrapPreference(
     },
   };
 }
+
+const RELAY_URL_KEY = 'ankylock.relayUrl';
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Checks a relay address the user typed: `wss://` only, or `ws://` on this machine for a relay
+ * in development. The runtime appends the vault id, so the address is a base without query or
+ * fragment. Empty input means "no relay".
+ */
+export function parseRelayUrl(input: string): { readonly url: string | null } | { readonly error: string } {
+  const trimmed = input.trim();
+  if (trimmed === '') return { url: null };
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { error: 'Enter a relay address such as wss://relay.example.com/ws.' };
+  }
+  const local = url.protocol === 'ws:' && LOCAL_HOSTS.has(url.hostname);
+  if (url.protocol !== 'wss:' && !local) return { error: 'Use a secure relay address (wss://); ws:// works on this machine only.' };
+  if (url.username || url.password || url.search || url.hash) return { error: 'A relay address has no user name, query or fragment.' };
+  return { url: url.href.replace(/\/+$/, '') };
+}
+
+/**
+ * The build's relay: only `VITE_RELAY_URL` when it is set (e.g. a local relay in development,
+ * see `.env.example`). Without it, sync runs through Google Drive and nothing tries to reach a
+ * relay that is not there.
+ */
+export function buildRelayUrl(env: { readonly VITE_RELAY_URL?: string }): { relayUrl?: string } {
+  const url = env.VITE_RELAY_URL?.trim();
+  return url ? { relayUrl: url } : {};
+}
+
+/** The user's own relay for instant sync, per device; null syncs through Google Drive only. */
+export interface RelayPreference {
+  readonly url: Accessor<string | null>;
+  set(url: string | null): void;
+}
+
+export function createRelayPreference(storage: PreferenceStorage | null = defaultStorage()): RelayPreference {
+  const saved = readPreference(storage, RELAY_URL_KEY);
+  const parsed = saved === null ? null : parseRelayUrl(saved);
+  const [url, setUrl] = createSignal<string | null>(parsed !== null && 'url' in parsed ? parsed.url : null);
+  return {
+    url,
+    set(next) {
+      setUrl(next);
+      // Empty means none (`parseRelayUrl('')`).
+      writePreference(storage, RELAY_URL_KEY, next ?? '');
+    },
+  };
+}

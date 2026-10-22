@@ -6,7 +6,7 @@ import { THEME_CHOICES, ThemeContext } from '../theme/colorScheme.js';
 import { buttonStyle, fieldStyle, tokens } from './sidebar/styles.js';
 import { THEME_LABELS, ThemeIcon } from './ThemeIcon.jsx';
 
-export type VaultSettingsView = 'menu' | 'remove' | 'delete' | 'wipe';
+export type VaultSettingsView = 'menu' | 'remove' | 'delete' | 'wipe' | 'relay';
 
 const baseField: JSX.CSSProperties = {
   display: 'block',
@@ -41,6 +41,7 @@ export function VaultSettings(props: {
   const [view, setView] = createSignal<VaultSettingsView>(props.initialView ?? 'menu');
   const [name, setName] = createSignal(props.runtime.vaultName() ?? '');
   const [typed, setTyped] = createSignal('');
+  const [relayInput, setRelayInput] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
   const status = (): ReturnType<Runtime['syncStatus']> => props.runtime.syncStatus();
@@ -60,6 +61,7 @@ export function VaultSettings(props: {
 
   const open = (next: VaultSettingsView): void => {
     setTyped('');
+    setRelayInput(props.runtime.ownRelayUrl() ?? '');
     setError(null);
     setView(next);
   };
@@ -124,6 +126,9 @@ export function VaultSettings(props: {
               </button>
             )}
           </Show>
+          <button type="button" disabled={busy()} style={button()} onClick={() => open('relay')}>
+            {props.runtime.ownRelayUrl() === null ? 'Instant sync (own relay)…' : 'Instant sync: on…'}
+          </button>
           <Show when={theme}>
             {(current) => (
               <div role="group" aria-label="Theme" style={{ 'margin-top': '10px' }}>
@@ -177,6 +182,53 @@ export function VaultSettings(props: {
           >
             Delete all Google Drive data…
           </button>
+        </Match>
+        <Match when={view() === 'relay'}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(() => props.runtime.setOwnRelay(relayInput()), true);
+            }}
+          >
+            <strong>Instant sync with your own relay</strong>
+            <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
+              Without a relay, your devices sync through Google Drive: changes from another device arrive within a few
+              minutes. A relay you run makes it instant.
+            </p>
+            <Show
+              when={props.runtime.ownRelaySupported}
+              fallback={
+                <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
+                  The web app connects only to the relay it was built with, so no other server can be reached from this
+                  page. Use the desktop app to set your own relay, or host the web app yourself with{' '}
+                  <code>VITE_RELAY_URL</code>.
+                </p>
+              }
+            >
+              <p role="note" style={{ margin: '6px 0', color: tokens.muted }}>
+                It is set for this device. The relay only ever sees encrypted data, but it receives your short-lived Google
+                sign-in token, so use only a relay you trust. A self-hosted relay must accept AnkyLock's Google client ids.
+              </p>
+              <input
+                aria-label="Relay address"
+                placeholder="wss://relay.example.com/ws"
+                value={relayInput()}
+                onInput={(e) => setRelayInput(e.currentTarget.value)}
+                style={field()}
+              />
+              <button type="submit" disabled={busy()} style={button()}>
+                Save
+              </button>
+              <Show when={props.runtime.ownRelayUrl() !== null}>
+                <button type="button" disabled={busy()} style={button()} onClick={() => void run(() => props.runtime.setOwnRelay(''), true)}>
+                  Turn off instant sync
+                </button>
+              </Show>
+            </Show>
+            <button type="button" disabled={busy()} style={button()} onClick={() => open('menu')}>
+              {props.runtime.ownRelaySupported ? 'Cancel' : 'Back'}
+            </button>
+          </form>
         </Match>
         <Match when={view() === 'wipe'}>
           <form

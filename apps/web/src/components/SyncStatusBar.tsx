@@ -146,6 +146,19 @@ export function SyncStatusBar(props: {
     setSettings({ at: { x: rect.left, y: rect.top - 4 }, view });
   };
   const syncing = (): boolean => status().catchingUp || status().backup.kind === 'running';
+  /** Signed in and syncing: through Drive only, or live through a relay. */
+  const syncText = (): string => {
+    if (status().mode === 'drive') return status().auth === 'stale' ? 'Waiting for Google access' : 'Synced via Google Drive';
+    if (status().connection === 'open') return 'Synced';
+    if (status().auth === 'stale') return 'Offline; changes are queued';
+    return status().connection === 'connecting' ? 'Connecting…' : 'Offline; changes are queued';
+  };
+  const catchUpTitle = (): string | undefined => {
+    const at = status().lastCatchUpAt;
+    if (status().mode !== 'drive' || at === null) return undefined;
+    const time = new Date(at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return `Checked your other devices' backups at ${time}; their changes arrive within minutes.`;
+  };
 
   const signIn = async (): Promise<void> => {
     setError(null);
@@ -226,17 +239,13 @@ export function SyncStatusBar(props: {
                   <BarButton onClick={() => void signIn()}>Sign in again</BarButton>
                 </Match>
                 <Match when={status().auth === 'stale'}>
-                  {status().connection === 'open' ? 'Synced' : 'Offline; changes are queued'}
+                  <span title={catchUpTitle()}>{syncText()}</span>
                   <BarButton title="Google access expired; renewing takes one click and no new consent" onClick={() => void signIn()}>
                     Renew Google access
                   </BarButton>
                 </Match>
                 <Match when={status().auth === 'signed-in'}>
-                  {status().connection === 'open'
-                    ? 'Synced'
-                    : status().connection === 'connecting'
-                      ? 'Connecting…'
-                      : 'Offline; changes are queued'}
+                  <span title={catchUpTitle()}>{syncText()}</span>
                   <BarButton onClick={() => void props.runtime.signOut()}>Sign out</BarButton>
                 </Match>
               </Switch>
@@ -268,7 +277,13 @@ export function SyncStatusBar(props: {
                 </BarButton>
               </Match>
               <Match when={status().auth === 'signed-in'}>
-                {status().connection === 'open' ? 'Synced' : status().connection === 'connecting' ? 'Connecting…' : 'Offline'}
+                <span title={catchUpTitle()}>
+                  {status().mode === 'drive' || status().connection === 'open'
+                    ? 'Synced'
+                    : status().connection === 'connecting'
+                      ? 'Connecting…'
+                      : 'Offline'}
+                </span>
               </Match>
             </Switch>
           </span>
@@ -310,7 +325,7 @@ export function SyncStatusBar(props: {
           )}
         </Show>
         {/* One button that spins while sync runs, so nothing beside it changes size. */}
-        <Show when={status().connection !== 'off' || syncing()}>
+        <Show when={status().mode !== 'off' || syncing()}>
           <BarButton
             compact={props.compact}
             aria-label="Sync now"
@@ -324,7 +339,7 @@ export function SyncStatusBar(props: {
           </BarButton>
         </Show>
         {/* Reserved while syncing or backed up; nothing to show leaves no gap at the edge. */}
-        <Show when={status().connection !== 'off' || status().backup.kind !== 'never' || syncing()}>
+        <Show when={status().mode !== 'off' || status().backup.kind !== 'never' || syncing()}>
           <BackupLabel
             compact={props.compact ?? false}
             text={status().catchingUp ? (props.compact ? null : 'Syncing…') : backupLabel(status().backup, props.compact ?? false)}

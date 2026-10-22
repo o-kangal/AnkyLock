@@ -845,6 +845,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 13a: Drive-Only Sync (No Hosted Relay) and an Optional Own Relay
+- **Status:** ✅ Completed (2026-10-23)
 - **Type:** Backend/Service
 - **Read-Only Context Files:** `packages/sync/src/engine/syncEngine.ts`, `packages/sync/src/backup/snapshotScheduler.ts`, `packages/sync/src/catchup/catchUp.ts`, `apps/relay/src/config.rs`
 - **Target Files (Create/Modify):**

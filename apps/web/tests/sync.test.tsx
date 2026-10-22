@@ -1,10 +1,14 @@
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
 import { TEXT_FIELD, createAuthSession, type SocketLike } from '@ankylock/sync';
 import { SyncStatusBar } from '../src/components/SyncStatusBar.jsx';
 import { UnlockScreen } from '../src/components/UnlockScreen.jsx';
-import { createRuntime, type Runtime } from '../src/index.js';
+import { VaultSettings } from '../src/components/VaultSettings.jsx';
+import { createRuntime, buildRelayUrl, parseRelayUrl, type Runtime } from '../src/index.js';
+import type { RelayPreference } from '../src/preferences/devicePreferences.js';
+import { CATCH_UP_INTERVAL_MS } from '../src/runtime/createRuntime.js';
 import { FakeDrive, PASSPHRASE, TestVaults, fakeGoogle, localSealer, until } from './helpers.js';
 
 /** In-memory blind relay shared by the runtimes in a test; like the real one, it fans out per URL (vault). */
@@ -390,5 +394,174 @@ describe('opening an existing vault from Google Drive', () => {
     await until(() => drive.names().filter((n) => n.includes('.snapshot-')).length === 2, 'B snapshot');
     expect(drive.names().filter((n) => n.endsWith('.header.json'))).toHaveLength(1);
     await b.runtime.lock();
+  });
+});
+
+describe('Drive-only sync (no relay)', () => {
+  /** Remembers the own-relay choice in memory, as localStorage would. */
+  function memoryRelayPreference(initial: string | null = null): RelayPreference {
+    const [url, setUrl] = createSignal<string | null>(initial);
+    return { url, set: setUrl };
+  }
+
+  function driveDevice(drive: FakeDrive, relayPreference: RelayPreference = memoryRelayPreference()) {
+    const vaults = new TestVaults();
+    const sockets: string[] = [];
+    const runtime = createRuntime({
+      vaults,
+      sealer: localSealer(),
+      auth: createAuthSession(fakeGoogle()),
+      relayPreference,
+      driveFetch: drive.fetch,
+      createSocket: (url) => {
+        sockets.push(url);
+        return {
+          binaryType: 'blob',
+          readyState: 0,
+          onopen: null,
+          onclose: null,
+          onmessage: null,
+          onerror: null,
+          send: () => undefined,
+          close: () => undefined,
+        };
+      },
+    });
+    return { runtime, vaults, sockets };
+  }
+
+  async function sharedDriveVault(drive: FakeDrive) {
+    const a = driveDevice(drive);
+    await a.runtime.init();
+    expect(await a.runtime.createVault('Personal', PASSPHRASE)).toBeNull();
+    await a.runtime.signIn();
+    await until(() => a.runtime.syncStatus().backup.kind === 'ok', 'A backed up');
+    const id = a.runtime.vaults()[0]?.id as VaultId;
+    const b = driveDevice(drive);
+    await b.runtime.init();
+    await b.runtime.findRemoteVaults();
+    expect(await b.runtime.openRemoteVault(id, PASSPHRASE)).toBeNull();
+    await until(() => b.runtime.syncStatus().backup.kind === 'ok', 'B backed up');
+    return { a, b, id };
+  }
+
+  it('syncs two devices through Google Drive without ever opening a relay connection', async () => {
+    const { a, b } = await sharedDriveVault(new FakeDrive());
+    expect(a.runtime.syncStatus()).toMatchObject({ mode: 'drive', connection: 'off' });
+    expect(a.runtime.syncStatus().lastCatchUpAt).not.toBeNull();
+
+    await a.runtime.store.createTab();
+    const noteId = a.runtime.store.state.tabs[0]?.noteId as NoteId;
+    (await a.runtime.openDoc(noteId)).getText(TEXT_FIELD).insert(0, 'from A, via Drive');
+    await a.runtime.flush();
+    await a.runtime.syncNow();
+
+    await b.runtime.syncNow();
+    expect((await b.runtime.openDoc(noteId)).getText(TEXT_FIELD).toString()).toBe('from A, via Drive');
+    expect([...a.sockets, ...b.sockets]).toEqual([]);
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+
+  it('catches up on a regular interval while no relay is set', async () => {
+    const { a, b } = await sharedDriveVault(new FakeDrive());
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      // Started before the fake clock: lock and unlock to restart sync under it.
+      await a.runtime.lock();
+      const id = a.runtime.vaults()[0]?.id as VaultId;
+      expect(await a.runtime.unlock(id, PASSPHRASE)).toBeNull();
+      await until(() => a.runtime.syncStatus().lastCatchUpAt !== null, 'first catch-up');
+      const first = a.runtime.syncStatus().lastCatchUpAt ?? 0;
+      await new Promise((r) => setTimeout(r, 5));
+      vi.advanceTimersByTime(CATCH_UP_INTERVAL_MS);
+      await until(() => (a.runtime.syncStatus().lastCatchUpAt ?? 0) > first, 'interval catch-up');
+    } finally {
+      vi.useRealTimers();
+    }
+    await Promise.all([a.runtime.lock(), b.runtime.lock()]);
+  });
+
+  it("uses the user's own relay once set, and goes back to Drive only when it is removed", async () => {
+    const drive = new FakeDrive();
+    const relayPreference = memoryRelayPreference();
+    const a = driveDevice(drive, relayPreference);
+    await a.runtime.init();
+    expect(await a.runtime.createVault('Personal', PASSPHRASE)).toBeNull();
+    await a.runtime.signIn();
+    await until(() => a.runtime.syncStatus().mode === 'drive', 'drive sync');
+    const id = a.runtime.vaults()[0]?.id as VaultId;
+
+    expect(await a.runtime.setOwnRelay('http://relay.example/ws')).toMatch(/wss:\/\//);
+    expect(await a.runtime.setOwnRelay('ws://relay.example/ws')).toMatch(/wss:\/\//);
+    expect(relayPreference.url()).toBeNull();
+
+    expect(await a.runtime.setOwnRelay(' wss://relay.example/ws/ ')).toBeNull();
+    expect(relayPreference.url()).toBe('wss://relay.example/ws');
+    expect(a.runtime.ownRelayUrl()).toBe('wss://relay.example/ws');
+    await until(() => a.sockets.length === 1, 'relay socket');
+    expect(a.sockets[0]).toBe(`wss://relay.example/ws/${id}`);
+    expect(a.runtime.syncStatus().mode).toBe('live');
+
+    expect(await a.runtime.setOwnRelay('')).toBeNull();
+    expect(relayPreference.url()).toBeNull();
+    expect(a.runtime.syncStatus()).toMatchObject({ mode: 'drive', connection: 'off' });
+    expect(a.sockets).toHaveLength(1);
+    await a.runtime.lock();
+  });
+});
+
+describe('relay settings', () => {
+  async function settingsFor(relayPreference?: RelayPreference): Promise<{ root: HTMLElement; runtime: Runtime }> {
+    const runtime = createRuntime({
+      vaults: new TestVaults(),
+      sealer: localSealer(),
+      auth: createAuthSession(fakeGoogle()),
+      ...(relayPreference ? { relayPreference } : {}),
+    });
+    await runtime.init();
+    expect(await runtime.createVault('Personal', PASSPHRASE)).toBeNull();
+    const root = document.createElement('div');
+    document.body.append(root);
+    const dispose = render(() => <VaultSettings runtime={runtime} initialView="relay" onClose={() => undefined} />, root);
+    disposers.push(() => {
+      dispose();
+      root.remove();
+    });
+    return { root, runtime };
+  }
+
+  it('offers no own relay in the web app, whose CSP allows only its built-in relay', async () => {
+    const { root, runtime } = await settingsFor();
+    expect(runtime.ownRelaySupported).toBe(false);
+    expect(root.querySelector('[aria-label="Relay address"]')).toBeNull();
+    expect(root.textContent).toContain('Use the desktop app to set your own relay');
+    expect(await runtime.setOwnRelay('wss://relay.example/ws')).toBe('An own relay can be set in the desktop app only.');
+    await runtime.lock();
+  });
+
+  it('lets the desktop app set its own relay, with a warning about the sign-in token', async () => {
+    const [url, set] = createSignal<string | null>(null);
+    const { root, runtime } = await settingsFor({ url, set });
+    expect(runtime.ownRelaySupported).toBe(true);
+    expect(root.querySelector('[aria-label="Relay address"]')).not.toBeNull();
+    expect(root.textContent).toContain('receives your short-lived Google sign-in token');
+    await runtime.lock();
+  });
+
+
+  it('accepts wss:// relays, and ws:// only on this machine', () => {
+    expect(parseRelayUrl('')).toEqual({ url: null });
+    expect(parseRelayUrl(' wss://relay.example.com/ws/ ')).toEqual({ url: 'wss://relay.example.com/ws' });
+    expect(parseRelayUrl('ws://localhost:8787/ws')).toEqual({ url: 'ws://localhost:8787/ws' });
+    expect(parseRelayUrl('ws://127.0.0.1:8787/ws')).toEqual({ url: 'ws://127.0.0.1:8787/ws' });
+    for (const bad of ['ws://relay.example.com/ws', 'https://relay.example.com', 'wss://u:p@relay.example.com', 'wss://r.example?x=1', 'not a url']) {
+      expect(parseRelayUrl(bad)).toHaveProperty('error');
+    }
+  });
+
+  it('has no relay, in development too, unless VITE_RELAY_URL sets one', () => {
+    expect(buildRelayUrl({})).toEqual({});
+    expect(buildRelayUrl({ VITE_RELAY_URL: '' })).toEqual({});
+    expect(buildRelayUrl({ VITE_RELAY_URL: 'ws://127.0.0.1:8787/ws' })).toEqual({ relayUrl: 'ws://127.0.0.1:8787/ws' });
   });
 });

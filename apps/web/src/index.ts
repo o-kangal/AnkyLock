@@ -16,6 +16,7 @@ export { buttonStyle, fieldStyle, tokens } from './components/sidebar/styles.js'
 export { applyColorScheme, initialColorScheme } from './theme/colorScheme.js';
 export { shortcutLabel, workspaceCommand, type Platform, type WorkspaceCommand } from './keyboard/shortcuts.js';
 export { CLOSE_BACKUP_WAIT_MS } from './runtime/closeGuard.js';
+export { createRelayPreference, buildRelayUrl, parseRelayUrl } from './preferences/devicePreferences.js';
 export {
   createRuntime,
   MAX_VAULT_NAME_LENGTH,

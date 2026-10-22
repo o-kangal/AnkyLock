@@ -9,6 +9,7 @@ import { UpdateBanner } from './pwa/UpdateBanner.jsx';
 import { watchForUpdates } from './pwa/updates.js';
 import { guardPageClose } from './runtime/closeGuard.js';
 import { createRuntime } from './runtime/createRuntime.js';
+import { buildRelayUrl } from './preferences/devicePreferences.js';
 
 /**
  * Web composition: each vault's notes persist encrypted in their own IndexedDB database and all encryption runs in a Dedicated
@@ -28,7 +29,8 @@ export function App(): JSX.Element {
   const runtime = createRuntime({
     vaults: new WebVaultDirectory(indexedDB),
     sealer,
-    ...(auth ? { auth, relayUrl: import.meta.env.VITE_RELAY_URL ?? 'ws://127.0.0.1:8787/ws' } : {}),
+    // No own-relay setting: the production CSP allows only the relay this build was given.
+    ...(auth ? { auth, ...buildRelayUrl(import.meta.env) } : {}),
     onError: (message) => console.error(message),
   });
   const closeGuard = guardPageClose(runtime);

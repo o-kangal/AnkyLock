@@ -8,7 +8,9 @@ import type { Runtime, SyncStatus } from '../src/runtime/createRuntime.js';
 
 const SIGNED_IN: SyncStatus = {
   auth: 'signed-in',
+  mode: 'live',
   connection: 'open',
+  lastCatchUpAt: null,
   backup: { kind: 'ok', at: Date.UTC(2026, 9, 21, 14, 5) as EpochMs },
   catchingUp: false,
   vaultDrive: 'ok',
@@ -135,9 +137,25 @@ describe('status bar without sync', () => {
   it('leaves no empty label box when signed out and never backed up', () => {
     const { runtime, setStatus } = fakeRuntime();
     const root = mount(runtime);
-    setStatus({ ...SIGNED_IN, auth: 'signed-out', connection: 'off', backup: { kind: 'never' } });
+    setStatus({ ...SIGNED_IN, auth: 'signed-out', mode: 'off', connection: 'off', backup: { kind: 'never' } });
     expect(root.querySelector('[data-backup-label]')).toBeNull();
     expect(root.querySelector('[aria-label="Sync now"]')).toBeNull();
     expect(button(root, 'Sign in with Google')).toBeDefined();
+  });
+});
+
+describe('status bar in Drive-only sync', () => {
+  it('says it syncs through Google Drive, with the last catch-up in the tooltip', () => {
+    const { runtime, setStatus } = fakeRuntime();
+    const root = mount(runtime);
+    setStatus({ ...SIGNED_IN, mode: 'drive', connection: 'off', lastCatchUpAt: Date.UTC(2026, 9, 23, 9, 30) as EpochMs });
+    const text = Array.from(root.querySelectorAll('footer span')).find((s) => s.textContent === 'Synced via Google Drive') as HTMLElement;
+    expect(text.title).toMatch(/^Checked your other devices' backups at \d\d:\d\d [AP]M; their changes arrive within minutes\.$/);
+    // Sync now stays available without a relay.
+    expect(root.querySelector('[aria-label="Sync now"]')).not.toBeNull();
+    expect(root.textContent).not.toContain('Offline');
+
+    setStatus({ ...SIGNED_IN, auth: 'stale', mode: 'drive', connection: 'off' });
+    expect(root.textContent).toContain('Waiting for Google access');
   });
 });

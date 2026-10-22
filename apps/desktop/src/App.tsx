@@ -5,7 +5,15 @@ import { bytesToBase64, createWorkerSealer, type MessagePortLike } from '@ankylo
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { TauriVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
-import { AnkyLockApp, buttonStyle, CLOSE_BACKUP_WAIT_MS, createRuntime, tokens } from '@ankylock/web/workspace';
+import {
+  AnkyLockApp,
+  buttonStyle,
+  CLOSE_BACKUP_WAIT_MS,
+  createRelayPreference,
+  createRuntime,
+  buildRelayUrl,
+  tokens,
+} from '@ankylock/web/workspace';
 import { guardWindowClose, type CloseState, type WindowCloseGuard } from './closeGuard.js';
 import { drawsWindowCorners, frameStyle, watchWindowFill } from './windowFrame.js';
 import { createTauriAuthTransport } from './googleAuthTransport.js';
@@ -24,7 +32,8 @@ export function App(): JSX.Element {
     vaults: new TauriVaultDirectory(),
     sealer,
     auth,
-    relayUrl: import.meta.env.VITE_RELAY_URL ?? 'ws://127.0.0.1:8787/ws',
+    relayPreference: createRelayPreference(),
+    ...buildRelayUrl(import.meta.env),
     onError: (message) => console.error(message),
   });
   const [closing, setClosing] = createSignal<CloseState>('open');

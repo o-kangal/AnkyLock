@@ -55,6 +55,7 @@ import {
 import { runExportInWorker, type ExportFile, type ExportJob } from '../export/exportNotes.js';
 import { planExport, type ExportScope } from '../export/exportPlan.js';
 import { createWorkspaceStore, type PurgedItem, type WorkspaceStore } from '../stores/workspaceStore.js';
+import { parseRelayUrl, type RelayPreference } from '../preferences/devicePreferences.js';
 import { DEFAULT_LOGO_FACE, nextLogoFace, type LogoFace } from './logoFace.js';
 
 export type VaultStatus = 'loading' | 'uninitialized' | 'locked' | 'unlocked';
@@ -67,8 +68,16 @@ export interface RuntimeOptions {
   readonly onError?: (message: string) => void;
   /** Google session; without it the app is local-only (sync and backup stay off). */
   readonly auth?: AuthSession;
-  /** Blind relay WebSocket base URL, e.g. `ws://127.0.0.1:8787/ws`; the vault id is appended. */
+  /**
+   * Blind relay WebSocket base URL for development builds, e.g. `ws://127.0.0.1:8787/ws`; the vault
+   * id is appended. Production builds have none: without a relay, sync runs through Drive only.
+   */
   readonly relayUrl?: string;
+  /**
+   * The user's own relay for instant sync on this device; it wins over `relayUrl`. Desktop only:
+   * the web app's CSP allows no relay but the one it was built with (`VITE_RELAY_URL`).
+   */
+  readonly relayPreference?: RelayPreference;
   /** Test seams for the relay socket and Drive's HTTP client. */
   readonly createSocket?: (url: string, protocols: string[]) => SocketLike;
   readonly driveFetch?: typeof fetch;
@@ -78,10 +87,21 @@ export interface RuntimeOptions {
   readonly random?: () => number;
 }
 
+/** How often a Drive-only device looks for other devices' backups (they back up every 5 minutes). */
+export const CATCH_UP_INTERVAL_MS = 2 * 60 * 1000;
+
 /** Shown in the status bar; never blocks local work (SPEC §7). */
 export interface SyncStatus {
   readonly auth: AuthState['kind'] | 'unavailable';
+  /**
+   * `off`: not syncing. `drive`: through Google Drive only (no relay); other devices' changes
+   * arrive at the next catch-up. `live`: through a relay as well, instantly.
+   */
+  readonly mode: 'off' | 'drive' | 'live';
+  /** The relay connection; `off` without a relay. */
   readonly connection: ConnectionStatus | 'off';
+  /** When this device last merged other devices' Drive backups. */
+  readonly lastCatchUpAt: EpochMs | null;
   readonly backup: BackupStatus;
   /** Merging other devices' Drive backups right now. */
   readonly catchingUp: boolean;
@@ -140,6 +160,15 @@ export interface Runtime {
   signOut(): Promise<void>;
   /** Catches up from Drive and backs up now ("Sync now"); a no-op while sync is off. */
   syncNow(): Promise<void>;
+  /** Whether this app lets the user set their own relay (the desktop app; not the web app). */
+  readonly ownRelaySupported: boolean;
+  /** The user's own relay on this device, or null (Drive only). */
+  readonly ownRelayUrl: Accessor<string | null>;
+  /**
+   * Sets or clears (empty input) the user's own relay and restarts sync with it. Resolves with an
+   * error message for an address that is not `wss://` (or `ws://` on this machine), or null.
+   */
+  setOwnRelay(input: string): Promise<string | null>;
   /** Renames the open vault; other devices take the newer name when they next sync. */
   renameVault(name: string): Promise<string | null>;
   /**
@@ -197,7 +226,10 @@ const message = (error: unknown): string =>
  * it is never written to disk, so every launch asks for the passphrase.
  */
 export function createRuntime(options: RuntimeOptions): Runtime {
-  const { vaults: directory, sealer, auth, relayUrl } = options;
+  const { vaults: directory, sealer, auth } = options;
+  const ownRelayUrl = (): string | null => options.relayPreference?.url() ?? null;
+  const relayUrl = (): string | null => ownRelayUrl() ?? options.relayUrl ?? null;
+  let catchUpTimer: ReturnType<typeof setInterval> | undefined;
   const report = (error: unknown): void => options.onError?.(message(error));
   const vault = createVaultKey();
   const names = createTextCodec(sealer);
@@ -253,7 +285,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const [vaultName, setVaultName] = createSignal<string | null>(null);
   const [syncStatus, setSyncStatus] = createSignal<SyncStatus>({
     auth: auth ? auth.state().kind : 'unavailable',
+    mode: 'off',
     connection: 'off',
+    lastCatchUpAt: null,
     backup: { kind: 'never' },
     catchingUp: false,
     vaultDrive: 'ok',
@@ -337,6 +371,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         await removeLegacyDriveFiles(drive);
       }
       const result = await catchUp.run();
+      updateSync({ lastCatchUpAt: Date.now() as EpochMs });
       if (result.unreadable > 0) report(`${result.unreadable} backup(s) of this vault could not be read and were skipped.`);
       if (result.changed) reloadSoon(result.changedNotes);
     } catch (error) {
@@ -348,18 +383,39 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   function startSync(): void {
-    if (engine || !auth || !relayUrl || status() !== 'unlocked' || auth.state().kind !== 'signed-in') return;
+    if (scheduler || !auth || status() !== 'unlocked' || auth.state().kind !== 'signed-in') return;
     const entry = vaultList().find((v) => v.id === vaultId);
     if (!storage || !vaultId || !entry || !drive || headerJson === null || vaultDeviceId === null) return;
     if (!syncState || syncState.localOnly || syncStatus().vaultDrive === 'deleted') return;
     const vaultStorage = storage;
+    const relay = relayUrl();
+    if (relay !== null) startRelay(vaultStorage, relay, vaultId);
+    scheduler = createSnapshotScheduler({
+      drive,
+      createSnapshot: () => exportSnapshot(vaultStorage, sealer, Date.now() as EpochMs),
+      snapshotFile: vaultSnapshotFileName(vaultId, vaultDeviceId),
+      prepare: prepareHeader,
+      onStatus: (backup) => updateSync({ backup }),
+    });
+    scheduler.start();
+    catchUp = createCatchUp({ drive, storage: vaultStorage, sealer, docs, vaultId, deviceId: vaultDeviceId });
+    // Without a relay, other devices' changes only arrive through their Drive backups.
+    if (relay === null) catchUpTimer = setInterval(() => void runCatchUp(), CATCH_UP_INTERVAL_MS);
+    updateSync({ mode: relay === null ? 'drive' : 'live' });
+    // Neither waits for the relay (SPEC §7): catch up from Drive, then back up the merged state.
+    void runCatchUp().finally(() => scheduler?.notifyIdle());
+  }
+
+  /** Instant sync through a relay, on top of Drive: live packets, outbox and peer catch-up. */
+  function startRelay(vaultStorage: IStorageEngine, relay: string, id: VaultId): void {
+    if (!auth) return;
     const next = createSyncEngine({
       storage: vaultStorage,
       sealer,
       docs,
       deviceId,
       // Relay channels are per account and vault, so other vaults never see these packets.
-      relayUrl: `${relayUrl.replace(/\/+$/, '')}/${vaultId}`,
+      relayUrl: `${relay.replace(/\/+$/, '')}/${id}`,
       getIdToken: () => auth.idToken(),
       onRemoteChange: reloadSoon,
       onStatusChange: (connection) => {
@@ -377,27 +433,18 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       if (doc) next.watch(noteId, doc);
     }
     next.start();
-    scheduler = createSnapshotScheduler({
-      drive,
-      createSnapshot: () => exportSnapshot(vaultStorage, sealer, Date.now() as EpochMs),
-      snapshotFile: vaultSnapshotFileName(vaultId, vaultDeviceId),
-      prepare: prepareHeader,
-      onStatus: (backup) => updateSync({ backup }),
-    });
-    scheduler.start();
-    catchUp = createCatchUp({ drive, storage: vaultStorage, sealer, docs, vaultId, deviceId: vaultDeviceId });
-    // Neither waits for the relay (SPEC §7): catch up from Drive, then back up the merged state.
-    void runCatchUp().finally(() => scheduler?.notifyIdle());
   }
 
   async function stopSync(): Promise<void> {
+    clearInterval(catchUpTimer);
+    catchUpTimer = undefined;
     catchUp = null;
     scheduler?.stop();
     scheduler = null;
     const stopping = engine;
     engine = null;
     await stopping?.stop();
-    updateSync({ connection: 'off' });
+    updateSync({ mode: 'off', connection: 'off' });
   }
 
   auth?.onChange((state) => {
@@ -557,7 +604,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         vaultNameCiphertext = ciphertext;
         setVaultName(trimmed);
         // Publish the new name now if syncing; otherwise the next sync does.
-        if (engine) {
+        if (scheduler) {
           headerChecked = false;
           await prepareHeader();
         }
@@ -744,6 +791,23 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     async syncNow() {
       await runCatchUp();
       await scheduler?.runNow();
+    },
+
+    ownRelaySupported: options.relayPreference !== undefined,
+    ownRelayUrl,
+
+    async setOwnRelay(input) {
+      const parsed = parseRelayUrl(input);
+      if ('error' in parsed) return parsed.error;
+      if (!options.relayPreference) return 'An own relay can be set in the desktop app only.';
+      if (parsed.url === ownRelayUrl()) return null;
+      options.relayPreference.set(parsed.url);
+      // Restart with or without the relay; Drive sync continues either way.
+      if (scheduler) {
+        await stopSync();
+        startSync();
+      }
+      return null;
     },
 
     async exportNotes(scope, password) {
