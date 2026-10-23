@@ -41,7 +41,7 @@ jobs:
       - run: pnpm audit
 
   rust:
-    name: Rust (clippy, test) and third-party notices
+    name: Rust (clippy, test)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -49,9 +49,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Tauri system libraries
+        # Usually under two minutes; a stuck mirror fails here instead of eating the job's timeout.
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev librsvg2-dev libdbus-1-dev libssl-dev pkg-config
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
@@ -68,10 +70,6 @@ jobs:
       - run: pnpm --filter @ankylock/desktop... run build
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
-      - name: THIRD_PARTY_NOTICES.md is up to date
-        run: |
-          pnpm notices
-          git diff --exit-code THIRD_PARTY_NOTICES.md || { echo "::error::Run 'pnpm notices' and commit THIRD_PARTY_NOTICES.md."; exit 1; }
 
   browser:
     name: Browser tests (Chromium, WebKit)
@@ -89,6 +87,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ankylock/web... run build
       - run: pnpm --filter @ankylock/e2e exec playwright install --with-deps chromium webkit
+        timeout-minutes: 10
       - run: pnpm --filter @ankylock/e2e run test:browser
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

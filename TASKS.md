@@ -1015,6 +1015,7 @@ pnpm -r run build && curl -sI https://ankylock.com https://app.ankylock.com
   2. Publish `SHA256SUMS` and GitHub artifact attestations (build provenance) for every file, so downloads can be verified.
   3. Enable the Tauri updater for the AppImage: the update manifest on the GitHub Release, signed with a key kept only in CI secrets; the app checks on launch and asks before installing.
   4. Windows and macOS stay out of releases for now (see Later); the README explains building them from source.
+  5. Generate `THIRD_PARTY_NOTICES.md` (`pnpm notices`) from the release's own lockfiles, ship it with every package and attach it to the GitHub Release. CI does not check the committed copy on every push (Dependabot cannot regenerate it), so refresh that copy with each release.
 - **Verification:**
 ``` bash
 pnpm -r run build && cargo test --workspace && pnpm --filter @ankylock/desktop tauri build --bundles appimage,deb,rpm

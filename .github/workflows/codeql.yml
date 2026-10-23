@@ -12,8 +12,23 @@ permissions:
   contents: read
 
 jobs:
+  # Code scanning is a paid feature on private repositories; analyze once the repository is public.
+  visibility:
+    name: Check repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      private: ${{ steps.check.outputs.private }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "private=$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)" >> "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: visibility
+    if: needs.visibility.outputs.private == 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
