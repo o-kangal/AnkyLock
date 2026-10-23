@@ -7,11 +7,13 @@ The settings of `o-kangal/AnkyLock` that the code relies on, and how to apply th
 | Setting | Value | Command |
 |---|---|---|
 | Default `GITHUB_TOKEN` permissions | read-only, cannot approve PRs | `gh api -X PUT $R/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false` |
-| Allowed actions | GitHub-owned plus the list in `selected-actions` below; all pinned to a commit SHA | `gh api -X PUT $R/actions/permissions -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true` |
+| Allowed actions | GitHub-owned plus the list in `selected-actions` below | `gh api -X PUT $R/actions/permissions -F enabled=true -f allowed_actions=selected -F sha_pinning_required=false` |
 | Selected actions | `pnpm/action-setup`, `dtolnay/rust-toolchain`, `Swatinem/rust-cache`, `EmbarkStudios/cargo-deny-action` | `gh api -X PUT $R/actions/permissions/selected-actions --input -` with `{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":["pnpm/action-setup@*","dtolnay/rust-toolchain@*","Swatinem/rust-cache@*","EmbarkStudios/cargo-deny-action@*"]}` |
 | Dependabot alerts and security updates | on | `gh api -X PUT $R/vulnerability-alerts && gh api -X PUT $R/automated-security-fixes` |
 
 A workflow that needs a new third-party action fails until the action is added to the selected list.
+
+Leave **SHA pinning required** off: it also applies to the workflows GitHub runs for Dependabot, which call actions by tag, so with it on Dependabot silently stops (no runs, no rebases). Our own workflows pin every action to a commit SHA anyway, and Dependabot keeps those pins current.
 
 ## Once the repository is public
 
