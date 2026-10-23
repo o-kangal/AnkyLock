@@ -101,7 +101,7 @@ export async function syncHeaderFile(
 ): Promise<HeaderSync> {
   const name = vaultHeaderFileName(local.vaultId);
   const bytes = await drive.download(name);
-  const write = (file: VaultHeaderFile): Bytes => new TextEncoder().encode(serializeVaultHeaderFile(file)) as Bytes;
+  const write = (file: VaultHeaderFile): Bytes => new TextEncoder().encode(serializeVaultHeaderFile(file));
   if (bytes === null) {
     if (headerOnDrive) return { kind: 'deleted' };
     await drive.create(name, write(local), 'application/json');

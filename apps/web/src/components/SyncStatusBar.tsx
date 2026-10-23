@@ -1,4 +1,4 @@
-import { createSignal, Match, Show, splitProps, Switch, type JSX } from 'solid-js';
+import { createSignal, Match, Show, splitProps, Switch, type JSX, For } from 'solid-js';
 import type { BackupStatus } from '@ankylock/sync';
 import type { Runtime } from '../runtime/createRuntime.js';
 import { formatTime, t, type MessageKey } from '../i18n/index.js';
@@ -115,11 +115,11 @@ function BackupLabel(props: { readonly text: string | null; readonly compact: bo
       title={props.text ?? undefined}
       style={{ display: 'inline-grid', 'max-width': '320px', 'white-space': 'nowrap' }}
     >
-      {longest().map((text) => (
+      <For each={longest()}>{(text) => (
         <span aria-hidden="true" style={{ 'grid-area': '1 / 1', visibility: 'hidden' }}>
           {text}
         </span>
-      ))}
+      )}</For>
       <span style={{ 'grid-area': '1 / 1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'min-width': '0' }}>{props.text ?? ''}</span>
     </span>
   );

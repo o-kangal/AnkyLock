@@ -163,6 +163,8 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
   });
 
   const putNote = (note: Note): void => {
+    // A note new to the store has no view yet, whatever the record type says.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     setState('notes', note.id, (existing) => noteView(note, existing?.title));
   };
 
@@ -291,7 +293,14 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
       return attempt(async () => {
         await storage.purgeNote(noteId);
         reportPurged([], [noteId]);
-        setState('notes', produce((notes) => void delete notes[noteId]));
+        setState(
+          'notes',
+          produce((notes) => {
+            // Notes are a record keyed by id.
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+            delete notes[noteId];
+          }),
+        );
         dropTabsOfMissingNotes();
       });
     },
@@ -316,6 +325,8 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
           if (!state.notes[noteId]) continue;
           const content = await storage.getNoteContent(noteId);
           const title = content ? await names.decrypt(content.titleCiphertext) : null;
+          // The note may have been purged while its title was decrypting.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           if (state.notes[noteId]) setState('notes', noteId, 'title', title === '' ? null : title);
         }
       });
@@ -356,7 +367,13 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
         if (!tab) return;
         if (isEmptyAndUnmodified && state.notes[tab.noteId]?.isEphemeral && state.notes[tab.noteId]?.deletedAt === null) {
           await storage.discardEphemeralNote(tab.noteId);
-          setState('notes', produce((notes) => void delete notes[tab.noteId]));
+          setState(
+            'notes',
+            produce((notes) => {
+              // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+              delete notes[tab.noteId];
+            }),
+          );
         }
         setState(
           produce((s) => {

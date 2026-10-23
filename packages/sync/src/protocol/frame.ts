@@ -35,7 +35,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
  * id) makes the payload fail to open instead of applying it to the wrong entity.
  */
 export function packetContext(packetType: PacketType, entityId: string): Bytes {
-  return encoder.encode(`ankylock.packet.v${PROTOCOL_VERSION}\n${packetType}\n${entityId}`) as Bytes;
+  return encoder.encode(`ankylock.packet.v${PROTOCOL_VERSION}\n${packetType}\n${entityId}`);
 }
 
 /** Serializes the SPEC §5.2 envelope as UTF-8 JSON for a binary WebSocket frame. */

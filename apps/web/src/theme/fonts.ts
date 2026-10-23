@@ -51,8 +51,11 @@ let registered = false;
  * precaches them). Text shows in the fallback until a font arrives (`display: swap`); CodeMirror
  * re-measures itself once `document.fonts.ready` settles. Runs once; a no-op without `FontFace`.
  */
+// jsdom and older engines have neither `document.fonts` nor `FontFace`, whatever the DOM types say.
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 export function loadAppFonts(fonts: FontFaceSet | undefined = globalThis.document?.fonts): void {
   if (registered || fonts === undefined || typeof FontFace !== 'function') return;
+  /* eslint-enable @typescript-eslint/no-unnecessary-condition */
   registered = true;
   for (const face of APP_FONT_FACES) {
     const fontFace = new FontFace(face.family, `url(${face.url}) format('woff2')`, {

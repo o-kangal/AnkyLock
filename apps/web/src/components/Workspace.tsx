@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on, onCleanup, onMount, Show, type JSX } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js';
 import type * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
 import { CodeMirrorView } from '@ankylock/editor';
@@ -31,7 +31,8 @@ export function Workspace(props: {
   /** Opens an http(s) link from a note; the desktop app hands it to the system browser. */
   readonly openLink?: (url: string) => void;
 }): JSX.Element {
-  const { store } = props.runtime;
+  // The open vault's store; the workspace is remounted for another vault.
+  const store = untrack(() => props.runtime.store);
   const theme = useTheme();
   const wrap = createWordWrapPreference();
   const narrow = useNarrowScreen();
@@ -174,7 +175,7 @@ export function Workspace(props: {
         </div>
         <SyncStatusBar
           runtime={props.runtime}
-          wordWrap={{ on: wrap.wordWrap, toggle: wrap.toggle, shortcut: shortcutLabel('toggle-wrap', props.platform) }}
+          wordWrap={{ on: wrap.wordWrap, toggle: () => wrap.toggle(), shortcut: shortcutLabel('toggle-wrap', props.platform) }}
           theme={theme}
           compact={narrow()}
         />

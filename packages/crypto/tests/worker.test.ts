@@ -9,7 +9,6 @@ import {
   open,
   seal,
   serveCrypto,
-  type MessagePortLike,
   type WorkerSealer,
 } from '../src/index.js';
 
@@ -69,8 +68,8 @@ describe('worker bridge over MessageChannel', () => {
 
   function connect(): void {
     channel = new MessageChannel();
-    stop = serveCrypto(channel.port1 as unknown as MessagePortLike);
-    client = createWorkerSealer(channel.port2 as unknown as MessagePortLike);
+    stop = serveCrypto(channel.port1);
+    client = createWorkerSealer(channel.port2);
   }
 
   afterEach(() => {

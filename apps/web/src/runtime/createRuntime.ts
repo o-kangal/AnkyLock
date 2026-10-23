@@ -573,15 +573,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       const trimmed = name.trim();
       if (trimmed === '') return t('vault.nameRequired');
       // Also enforced here, not only in the form: the passphrase is the vault's only protection.
-      if ([...passphrase].length < MIN_PASSPHRASE_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_PASSPHRASE_LENGTH });
-      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
+      if (Array.from(passphrase).length < MIN_PASSPHRASE_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_PASSPHRASE_LENGTH });
+      if (Array.from(trimmed).length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
       try {
         const id = crypto.randomUUID() as VaultId;
         const header = serializeVaultHeader(await vault.initialize(passphrase));
         await sealer.setKey(vault.getKey());
         const created = await directory.create(id, header, await names.encrypt(trimmed));
         const failure = await start(created, id, header);
-        return failure === null ? null : failed(failure);
+        return failure === null ? null : await failed(failure);
       } catch (error) {
         return failed(error);
       }
@@ -594,7 +594,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         if (header === null) return t('runtime.noHeader');
         await vault.unlock(passphrase, parseVaultHeader(header));
         const failure = await start(opened, id, header);
-        return failure === null ? null : failed(failure);
+        return failure === null ? null : await failed(failure);
       } catch (error) {
         return failed(error);
       }
@@ -605,7 +605,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     async renameVault(name) {
       const trimmed = name.trim();
       if (trimmed === '') return t('vault.nameRequired');
-      if ([...trimmed].length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
+      if (Array.from(trimmed).length > MAX_VAULT_NAME_LENGTH) return t('runtime.nameTooLong', { max: MAX_VAULT_NAME_LENGTH });
       if (!storage || !syncState) return t('runtime.noVaultOpen');
       try {
         const ciphertext = await names.encrypt(trimmed);
@@ -744,7 +744,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         await created.importVault(data);
         remoteVaults.delete(id);
         const failure = await start(created, id, remote.header);
-        return failure === null ? null : failed(failure);
+        return failure === null ? null : await failed(failure);
       } catch (error) {
         return failed(error);
       }

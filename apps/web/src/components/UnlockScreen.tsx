@@ -139,7 +139,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
 
   const validateNew = (): string | null => {
     if (name().trim() === '') return t('vault.nameRequired');
-    if ([...passphrase()].length < MIN_PASSPHRASE_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_PASSPHRASE_LENGTH });
+    if (Array.from(passphrase()).length < MIN_PASSPHRASE_LENGTH) return t('unlock.passphraseTooShort', { min: MIN_PASSPHRASE_LENGTH });
     if (passphrase() !== confirmation()) return t('unlock.passphraseMismatch');
     return null;
   };
@@ -290,7 +290,7 @@ export function UnlockScreen(props: { readonly runtime: Runtime }): JSX.Element 
             <p role="note" style={{ margin: '4px 0 0', color: tokens.muted, 'font-size': '12px' }}>
               {t('unlock.passphraseHint', { min: MIN_PASSPHRASE_LENGTH })}
             </p>
-            <Show when={[...passphrase()].length >= MIN_PASSPHRASE_LENGTH && isEasyToGuess(passphrase())}>
+            <Show when={Array.from(passphrase()).length >= MIN_PASSPHRASE_LENGTH && isEasyToGuess(passphrase())}>
               <p role="alert" style={{ margin: '4px 0 0', color: tokens.danger, 'font-size': '12px' }}>
                 {t('unlock.passphraseWeak')}
               </p>

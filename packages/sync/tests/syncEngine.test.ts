@@ -338,7 +338,9 @@ describe('createSyncEngine', () => {
           deviceId: `desktop-${i}` as DeviceId,
           relayUrl: 'ws://relay.test/ws',
           getIdToken: () => 'id-token',
-          onRemoteChange: () => void applied[i]!++,
+          onRemoteChange: () => {
+            applied[i]!++;
+          },
           onStatusChange: () => undefined,
           onError: (e) => {
             throw e;

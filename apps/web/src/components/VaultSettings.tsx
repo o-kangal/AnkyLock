@@ -1,4 +1,4 @@
-import { createSignal, For, Match, Show, Switch, useContext, type JSX } from 'solid-js';
+import { createSignal, For, Match, Show, Switch, untrack, useContext, type JSX } from 'solid-js';
 import { MAX_VAULT_NAME_LENGTH, type Runtime } from '../runtime/createRuntime.js';
 import { touchSized, useNarrowScreen } from '../layout/screen.js';
 import { useExport } from '../export/saveFile.js';
@@ -43,7 +43,7 @@ export function VaultSettings(props: {
   /** Typed to confirm deleting all Drive data. */
   const confirmWord = (): string => t('common.confirmWord');
   const [view, setView] = createSignal<VaultSettingsView>(props.initialView ?? 'menu');
-  const [name, setName] = createSignal(props.runtime.vaultName() ?? '');
+  const [name, setName] = createSignal(untrack(() => props.runtime.vaultName()) ?? '');
   const [typed, setTyped] = createSignal('');
   const [relayInput, setRelayInput] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);

@@ -10,6 +10,8 @@ function fake(responses: Record<string, unknown>): { invoke: Invoke; calls: stri
     invoke: async (command) => {
       calls.push(command);
       const response = responses[command];
+      // Tauri rejects commands with plain `{ code, message }` objects, not Errors.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       if (response instanceof Error || (typeof response === 'object' && response !== null && 'code' in response)) throw response;
       return response;
     },

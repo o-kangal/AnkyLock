@@ -23,11 +23,7 @@ export function titleListener(onTitle: (title: string | null) => void): Extensio
       update(update: ViewUpdate) {
         if (!update.docChanged) return;
         const lineOneEnd = update.startState.doc.line(1).to;
-        let touchesLineOne = false;
-        update.changes.iterChangedRanges((fromA) => {
-          if (fromA <= lineOneEnd) touchesLineOne = true;
-        });
-        if (!touchesLineOne) return;
+        if (!update.changes.touchesRange(0, lineOneEnd)) return;
         const title = readTitle(update.view);
         if (title !== last) {
           last = title;

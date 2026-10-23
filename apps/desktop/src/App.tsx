@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { createSignal, Match, onCleanup, Switch, type JSX } from 'solid-js';
-import { bytesToBase64, createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
+import { bytesToBase64, createWorkerSealer } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { TauriVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
@@ -27,7 +27,7 @@ import { TitleBar } from './TitleBar.jsx';
  */
 export function App(): JSX.Element {
   const worker = new CryptoWorker();
-  const sealer = createWorkerSealer(worker as MessagePortLike);
+  const sealer = createWorkerSealer(worker);
   const auth = createAuthSession(createTauriAuthTransport(), { onError: (error) => console.error(error) });
   const runtime = createRuntime({
     vaults: new TauriVaultDirectory(),

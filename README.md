@@ -106,7 +106,7 @@ packages/
   storage/   Storage engine interface and adapters (SQLite, IndexedDB)
   sync/      Yjs documents, Drive backup and catch-up, outbox, relay client
 migrations/  SQL schema migrations
-tests/       End-to-end tests across devices
+tests/       End-to-end tests across devices; browser tests (Playwright) in tests/browser
 docs/        Security documents, design sources, screenshots
 ```
 
@@ -123,6 +123,7 @@ Run from the repository root:
 | Type check | `pnpm -r run typecheck` |
 | Lint | `pnpm -r run lint && cargo clippy --workspace --all-targets` |
 | Tests | `pnpm -r run test && cargo test --workspace` |
+| Browser tests (Chromium, WebKit) | `pnpm --filter @ankylock/e2e test:browser` |
 | Build | `pnpm -r run build && pnpm --filter @ankylock/desktop tauri build` |
 | Dependency audit | `pnpm audit && cargo audit && cargo deny check` |
 | Third-party notices | `pnpm notices` |

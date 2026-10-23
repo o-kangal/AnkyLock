@@ -31,7 +31,7 @@ const MAX_NAME = 100;
 /** A file or directory name every OS accepts: reserved characters become `_`, reserved names get a `_` prefix. */
 export function safeName(name: string, fallback = 'Untitled'): string {
   let safe = name.normalize('NFC').replace(UNSAFE, '_').trim();
-  const chars = [...safe];
+  const chars = Array.from(safe);
   if (chars.length > MAX_NAME) safe = chars.slice(0, MAX_NAME).join('');
   // Windows drops trailing dots and spaces, which would make two names collide.
   safe = safe.replace(/[. ]+$/, '');

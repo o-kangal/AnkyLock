@@ -43,7 +43,7 @@ function stubAnimate() {
   Element.prototype.animate = function (this: Element, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
     animate(keyframes, options, this);
     return {} as Animation;
-  } as Element['animate'];
+  };
   disposers.push(() => {
     delete (Element.prototype as { animate?: unknown }).animate;
   });

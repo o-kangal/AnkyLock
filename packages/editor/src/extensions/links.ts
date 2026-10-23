@@ -67,7 +67,7 @@ export function findLinks(text: string, offset = 0): LinkMatch[] {
     const text = match[0].replace(TRAILING, '');
     const url = toUrl(text);
     if (url === null) continue;
-    const from = offset + (match.index ?? 0);
+    const from = offset + match.index;
     links.push({ from, to: from + text.length, url });
   }
   return links;

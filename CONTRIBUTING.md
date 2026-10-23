@@ -25,7 +25,9 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 ```
 
-All of them must pass with no new warnings. Add tests for what you change: the rules a change touches should be covered by a test that would fail without it.
+All of them must pass with no new warnings. CI runs them on every pull request, together with browser tests in Chromium and WebKit, `pnpm audit`, `cargo deny`, gitleaks, CodeQL and a crypto pattern scan. To run the browser tests locally, install the browsers once with `pnpm --filter @ankylock/e2e exec playwright install --with-deps chromium webkit`, then run `pnpm --filter @ankylock/e2e test:browser`.
+
+Add tests for what you change: the rules a change touches should be covered by a test that would fail without it.
 
 ## How the code is written
 

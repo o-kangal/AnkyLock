@@ -6,7 +6,7 @@ import { findLinks, isOpenableUrl, links, type LinkModifier } from '../src/index
 beforeAll(() => {
   // jsdom has no layout; CodeMirror only needs these to exist.
   Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
-  Range.prototype.getClientRects = () => Object.assign([] as DOMRect[], { item: () => null }) as unknown as DOMRectList;
+  Range.prototype.getClientRects = () => Object.assign([] as DOMRect[], { item: () => null });
 });
 
 describe('link detection', () => {

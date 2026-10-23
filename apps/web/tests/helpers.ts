@@ -85,7 +85,7 @@ export class FakeDrive {
   }
 
   readonly fetch: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const method = init?.method ?? 'GET';
     const json = (value: unknown): Response => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
     const fileId = /\/files\/([^/?]+)$/.exec(url.pathname)?.[1];

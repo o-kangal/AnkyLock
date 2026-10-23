@@ -21,7 +21,7 @@ describe('export file names', () => {
     expect(safeName('../../etc/passwd')).toBe('.._.._etc_passwd');
     expect(safeName('..\\..\\windows')).toBe('.._.._windows');
     expect(safeName('.')).toBe('Untitled');
-    expect([...safeName('x'.repeat(300))]).toHaveLength(100);
+    expect(Array.from(safeName('x'.repeat(300)))).toHaveLength(100);
     expect(safeName('Plans\u0000\u0007')).toBe('Plans__');
   });
 

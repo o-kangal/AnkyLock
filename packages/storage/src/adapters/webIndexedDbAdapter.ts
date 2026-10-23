@@ -13,7 +13,6 @@ import {
   type Category,
   type CategoryId,
   type Ciphertext,
-  type DomainError,
   type EpochMs,
   type Folder,
   type FolderId,
@@ -92,7 +91,7 @@ const isSetting = (value: unknown): value is { key: string; value: unknown } =>
 const anything = (_value: unknown): _value is unknown => true;
 const isKey = (value: unknown): value is number => typeof value === 'number';
 
-function unwrap<T>(result: Result<T, DomainError>): T {
+function unwrap<T>(result: Result<T>): T {
   if (!result.ok) throw new StorageError(result.error.code, result.error.message);
   return result.value;
 }

@@ -6,6 +6,6 @@ import { TITLE_FALLBACK_LENGTH } from '../constants.js';
  * Pass only a bounded prefix of line 1; the text may be a multi-megabyte single line.
  */
 export function deriveTitle(firstLine: string): string | null {
-  const title = [...firstLine.trim()].slice(0, TITLE_FALLBACK_LENGTH).join('').trimEnd();
+  const title = Array.from(firstLine.trim()).slice(0, TITLE_FALLBACK_LENGTH).join('').trimEnd();
   return title === '' ? null : title;
 }

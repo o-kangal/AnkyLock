@@ -45,7 +45,7 @@ Audit target: `$ARGUMENTS`. If it's empty, audit the current changes. This direc
    ```bash
    bash .claude/skills/crypto-audit/scripts/scan.sh <path...>
    ```
-   It greps for known-bad patterns: `Math.random` near IVs, constant or reused IVs, `localStorage`/`sessionStorage` near key material, Node `crypto` imports in `packages/`, plaintext field names being logged or serialized into outbox/frames, and `extractable: true`. Its hits are **leads, not verdicts**. Read each one in context.
+   It greps for known-bad patterns: `Math.random` near IVs, constant or reused IVs, `localStorage`/`sessionStorage` near key material, Node `crypto` imports in `packages/`, plaintext field names being logged or serialized into outbox/frames, and `extractable: true`. Its hits are **leads, not verdicts**. Read each one in context. CI runs it with `--strict`, which fails only on the checks marked `hard` in the script (patterns with no legitimate use here: an IV parameter on `encrypt`, key material in Web Storage, Node imports in shared code, extractable keys, keys from OAuth material).
 2. Then trace data flow by hand. Grep alone won't catch these. For each sink (`sync_outbox` insert, `ws.send`, Drive upload, `console.*`/`tracing::*`, `*_ciphertext` column write), follow the value backwards and confirm it went through `encrypt`/`pack` from `packages/crypto`. Check the relay (`apps/relay`) too: it must forward frames without deserializing or logging the `encrypted_envelope`.
 3. Check every rule in Part 1, not only the three original checks: fresh IV, no plaintext at the sinks, MEK not persisted insecurely, key separation, KDF parameters, the decrypt failure path, main-thread crypto.
 

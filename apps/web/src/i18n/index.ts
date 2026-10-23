@@ -18,7 +18,7 @@ const DICTIONARIES: Record<Locale, Messages> = { en, tr };
 const TAGS: Record<Locale, string> = { en: 'en-US', tr: 'tr-TR' };
 
 /** Turkish for any `tr` language tag, otherwise English. */
-export function systemLocale(languages: readonly string[] = typeof navigator === 'undefined' ? [] : navigator.languages ?? [navigator.language]): Locale {
+export function systemLocale(languages: readonly string[] = typeof navigator === 'undefined' ? [] : navigator.languages): Locale {
   return languages[0]?.toLowerCase().startsWith('tr') ? 'tr' : 'en';
 }
 

@@ -940,6 +940,7 @@ pnpm -r run typecheck && cargo test --workspace
 ---
 
 ### Task 13d: CI Pipeline with Security Checks
+- **Status:** ✅ Completed (2026-10-23)
 - **Type:** DevOps
 - **Read-Only Context Files:** `AGENTS.md`, `package.json`, `deny.toml`, `.gitleaks.toml`
 - **Target Files (Create/Modify):**

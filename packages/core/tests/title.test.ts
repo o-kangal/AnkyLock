@@ -13,7 +13,7 @@ describe('deriveTitle (BR-NOTE-03)', () => {
 
   it('counts emoji as single characters and never splits them', () => {
     const title = deriveTitle('🔐'.repeat(45));
-    expect([...(title ?? '')]).toHaveLength(40);
+    expect(Array.from(title ?? '')).toHaveLength(40);
     expect(title?.endsWith('🔐')).toBe(true);
   });
 

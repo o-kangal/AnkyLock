@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, onMount, type JSX } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, onMount, untrack, type JSX } from 'solid-js';
 
 export interface VirtualListProps<T> {
   readonly items: readonly T[];
@@ -18,7 +18,7 @@ export interface VirtualListProps<T> {
 export function VirtualList<T>(props: VirtualListProps<T>): JSX.Element {
   let scroller!: HTMLDivElement;
   const [scrollTop, setScrollTop] = createSignal(0);
-  const [height, setHeight] = createSignal(props.fallbackHeight ?? 600);
+  const [height, setHeight] = createSignal(untrack(() => props.fallbackHeight) ?? 600);
 
   onMount(() => {
     if (scroller.clientHeight > 0) setHeight(scroller.clientHeight);

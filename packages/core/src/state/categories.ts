@@ -8,7 +8,7 @@ import { err, ok, type Result } from '../errors.js';
  */
 export function validateCategoryName(name: string, existingNames: readonly string[]): Result<string> {
   const trimmed = name.trim();
-  const length = [...trimmed].length;
+  const length = Array.from(trimmed).length;
   if (length < 1 || length > MAX_CATEGORY_NAME_LENGTH) {
     return err('ERR_CATEGORY_NAME_INVALID', `Category names must be 1 to ${MAX_CATEGORY_NAME_LENGTH} characters.`);
   }

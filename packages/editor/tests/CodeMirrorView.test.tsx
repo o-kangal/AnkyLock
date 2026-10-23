@@ -10,7 +10,7 @@ import { CodeMirrorView, undoManagerFor, type ColorScheme } from '../src/index.j
 beforeAll(() => {
   // jsdom has no layout; CodeMirror only needs these to exist.
   const rect = (): DOMRect => new DOMRect(0, 0, 0, 0);
-  const rects = (): DOMRectList => Object.assign([] as DOMRect[], { item: () => null }) as unknown as DOMRectList;
+  const rects = (): DOMRectList => Object.assign([] as DOMRect[], { item: () => null });
   Range.prototype.getBoundingClientRect = rect;
   Range.prototype.getClientRects = rects;
 });
@@ -163,10 +163,9 @@ describe('CodeMirrorView', () => {
   });
 
   it('takes focus on mount only when autoFocus is set', async () => {
-    const plain = mount({ doc: docWith('a') });
+    mount({ doc: docWith('a') });
     await Promise.resolve();
     expect(view().hasFocus).toBe(false);
-    void plain;
     dispose?.();
     root.remove();
 

@@ -7,7 +7,7 @@ import { editorBasics, noteText, undoManagerFor, yjsBinding } from '../src/index
 beforeAll(() => {
   // jsdom has no layout; CodeMirror only needs these to exist.
   Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
-  Range.prototype.getClientRects = () => Object.assign([] as DOMRect[], { item: () => null }) as unknown as DOMRectList;
+  Range.prototype.getClientRects = () => Object.assign([] as DOMRect[], { item: () => null });
 });
 
 const views: EditorView[] = [];

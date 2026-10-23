@@ -133,7 +133,7 @@ describe('page close guard', () => {
       addEventListener: (_type: string, next: (event: BeforeUnloadEvent) => void) => void (listener = next),
       removeEventListener: () => void (listener = null),
       unload(): boolean {
-        const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+        const event = new Event('beforeunload', { cancelable: true });
         listener?.(event);
         return event.defaultPrevented;
       },
@@ -146,7 +146,7 @@ describe('page close guard', () => {
     const page = target();
     const guard = guardPageClose(
       { hasUnbackedChanges: () => unbacked, backUpBeforeClose: async (ms) => (started.push(ms), 'ok') },
-      page as unknown as Window,
+      page,
     );
     expect(page.unload()).toBe(true);
     expect(started).toHaveLength(1);

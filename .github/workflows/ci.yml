@@ -1,0 +1,121 @@
+# Every push and pull request: the checks of AGENTS.md, browser tests and security scans.
+# Actions are pinned to commit SHAs (the tag is in the comment); Dependabot keeps them current.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Builds and tests never talk to Google or a relay.
+  VITE_GOOGLE_CLIENT_ID: ''
+  VITE_RELAY_URL: ''
+
+jobs:
+  web:
+    name: TypeScript (typecheck, lint, test, build, audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run typecheck
+      - run: pnpm -r run lint
+      - run: pnpm -r run test
+      - run: pnpm -r run build
+      - run: pnpm audit
+
+  rust:
+    name: Rust (clippy, test) and third-party notices
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev libdbus-1-dev libssl-dev pkg-config
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The desktop crate embeds the built frontend (tauri.conf.json `frontendDist`).
+      - run: pnpm --filter @ankylock/desktop... run build
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - name: THIRD_PARTY_NOTICES.md is up to date
+        run: |
+          pnpm notices
+          git diff --exit-code THIRD_PARTY_NOTICES.md || { echo "::error::Run 'pnpm notices' and commit THIRD_PARTY_NOTICES.md."; exit 1; }
+
+  browser:
+    name: Browser tests (Chromium, WebKit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ankylock/web... run build
+      - run: pnpm --filter @ankylock/e2e exec playwright install --with-deps chromium webkit
+      - run: pnpm --filter @ankylock/e2e run test:browser
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-traces
+          path: tests/test-results/
+          retention-days: 7
+
+  security:
+    name: Security scans (secrets, crypto patterns, Rust dependencies)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # gitleaks scans the whole history, not only the last commit.
+          fetch-depth: 0
+      - name: gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo" -w /repo
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
+          docker.io/zricethezav/gitleaks:v8.28.0@sha256:bf00b5e039f0fad4b32935dc5ec1e358f227ccd097bcb64b971f0331072fe2ae
+          git --config .gitleaks.toml --redact --verbose --exit-code 1 .
+      - name: Crypto pattern scan
+        run: bash .claude/skills/crypto-audit/scripts/scan.sh --strict
+      - name: cargo deny (advisories, licenses, sources, bans)
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check

@@ -4,5 +4,5 @@
     "jsx": "preserve",
     "jsxImportSource": "solid-js"
   },
-  "include": ["e2e", "vitest.config.ts"]
+  "include": ["e2e", "browser", "vitest.config.ts", "playwright.config.ts"]
 }

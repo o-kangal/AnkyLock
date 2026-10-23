@@ -1,4 +1,4 @@
-import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
+import { createSignal, Match, Show, Switch, untrack, type JSX } from 'solid-js';
 import { MAX_RETENTION_DAYS } from '@ankylock/core';
 import type { WorkspaceStore } from '../../stores/workspaceStore.js';
 import { Popover } from '../Popover.jsx';
@@ -39,7 +39,8 @@ function BinIcon(): JSX.Element {
 
 /** Trash retention setting (BR-LIFE-03) with the SPEC §6 confirmation before shortening it purges items. */
 function RetentionSettings(props: { readonly store: WorkspaceStore; readonly onDone: () => void }): JSX.Element {
-  const initial = props.store.state.retentionDays;
+  // The form starts from the saved value; later changes come from the form itself.
+  const initial = untrack(() => props.store.state.retentionDays);
   const [manual, setManual] = createSignal(initial === 0);
   const [days, setDays] = createSignal(String(initial === 0 ? 28 : initial));
   const [affected, setAffected] = createSignal<number | null>(null);

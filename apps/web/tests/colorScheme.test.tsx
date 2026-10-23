@@ -138,7 +138,7 @@ describe('theme in the app', () => {
 
     (Array.from(root.querySelectorAll('footer button')).find((b) => b.textContent?.endsWith('▾')) as HTMLButtonElement).click();
     await until(() => document.querySelector('[role="group"][aria-label="Theme"]') !== null, 'vault menu');
-    const options = Array.from(document.querySelectorAll('[role="group"][aria-label="Theme"] button')) as HTMLButtonElement[];
+    const options = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Theme"] button'));
     expect(options.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
       ['System', 'false'],
       ['Light', 'false'],

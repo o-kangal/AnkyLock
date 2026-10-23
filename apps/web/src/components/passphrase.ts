@@ -38,7 +38,7 @@ function isSequence(chars: readonly string[]): boolean {
  */
 export function isEasyToGuess(passphrase: string): boolean {
   const lower = passphrase.normalize('NFC').toLocaleLowerCase('tr-TR');
-  const chars = [...lower.replace(/\s+/g, '')];
+  const chars = Array.from(lower.replace(/\s+/g, ''));
   if (new Set(chars).size < 5) return true;
   if (isSequence(chars)) return true;
   return COMMON.some((fragment) => lower.replace(/\s+/g, '').includes(fragment));

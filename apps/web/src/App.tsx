@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, type JSX } from 'solid-js';
-import { createWorkerSealer, type MessagePortLike } from '@ankylock/crypto';
+import { createWorkerSealer } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { WebVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
@@ -17,7 +17,7 @@ import { buildRelayUrl } from './preferences/devicePreferences.js';
  */
 export function App(): JSX.Element {
   const worker = new CryptoWorker();
-  const sealer = createWorkerSealer(worker as MessagePortLike);
+  const sealer = createWorkerSealer(worker);
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   // Without a configured Google client the app is local-only (no sync, no Drive backup).
   const auth = clientId

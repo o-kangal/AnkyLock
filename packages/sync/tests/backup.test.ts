@@ -86,7 +86,7 @@ function fakeDrive(responses: (call: Call) => Response): { fetch: typeof fetch; 
   const calls: Call[] = [];
   const fakeFetch: typeof fetch = async (input, init) => {
     const call = {
-      url: String(input),
+      url: typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
       method: init?.method ?? 'GET',
       headers: new Headers(init?.headers),
       body: init?.body,
@@ -425,7 +425,7 @@ describe('Drive cleanup', () => {
     const drive = new MemoryDrive();
     await syncHeaderFile(drive, { ...headerFile(), nameUpdatedAt: 0 as EpochMs }, false);
     for (const name of [vaultSnapshotFileName(VAULT, DEVICE_A), vaultSnapshotFileName(VAULT, DEVICE_B), 'ankylock-snapshot.v1.bin', 'ankylock-vault-header.v1.json', 'vault-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.header.json']) {
-      await drive.upload(name, new Uint8Array([1]) as Bytes);
+      await drive.upload(name, new Uint8Array([1]));
     }
     await deleteVaultFromDrive(drive, VAULT);
     expect(await removeLegacyDriveFiles(drive)).toBe(2);

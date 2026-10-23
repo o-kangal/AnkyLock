@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EpochMs, NoteId, VaultId } from '@ankylock/core';
+import type { NoteId, VaultId } from '@ankylock/core';
 import { TEXT_FIELD, createAuthSession, type SocketLike } from '@ankylock/sync';
 import { SyncStatusBar } from '../src/components/SyncStatusBar.jsx';
 import { UnlockScreen } from '../src/components/UnlockScreen.jsx';
@@ -93,7 +93,7 @@ async function twoDevices(relay: FakeRelay, drive?: FakeDrive): Promise<readonly
   const id = (await a.vaults.list())[0]?.id as VaultId;
   const b = device(relay, true, drive);
   const header = (await a.vaults.storage.getVaultHeader()) as string;
-  await b.vaults.create(id, header, (await a.vaults.storage.getVaultName())!);
+  await b.vaults.create(id, header, (await a.vaults.storage.getVaultName()));
   await b.runtime.init();
   expect(await b.runtime.unlock(id, PASSPHRASE)).toBeNull();
   return [a, b];
@@ -295,7 +295,7 @@ describe('SyncStatusBar', () => {
     const bar = mount(a.runtime);
     expect(bar.textContent).toContain('Not syncing');
     (Array.from(bar.querySelectorAll('button')).find((b) => b.textContent === 'Sign in with Google') as HTMLElement).click();
-    await until(() => bar.textContent?.includes('Synced') === true, 'synced');
+    await until(() => bar.textContent?.includes('Synced'), 'synced');
     expect(bar.textContent).toContain('Sign out');
     await a.runtime.lock();
   });
@@ -380,7 +380,7 @@ describe('opening an existing vault from Google Drive', () => {
 
     type(root, 'Passphrase', 'not the passphrase');
     submit(root);
-    await until(() => root.textContent?.includes('does not unlock') === true, 'wrong passphrase');
+    await until(() => root.textContent?.includes('does not unlock'), 'wrong passphrase');
     expect(await b.vaults.list()).toEqual([]);
 
     type(root, 'Passphrase', PASSPHRASE);

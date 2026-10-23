@@ -42,7 +42,7 @@ function state(selection: Selection): WorkspaceState {
   return {
     categories: [],
     folders: [folder('a', null), folder('b', 'a'), folder('w', null, 'work')],
-    notes: Object.fromEntries(notes.map((n) => [n.id, n])) as WorkspaceState['notes'],
+    notes: Object.fromEntries(notes.map((n) => [n.id, n])),
     tabs: [],
     activeTabIndex: -1,
     selection,

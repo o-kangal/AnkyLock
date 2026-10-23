@@ -83,6 +83,19 @@ describe('watchForUpdates', () => {
     container.emit('controllerchange');
     expect(reloads).toBe(1);
   });
+  it('does not reload a first visit when its first worker claims the page', () => {
+    // The page had no controller: the claim is the install, not an update.
+    const container = new FakeContainer(null);
+    let reloads = 0;
+    watchForUpdates(container, new FakeRegistration(), () => undefined, () => {
+      reloads++;
+    });
+    container.emit('controllerchange');
+    expect(reloads).toBe(0);
+    // A later update on the same page still reloads.
+    container.emit('controllerchange');
+    expect(reloads).toBe(1);
+  });
 });
 
 describe('UpdateBanner', () => {

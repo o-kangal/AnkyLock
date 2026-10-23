@@ -55,6 +55,9 @@ const LABELS: Record<Platform, Record<WorkspaceCommand, string>> = {
 export const shortcutLabel = (command: WorkspaceCommand, platform: Platform): string => LABELS[platform][command];
 
 /** Ctrl+click opens links, ⌘+click on Apple platforms (where Ctrl+click is a right click). */
+// `navigator.platform` is deprecated but still the reliable source: user agents may claim to be a
+// Mac for compatibility, and `userAgentData` exists in Chromium only.
+// eslint-disable-next-line @typescript-eslint/no-deprecated
 export function linkModifier(platform: string = navigator.platform): 'ctrl' | 'meta' {
   return /^(Mac|iPhone|iPad|iPod)/.test(platform) ? 'meta' : 'ctrl';
 }

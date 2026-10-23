@@ -1,4 +1,4 @@
-import { createSignal, Show, type Accessor, type JSX } from 'solid-js';
+import { createSignal, Show, untrack, type Accessor, type JSX } from 'solid-js';
 import type { LogoFace } from '../../runtime/logoFace.js';
 import { AnkyLogo } from '../AnkyLogo.jsx';
 import { createDragDropManager } from '../../dnd/dragDropManager.js';
@@ -17,7 +17,8 @@ export interface SidebarProps {
 /** Left navigation: the logo, then categories, then the virtualized folder/note tree. */
 export function Sidebar(props: SidebarProps): JSX.Element {
   const [dropError, setDropError] = createSignal<string | null>(null);
-  const dnd = createDragDropManager(props.store, setDropError);
+  // One workspace store per opened vault; the sidebar is remounted with a new one.
+  const dnd = createDragDropManager(untrack(() => props.store), setDropError);
   const [menu, setMenu] = createSignal<{ item: MenuTarget; x: number; y: number } | null>(null);
   const openMenu = (event: MouseEvent, item: MenuTarget): void => {
     setMenu({ item, x: event.clientX, y: event.clientY });

@@ -1,5 +1,4 @@
 import { EditorView } from '@codemirror/view';
-import { IDBFactory } from 'fake-indexeddb';
 import { render } from 'solid-js/web';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { EpochMs, FolderId, NoteId } from '@ankylock/core';
@@ -10,7 +9,7 @@ import { setup, TestVaults } from './helpers.js';
 beforeAll(() => {
   // jsdom has no layout; CodeMirror only needs these to exist.
   Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
-  Range.prototype.getClientRects = () => Object.assign([] as DOMRect[], { item: () => null }) as unknown as DOMRectList;
+  Range.prototype.getClientRects = () => Object.assign([] as DOMRect[], { item: () => null });
 });
 
 /** Same-thread stand-in for the crypto worker. */
@@ -462,7 +461,7 @@ describe('confirmation styling', () => {
       Array.from(document.querySelectorAll('[role="menuitem"]')).find((b) => b.textContent?.startsWith('Delete permanently')) as HTMLElement;
     expect(purge().style.color).toBe('inherit');
     purge().click();
-    await waitFor(() => purge().textContent?.includes('Click again to confirm') === true, 'confirm prompt');
+    await waitFor(() => purge().textContent?.includes('Click again to confirm'), 'confirm prompt');
     expect(purge().style.color).toBe(tokens.danger);
   });
 });

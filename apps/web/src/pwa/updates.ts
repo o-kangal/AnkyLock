@@ -30,7 +30,14 @@ export function watchForUpdates(
   reload: () => void,
 ): void {
   let reloading = false;
+  // A first visit gets its first controller when the new worker claims the page: not an update,
+  // and reloading then would wipe whatever the user is typing (say, a new vault's passphrase).
+  let controlled = Boolean(container.controller);
   container.addEventListener('controllerchange', () => {
+    if (!controlled) {
+      controlled = true;
+      return;
+    }
     if (reloading) return;
     reloading = true;
     reload();

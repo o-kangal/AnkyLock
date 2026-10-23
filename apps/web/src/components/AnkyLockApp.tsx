@@ -1,4 +1,4 @@
-import { createEffect, createSignal, Match, on, onCleanup, onMount, Switch, type Accessor, type JSX } from 'solid-js';
+import { createEffect, createSignal, Match, on, onCleanup, onMount, Switch, untrack, type Accessor, type JSX } from 'solid-js';
 import type { Platform } from '../keyboard/shortcuts.js';
 import { createNarrowScreen, ScreenContext } from '../layout/screen.js';
 import type { Runtime } from '../runtime/createRuntime.js';
@@ -27,8 +27,10 @@ export function AnkyLockApp(props: {
   onMount(() => void props.runtime.init());
   // Before any editor exists, so notes open with their font already loaded.
   loadAppFonts();
-  const narrow = props.narrow ?? createNarrowScreen();
-  const theme = props.theme ?? createThemePreference();
+  // Test overrides are fixed for the app's lifetime.
+  const narrow = untrack(() => props.narrow) ?? createNarrowScreen();
+  const theme = untrack(() => props.theme) ?? createThemePreference();
+  const saveFile = untrack(() => props.saveFile) ?? downloadFile;
   // The whole document follows, including the desktop title bar outside this tree.
   createEffect(() => applyColorScheme(theme.scheme()));
   // Screen readers, hyphenation and spell checking follow the UI language.
@@ -36,10 +38,10 @@ export function AnkyLockApp(props: {
   // An unlock plays on the vault picker's logo before the workspace replaces it. Locking shows
   // the picker right away; its logo then plays the lock.
   const reducedMotion = createReducedMotion();
-  const [screen, setScreen] = createSignal(props.runtime.status());
+  const [screen, setScreen] = createSignal(untrack(() => props.runtime.status()));
   let opening: ReturnType<typeof setTimeout> | undefined;
   createEffect(
-    on(props.runtime.status, (status) => {
+    on(() => props.runtime.status(), (status) => {
       clearTimeout(opening);
       const fromPicker = screen() === 'locked' || screen() === 'uninitialized';
       if (status === 'unlocked' && fromPicker && !reducedMotion()) opening = setTimeout(() => setScreen(status), LOGO_TRANSITION_MS);
@@ -50,7 +52,7 @@ export function AnkyLockApp(props: {
 
   return (
     <ThemeContext.Provider value={theme}>
-      <SaveFileContext.Provider value={props.saveFile ?? downloadFile}>
+      <SaveFileContext.Provider value={saveFile}>
         <ScreenContext.Provider value={narrow}>
           <Switch>
             <Match when={screen() === 'loading'}>

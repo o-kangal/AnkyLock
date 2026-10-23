@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EpochMs } from '@ankylock/core';
-import { createWebAuthTransport, DRIVE_APPDATA_SCOPE, type ChannelLike, type PopupLike } from '../src/auth/webGoogleAuth.js';
+import { createWebAuthTransport, DRIVE_APPDATA_SCOPE, type ChannelLike } from '../src/auth/webGoogleAuth.js';
 
 const CLIENT_ID = 'web-client.apps.googleusercontent.com';
 const NOW = 1_776_100_000_000;
@@ -22,7 +22,7 @@ function harness(revokeResponse: () => Promise<Response> = async () => new Respo
     openPopup: (u) => {
       url = u;
       popup.closed = false;
-      return popup as PopupLike;
+      return popup;
     },
     openChannel: () => (channel = { onmessage: null, close: vi.fn() }),
     storage: {
@@ -126,7 +126,7 @@ describe('createWebAuthTransport', () => {
     status = 200;
     await h.transport.revoke();
     expect(h.fetch).toHaveBeenCalledTimes(2);
-    expect(String(h.fetch.mock.calls[1]?.[1]?.body)).toBe('token=drive-token');
+    expect(h.fetch.mock.calls[1]?.[1]?.body).toBe('token=drive-token');
     // Already revoked: signing out has nothing left to revoke.
     await h.transport.signOut();
     expect(h.fetch).toHaveBeenCalledTimes(2);
