@@ -1,5 +1,6 @@
 {
   "name": "ankylock",
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.34.6",
@@ -11,7 +12,8 @@
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
-    "build": "pnpm -r run build"
+    "build": "pnpm -r run build",
+    "notices": "node scripts/third-party-notices.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3"

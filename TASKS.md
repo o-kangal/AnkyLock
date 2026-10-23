@@ -917,6 +917,7 @@ pnpm -r run typecheck && pnpm -r run test && cargo test --workspace && bash .cla
 ---
 
 ### Task 13c: License and Documentation
+- **Status:** ✅ Completed (2026-10-23)
 - **Type:** Documentation
 - **Read-Only Context Files:** `SPEC.md`, `AGENTS.md`, `docs/security/threat-model.md`
 - **Target Files (Create/Modify):**
