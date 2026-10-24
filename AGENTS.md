@@ -72,7 +72,7 @@ Always run these commands from the repository root:
 ## Hard Guardrails (Agent Prohibitions)
 
 - **DO NOT** use TypeScript `any`. Use strict schemas, branded types, or `unknown` with type guards.
-- **DO NOT** import Node.js native modules (`fs`, `path`, `crypto`) in shared frontend packages (`packages/*`). Use Tauri IPC or Web APIs.
+- **DO NOT** import Node.js native modules (`fs`, `path`, `crypto`) in shared frontend packages (`packages/*`) or in any code an app ships to the browser. Use Tauri IPC or Web APIs. Only an app's own `tests/` and root `vite.config.ts`/`vitest.config.ts` run in Node. ESLint, the crypto scan and `pnpm build:check` (which fails when Vite externalizes a Node module from any bundle, workers included) enforce this.
 - **DO NOT** use Monaco Editor or Electron packages under any circumstances.
 - **DO NOT** introduce global CSS files or UI component libraries (e.g., MUI, AntD). Use utility classes or headless Solid primitives. The one exception is the static landing site `apps/site`, which keeps its styles in a single stylesheet (`src/styles/site.css`) so its CSP can forbid inline styles; the apps themselves stay without global CSS.
 - **DO NOT** execute blocking CPU tasks (encryption, delta parsing, syntax detection) on the main thread. Delegate all heavy operations to Dedicated Web Workers.

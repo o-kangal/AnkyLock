@@ -23,6 +23,7 @@ pnpm -r run lint
 pnpm -r run test
 cargo clippy --workspace --all-targets
 cargo test --workspace
+pnpm build:check   # builds everything; fails if a Node module reached a browser bundle
 ```
 
 All of them must pass with no new warnings. CI runs them on every pull request, together with browser tests in Chromium and WebKit, `pnpm audit`, `cargo deny`, gitleaks, CodeQL and a crypto pattern scan. To run the browser tests locally, install the browsers once with `pnpm --filter @ankylock/e2e exec playwright install --with-deps chromium webkit`, then run `pnpm --filter @ankylock/e2e test:browser`.

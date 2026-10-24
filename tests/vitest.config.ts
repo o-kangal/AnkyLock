@@ -7,5 +7,5 @@ export default defineConfig({
   plugins: [solid()],
   resolve: { conditions: ['@ankylock/source', 'browser'] },
   // Reconnects use the real backoff (0.5 s, 1 s, 2 s…), so a test may take several seconds.
-  test: { environment: 'jsdom', include: ['e2e/**/*.test.ts'], testTimeout: 30_000 },
+  test: { environment: 'jsdom', include: ['e2e/**/*.test.ts', 'build/**/*.test.ts'], testTimeout: 30_000 },
 });

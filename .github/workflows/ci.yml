@@ -37,7 +37,8 @@ jobs:
       - run: pnpm -r run typecheck
       - run: pnpm -r run lint
       - run: pnpm -r run test
-      - run: pnpm -r run build
+      # Builds everything and fails if a Node module reached a browser bundle (scripts/check-build.ts).
+      - run: pnpm build:check
         env:
           # The landing site reads the latest release at build time; the token avoids the rate limit.
           GITHUB_TOKEN: ${{ github.token }}

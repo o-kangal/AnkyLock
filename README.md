@@ -127,6 +127,7 @@ Run from the repository root:
 | Tests | `pnpm -r run test && cargo test --workspace` |
 | Browser tests (Chromium, WebKit) | `pnpm --filter @ankylock/e2e test:browser` |
 | Build | `pnpm -r run build && pnpm --filter @ankylock/desktop tauri build` |
+| Build, checking browser bundles for Node modules | `pnpm build:check` |
 | Dependency audit | `pnpm audit && cargo audit && cargo deny check` |
 | Third-party notices | `pnpm notices` |
 

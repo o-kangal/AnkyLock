@@ -1,9 +1,19 @@
 // Lint rules for every TypeScript package and app (AGENTS.md: strict TypeScript, no `any`).
 // Each package runs `eslint .`; this file is found from there.
+import { builtinModules } from 'node:module';
 import js from '@eslint/js';
 import solid from 'eslint-plugin-solid/configs/typescript';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+
+// Node's built-in modules by every name they can be imported with (`fs`, `node:fs`, `fs/promises`).
+const NODE_MODULES = builtinModules
+  .filter((name) => !name.startsWith('_'))
+  .flatMap((name) => (name.startsWith('node:') ? [name] : [name, `node:${name}`]));
+const NO_NODE = 'Code that runs in the browser or a worker cannot use Node modules (AGENTS.md); use Web APIs or Tauri IPC.';
+const nodeImports = NODE_MODULES.map((name) => ({ name, message: NO_NODE }));
+const escaped = NODE_MODULES.map((name) => name.replace(/[/:]/g, '\\$&')).join('|');
+const nodeDynamicImport = { selector: `ImportExpression > Literal[value=/^(${escaped})$/]`, message: NO_NODE };
 
 export default tseslint.config(
   { ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.generated/**', 'target/**', 'apps/desktop/src-tauri/**'] },
@@ -43,6 +53,23 @@ export default tseslint.config(
       // Tests probe values the types already promise, and drive Solid outside components.
       '@typescript-eslint/no-unnecessary-condition': 'off',
       'solid/reactivity': 'off',
+    },
+  },
+  {
+    // No Node modules in shipped code. Only the apps' own tests and build configs run in Node;
+    // `pnpm build:check` catches anything that still reaches a bundle.
+    files: ['packages/**', 'apps/**'],
+    ignores: ['apps/*/tests/**', 'apps/*/vite.config.ts', 'apps/*/vitest.config.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: nodeImports }],
+      'no-restricted-syntax': ['error', nodeDynamicImport],
+    },
+  },
+  {
+    // Shipped code must not pull in test helpers, which may use Node modules freely.
+    files: ['packages/*/src/**', 'apps/*/src/**', 'apps/*/public/**'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: nodeImports, patterns: [{ regex: '(^|/)tests?/', message: 'Shipped code must not import test files.' }] }],
     },
   },
   {

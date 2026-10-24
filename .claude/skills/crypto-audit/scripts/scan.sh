@@ -17,17 +17,23 @@ if [ ${#existing[@]} -eq 0 ]; then
   exit 0
 fi
 
-GREP=(grep -rnE --include=*.ts --include=*.tsx --include=*.js --include=*.rs
-      --exclude-dir=node_modules --exclude-dir=target --exclude-dir=dist)
+GREP=(grep -rnE --include=*.ts --include=*.tsx --include=*.js --include=*.mjs --include=*.rs
+      --exclude-dir=node_modules --exclude-dir=target --exclude-dir=dist --exclude-dir=.generated)
+
+# Files that only ever run in Node: an app's own tests and its root Vite/Vitest config. Only the
+# Node-module check skips them; `pnpm build:check` fails if one of them still reaches a bundle.
+NODE_ONLY='^(\./)?apps/[^/]+/(tests/|(vite|vitest)\.config\.ts:)'
 
 hits=0
 hard_hits=0
 check() {
   local label="$1" pattern="$2"; shift 2
-  local hard=0
+  local hard=0 skip=''
   [ "${1:-}" = "hard" ] && { hard=1; shift; }
+  [ "${1:-}" = "skip-node-only" ] && { skip=1; shift; }
   local out
   out=$("${GREP[@]}" "$@" -e "$pattern" "${existing[@]}" 2>/dev/null)
+  [ -n "$skip" ] && out=$(printf '%s\n' "$out" | grep -vE "$NODE_ONLY")
   if [ -n "$out" ]; then
     echo "### $label"
     echo "$out"
@@ -43,7 +49,7 @@ check "Non-crypto RNG (Math.random / rand::thread_rng near crypto)" 'Math\.rando
 check "Possibly constant / caller-supplied IV" '(iv|nonce)\s*[:=]\s*(new Uint8Array\(12\)\s*[,;)]|\[0|Uint8Array\.from\(|["'"'"'`])'
 check "IV passed in as parameter (should be generated inside encrypt)" 'function\s+encrypt\w*\s*\([^)]*\biv\b' hard
 check "Key material in Web Storage" '(localStorage|sessionStorage)\.(setItem|getItem)\s*\([^)]*(key|mek|secret|pass)' hard
-check "Node crypto / fs / path import in shared code" "from\s+['\"](node:)?(crypto|fs|path)['\"]|require\(['\"](node:)?(crypto|fs|path)['\"]\)" hard
+check "Node crypto / fs / path import in shipped code" "from\s+['\"](node:)?(crypto|fs|path)['\"]|import\(\s*['\"](node:)?(crypto|fs|path)['\"]|require\(['\"](node:)?(crypto|fs|path)['\"]\)" hard skip-node-only
 check "Extractable keys" 'extractable\s*:\s*true|,\s*true\s*,\s*\[\s*["'"'"']?(encrypt|decrypt|wrapKey)' hard
 check "Plaintext fields logged" '(console\.(log|info|debug|warn|error)|tracing::(info|debug|warn|error)!|println!|eprintln!)\s*\([^)]*(title|body|content|folderName|categoryName|plaintext|name\b)'
 check "Plaintext fields serialized near sync sinks" '(JSON\.stringify|serde_json::to_)\w*\([^)]*(title|body|plaintext|folderName|categoryName)'
