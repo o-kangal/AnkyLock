@@ -19,7 +19,8 @@
 │   ├── desktop/             # Tauri v2 container (src-tauri Rust host + frontend binding)
 │   │   └── src-tauri/       # Native IPC commands, rusqlite manager, OS keychain integration
 │   ├── web/                 # Solid.js SPA entrypoint, ServiceWorker, PWA manifest, OPFS driver
-│   └── relay/               # Rust (Axum + Tokio) stateless blind WebSocket fanout node
+│   ├── relay/               # Rust (Axum + Tokio) stateless blind WebSocket fanout node
+│   └── site/                # Static landing site (ankylock.com), pre-rendered HTML in English and Turkish
 ├── packages/
 │   ├── core/                # Domain models, state machines (XState/signals), business rules
 │   ├── crypto/              # WebCrypto wrappers: AES-256-GCM, PBKDF2 key derivation, IV handling
@@ -73,7 +74,7 @@ Always run these commands from the repository root:
 - **DO NOT** use TypeScript `any`. Use strict schemas, branded types, or `unknown` with type guards.
 - **DO NOT** import Node.js native modules (`fs`, `path`, `crypto`) in shared frontend packages (`packages/*`). Use Tauri IPC or Web APIs.
 - **DO NOT** use Monaco Editor or Electron packages under any circumstances.
-- **DO NOT** introduce global CSS files or UI component libraries (e.g., MUI, AntD). Use utility classes or headless Solid primitives.
+- **DO NOT** introduce global CSS files or UI component libraries (e.g., MUI, AntD). Use utility classes or headless Solid primitives. The one exception is the static landing site `apps/site`, which keeps its styles in a single stylesheet (`src/styles/site.css`) so its CSP can forbid inline styles; the apps themselves stay without global CSS.
 - **DO NOT** execute blocking CPU tasks (encryption, delta parsing, syntax detection) on the main thread. Delegate all heavy operations to Dedicated Web Workers.
 - **DO NOT** modify existing SQLite migration files in `migrations/`. Always append a new versioned migration script (`V<timestamp>__description.sql`).
 - **DO NOT** implement Last-Write-Wins (LWW) overrides for text conflicts. All text merges must pass through Yjs CRDT binary updates.

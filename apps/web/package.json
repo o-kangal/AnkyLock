@@ -7,6 +7,9 @@
   "exports": {
     "./workspace": {
       "@ankylock/source": "./src/index.ts"
+    },
+    "./logo": {
+      "@ankylock/source": "./src/logo/index.ts"
     }
   },
   "scripts": {

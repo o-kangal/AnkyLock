@@ -99,6 +99,7 @@ apps/
   desktop/   Tauri v2 shell (src-tauri: Rust host, SQLite, keychain)
   web/       Solid.js app and PWA; the shared UI
   relay/     Rust blind WebSocket relay
+  site/      Static landing site (ankylock.com), pre-rendered in English and Turkish
 packages/
   core/      Domain models and business rules
   crypto/    Web Crypto wrappers (AES-256-GCM, PBKDF2) and the crypto worker
@@ -119,6 +120,7 @@ Run from the repository root:
 | Install | `pnpm install --frozen-lockfile` |
 | Desktop dev | `pnpm --filter @ankylock/desktop tauri dev` |
 | Web dev | `pnpm --filter @ankylock/web dev` |
+| Landing site dev | `pnpm --filter @ankylock/site dev` |
 | Relay dev | `cargo run --manifest-path apps/relay/Cargo.toml` |
 | Type check | `pnpm -r run typecheck` |
 | Lint | `pnpm -r run lint && cargo clippy --workspace --all-targets` |

@@ -962,6 +962,7 @@ pnpm -r run lint && pnpm -r run typecheck && pnpm -r run test && cargo clippy --
 ---
 
 ### Task 13e: Landing Site (ankylock.com)
+- **Status:** ✅ Completed (2026-10-24)
 - **Type:** Frontend/UI
 - **Read-Only Context Files:** `README.md`, `docs/design/logo-expressions.html`, `apps/web/src/theme/colorScheme.ts`, `apps/web/src/theme/fonts.ts`
 - **Target Files (Create/Modify):**

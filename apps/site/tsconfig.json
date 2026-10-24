@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // The color test imports the app's palette, whose imports reach Solid components.
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js"
+  },
+  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts"]
+}

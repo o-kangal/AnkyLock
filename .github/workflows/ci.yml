@@ -38,6 +38,9 @@ jobs:
       - run: pnpm -r run lint
       - run: pnpm -r run test
       - run: pnpm -r run build
+        env:
+          # The landing site reads the latest release at build time; the token avoids the rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
       - run: pnpm audit
 
   rust:
