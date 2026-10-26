@@ -13,5 +13,16 @@
         "transparent": true
       }
     ]
+  },
+  "productName": "ankylock",
+  "bundle": {
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/ankylock.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "linux/ankylock.desktop"
+      }
+    }
   }
 }

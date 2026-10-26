@@ -1,3 +1,4 @@
+import solid from 'vite-plugin-solid';
 import { defaultClientConditions } from 'vite';
 import { defineConfig } from 'vitest/config';
 
@@ -5,6 +6,8 @@ import { defineConfig } from 'vitest/config';
 const conditions = ['@ankylock/source', ...defaultClientConditions];
 
 export default defineConfig({
+  // The update banner's strings come from the web app's components (JSX).
+  plugins: [solid()],
   resolve: { conditions },
   ssr: { resolve: { conditions } },
 });

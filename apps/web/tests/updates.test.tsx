@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { describe, expect, it } from 'vitest';
-import { UpdateBanner } from '../src/pwa/UpdateBanner.jsx';
+import { describe, expect, it, vi } from 'vitest';
+import { UpdateBanner, type PendingUpdate } from '../src/pwa/UpdateBanner.jsx';
 import { watchForUpdates, type ContainerLike, type RegistrationLike, type WorkerLike } from '../src/pwa/updates.js';
 import { SKIP_WAITING } from '../src/sw/cachePolicy.js';
 
@@ -99,30 +99,56 @@ describe('watchForUpdates', () => {
 });
 
 describe('UpdateBanner', () => {
-  it('stays hidden until an update is ready, and saves notes before activating', async () => {
-    const order: string[] = [];
-    const [activate, setActivate] = createSignal<(() => void) | null>(null);
+  function mount(update: () => PendingUpdate | null) {
     const root = document.createElement('div');
     document.body.append(root);
-    const dispose = render(
-      () => (
-        <UpdateBanner
-          activate={activate()}
-          beforeReload={async () => {
-            order.push('flush');
-          }}
-        />
-      ),
+    const dispose = render(() => <UpdateBanner update={update()} />, root);
+    return {
       root,
-    );
-    expect(root.textContent).toBe('');
+      button: () => root.querySelector('button') as HTMLButtonElement,
+      dispose: () => {
+        dispose();
+        root.remove();
+      },
+    };
+  }
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-    setActivate(() => () => order.push('activate'));
-    expect(root.textContent).toContain('A new version of AnkyLock is available.');
-    (root.querySelector('button') as HTMLButtonElement).click();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(order).toEqual(['flush', 'activate']);
-    dispose();
-    root.remove();
+  it('stays hidden until an update is ready, then runs it once', async () => {
+    const runs: string[] = [];
+    const [update, setUpdate] = createSignal<PendingUpdate | null>(null);
+    const banner = mount(update);
+    expect(banner.root.textContent).toBe('');
+
+    setUpdate({ message: 'A new version of AnkyLock is available.', action: 'Reload', busy: 'Saving…', apply: async () => void runs.push('apply') });
+    expect(banner.root.textContent).toContain('A new version of AnkyLock is available.');
+    banner.button().click();
+    expect(banner.button().textContent).toBe('Saving…');
+    expect(banner.button().disabled).toBe(true);
+    await tick();
+    expect(runs).toEqual(['apply']);
+    banner.dispose();
+  });
+
+  it('says so when the update fails, and lets the user try again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let attempts = 0;
+    const banner = mount(() => ({
+      message: 'AnkyLock 0.2.0 is available.',
+      action: 'Install and restart',
+      busy: 'Installing…',
+      apply: () => {
+        attempts++;
+        return Promise.reject(new Error('download failed'));
+      },
+    }));
+    banner.button().click();
+    await tick();
+    expect(banner.root.textContent).toContain('The update could not be installed. Try again later.');
+    expect(banner.button().disabled).toBe(false);
+    banner.button().click();
+    await tick();
+    expect(attempts).toBe(2);
+    banner.dispose();
   });
 });

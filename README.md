@@ -53,7 +53,7 @@ What it does not promise: protection against malware on an unlocked device, or a
 
 ## Download and install
 
-Linux packages (AppImage, `.deb`, `.rpm`) will be published on [GitHub Releases](https://github.com/o-kangal/AnkyLock/releases) with SHA-256 checksums and build provenance, and the AppImage will update itself. Windows and macOS builds come later; until then, build them from source.
+Linux packages (AppImage, `.deb`, `.rpm`) are published on [GitHub Releases](https://github.com/o-kangal/AnkyLock/releases) and at [ankylock.com/download](https://ankylock.com/download/), with SHA-256 checksums and build provenance (`gh attestation verify <file> --repo o-kangal/AnkyLock`). The AppImage updates itself, after asking. Windows and macOS builds come later; until then, build them from source.
 
 The web app will be served at `app.ankylock.com`.
 
@@ -155,7 +155,14 @@ The landing site (`ankylock.com`) and the web app (`app.ankylock.com`) are stati
 
 ### Releases
 
-Releases are built in CI from a version tag and published to GitHub Releases; the steps and the required secrets are documented with the release workflow (Task 13g).
+A version tag builds the Linux packages in CI (`.github/workflows/release.yml`) and drafts a GitHub Release with them, `SHA256SUMS`, build provenance, the AppImage's signed update manifest and the third-party notices; publishing the draft makes it the latest release. To release a version:
+
+1. Set the version in `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml` and `apps/desktop/package.json`, and date its section in `CHANGELOG.md` (`## [0.2.0] - 2026-12-01`).
+2. Refresh `THIRD_PARTY_NOTICES.md` with `pnpm notices`, then commit.
+3. Tag and push: `git tag -s v0.2.0 -m "AnkyLock 0.2.0" && git push origin v0.2.0`.
+4. Review the draft on GitHub and publish it.
+
+Running the workflow by hand from the Actions tab builds the same packages as a dry run, without publishing anything.
 
 ## License
 

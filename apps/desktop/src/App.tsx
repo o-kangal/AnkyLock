@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { createSignal, Match, onCleanup, Switch, type JSX } from 'solid-js';
+import { createSignal, Match, onCleanup, onMount, Switch, type JSX } from 'solid-js';
 import { bytesToBase64, createWorkerSealer } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { TauriVaultDirectory } from '@ankylock/storage';
@@ -14,11 +14,14 @@ import {
   buildRelayUrl,
   t,
   tokens,
+  UpdateBanner,
+  type PendingUpdate,
 } from '@ankylock/web/workspace';
 import { guardWindowClose, type CloseState, type WindowCloseGuard } from './closeGuard.js';
 import { drawsWindowCorners, frameStyle, watchWindowFill } from './windowFrame.js';
 import { createTauriAuthTransport } from './googleAuthTransport.js';
 import { TitleBar } from './TitleBar.jsx';
+import { findDesktopUpdate } from './updates.js';
 
 /**
  * Desktop composition: notes persist through Tauri IPC into one SQLite database per vault in the
@@ -42,6 +45,11 @@ export function App(): JSX.Element {
   const [filled, setFilled] = createSignal(false);
   if (ownCorners) onCleanup(watchWindowFill(getCurrentWindow(), setFilled));
   const closeGuard = guardWindowClose(getCurrentWindow(), runtime, setClosing, CLOSE_BACKUP_WAIT_MS);
+  // Checked once per launch; installing asks first (the banner) and saves notes before restarting.
+  const [update, setUpdate] = createSignal<PendingUpdate | null>(null);
+  onMount(() => {
+    void findDesktopUpdate(() => runtime.flush()).then(setUpdate);
+  });
   onCleanup(() => {
     closeGuard.dispose();
     auth.dispose();
@@ -63,6 +71,7 @@ export function App(): JSX.Element {
         />
       </div>
       <CloseDialog state={closing()} guard={closeGuard} />
+      <UpdateBanner update={update()} />
     </div>
   );
 }

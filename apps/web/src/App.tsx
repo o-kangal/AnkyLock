@@ -5,6 +5,7 @@ import { WebVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
 import { createWebAuthTransport } from './auth/webGoogleAuth.js';
 import { AnkyLockApp } from './components/AnkyLockApp.jsx';
+import { t } from './i18n/index.js';
 import { UpdateBanner } from './pwa/UpdateBanner.jsx';
 import { watchForUpdates } from './pwa/updates.js';
 import { guardPageClose } from './runtime/closeGuard.js';
@@ -59,7 +60,22 @@ export function App(): JSX.Element {
   return (
     <>
       <AnkyLockApp runtime={runtime} />
-      <UpdateBanner activate={activateUpdate()} beforeReload={() => runtime.flush()} />
+      <UpdateBanner
+        update={(() => {
+          const activate = activateUpdate();
+          return activate
+            ? {
+                message: t('update.available'),
+                action: t('update.reload'),
+                busy: t('update.saving'),
+                apply: async () => {
+                  await runtime.flush();
+                  activate();
+                },
+              }
+            : null;
+        })()}
+      />
     </>
   );
 }

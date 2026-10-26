@@ -14,10 +14,23 @@ use crate::commands::vaults::{self, Vaults};
 use crate::commands::{categories, export, folders, links, notes, oauth, outbox, settings, sync};
 use crate::db::pool::DbPool;
 
+/// Self-updates only exist for the AppImage, which can replace its own file; .deb and .rpm
+/// installs belong to the system's package manager. Without the plugin the app's update check
+/// fails quietly and shows nothing.
+fn is_appimage() -> bool {
+    cfg!(target_os = "linux") && std::env::var_os("APPIMAGE").is_some()
+}
+
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init());
+    if is_appimage() {
+        // Downloads are checked against the public key in tauri.conf.json before anything installs.
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+    builder
         .manage(GoogleAuth { client: OAuthClient::from_build_env(), store: Box::new(KeychainStore) })
         .manage(DbPool::default())
         .setup(|app| {

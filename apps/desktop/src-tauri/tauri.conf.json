@@ -35,6 +35,25 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Onur Kangal",
+    "copyright": "Copyright © 2026 Onur Kangal",
+    "homepage": "https://ankylock.com",
+    "license": "AGPL-3.0-or-later",
+    "category": "Productivity",
+    "shortDescription": "Local-first, end-to-end encrypted notes for developers",
+    "longDescription": "AnkyLock is a local-first, end-to-end encrypted scratchpad and notes app for developers. Notes are encrypted on your device with a key that only your passphrase can produce, and sync through your own Google Drive as ciphertext.",
+    "resources": {
+      "../../../LICENSE": "LICENSE",
+      "../../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZEQjA0MDc0ODcxQ0IxQUEKUldTcXNSeUhkRUN3L2VqdGF5TTNjNVhCQXNLV0NabW5yczZiakY0MkVaeUlLbHN3eHdrdXNCVnEK",
+      "endpoints": [
+        "https://github.com/o-kangal/AnkyLock/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
