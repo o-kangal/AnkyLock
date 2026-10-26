@@ -983,6 +983,7 @@ pnpm -r run typecheck && pnpm -r run test && pnpm -r run build
 ---
 
 ### Task 13f: Hosting on Cloudflare (ankylock.com, app.ankylock.com)
+- **Status:** ✅ Completed (2026-10-27)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `apps/web/vite.config.ts`, `apps/web/src/sw/cachePolicy.ts`, `apps/site/`
 - **Target Files (Create/Modify):**
