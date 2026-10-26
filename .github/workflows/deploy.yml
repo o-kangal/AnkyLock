@@ -103,3 +103,8 @@ jobs:
           done
           pnpm exec wrangler pages deploy apps/site/dist --project-name=ankylock-site --branch=main --commit-hash="$SHA" --commit-dirty=false
           pnpm exec wrangler pages deploy apps/web/dist --project-name=ankylock-app --branch=main --commit-hash="$SHA" --commit-dirty=false
+
+      - name: The live pages are exactly the ones built
+        if: steps.target.outputs.deploy == 'true'
+        # Cloudflare features (email obfuscation, Web Analytics, …) rewrite pages and inject scripts.
+        run: node scripts/check-live.ts

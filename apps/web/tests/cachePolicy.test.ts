@@ -26,6 +26,8 @@ describe('ServiceWorker cache policy', () => {
     expect(cacheStrategy(req('/sw.js'), ORIGIN)).toBe('bypass');
     // The Google sign-in landing page carries tokens and must never replace the cached shell.
     expect(cacheStrategy({ ...req('/oauth-callback.html'), mode: 'navigate' }, ORIGIN)).toBe('bypass');
+    // Where Cloudflare Pages redirects it, without the extension.
+    expect(cacheStrategy({ ...req('/oauth-callback'), mode: 'navigate' }, ORIGIN)).toBe('bypass');
     expect(cacheStrategy(req('/unknown.json'), ORIGIN)).toBe('bypass');
   });
 

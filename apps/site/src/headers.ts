@@ -1,4 +1,4 @@
-import { SECURITY_HEADERS } from '@ankylock/web/headers';
+import { DETACHED_HEADERS, SECURITY_HEADERS } from '@ankylock/web/headers';
 
 /**
  * The site's CSP: its own scripts, styles, fonts and images only. No inline script or style,
@@ -21,7 +21,9 @@ export function siteHeaders(): string {
   const lines = (headers: readonly (readonly [string, string])[]): string[] => headers.map(([name, value]) => `  ${name}: ${value}`);
   return [
     '/*',
-    ...lines([['Content-Security-Policy', SITE_CSP], ...SECURITY_HEADERS]),
+    // The site opens no windows, so it shares its browsing context with none.
+    ...lines([['Content-Security-Policy', SITE_CSP], ...SECURITY_HEADERS, ['Cross-Origin-Opener-Policy', 'same-origin']]),
+    ...DETACHED_HEADERS.map((line) => `  ${line}`),
     '',
     '/assets/*',
     ...lines([['Cache-Control', 'public, max-age=31536000, immutable']]),

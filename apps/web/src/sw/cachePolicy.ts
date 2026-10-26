@@ -11,9 +11,10 @@ export function precacheUrls(buildAssets: readonly string[]): string[] {
 
 /**
  * The ServiceWorker itself, and the Google sign-in landing page: it carries tokens in its URL
- * fragment and must never be cached, least of all in place of the app shell.
+ * fragment and must never be cached, least of all in place of the app shell. Cloudflare Pages
+ * redirects `/oauth-callback.html` to `/oauth-callback`, so both addresses are listed.
  */
-const BYPASS_PATHS = new Set(['/sw.js', '/oauth-callback.html', '/oauth-callback.js']);
+const BYPASS_PATHS = new Set(['/sw.js', '/oauth-callback.html', '/oauth-callback', '/oauth-callback.js']);
 
 export type CacheStrategy =
   /** Pages: try the network for the newest app, fall back to the cached shell when offline. */

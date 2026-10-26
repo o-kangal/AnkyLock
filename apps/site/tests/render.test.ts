@@ -129,7 +129,15 @@ describe('site pages', () => {
     const all = headers.split('\n\n')[0] ?? '';
     expect(all.split('\n')[0]).toBe('/*');
     expect(all).toContain(`Content-Security-Policy: ${SITE_CSP}`);
-    for (const name of ['Strict-Transport-Security', 'X-Content-Type-Options: nosniff', 'Referrer-Policy: no-referrer', 'Permissions-Policy']) {
+    for (const name of [
+      'Strict-Transport-Security',
+      'X-Content-Type-Options: nosniff',
+      'Referrer-Policy: no-referrer',
+      'Permissions-Policy',
+      'Cross-Origin-Opener-Policy: same-origin',
+      'Cross-Origin-Resource-Policy: same-origin',
+      '! Access-Control-Allow-Origin',
+    ]) {
       expect(all).toContain(name);
     }
     expect(SITE_CSP).toContain("default-src 'none'");

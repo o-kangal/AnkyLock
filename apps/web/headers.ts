@@ -31,7 +31,15 @@ export const SECURITY_HEADERS: readonly (readonly [string, string])[] = [
   ['Referrer-Policy', 'no-referrer'],
   ['X-Frame-Options', 'DENY'],
   ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=(), browsing-topics=()'],
+  // Our files are for our own pages; no other site may embed them.
+  ['Cross-Origin-Resource-Policy', 'same-origin'],
 ];
+
+/**
+ * `_headers` lines removing the `Access-Control-Allow-Origin: *` Pages adds by default: no other
+ * site's scripts need to read our responses.
+ */
+export const DETACHED_HEADERS: readonly string[] = ['! Access-Control-Allow-Origin'];
 
 /**
  * Cloudflare Pages `_headers`: the CSP (plus `frame-ancestors`, which a meta tag cannot carry)
@@ -39,11 +47,21 @@ export const SECURITY_HEADERS: readonly (readonly [string, string])[] = [
  * ServiceWorker revalidated on every load so an update is never stuck behind a cache.
  */
 export function cloudflareHeaders(csp: string): string {
-  const rule = (path: string, headers: readonly (readonly [string, string])[]): string =>
-    [path, ...headers.map(([name, value]) => `  ${name}: ${value}`)].join('\n');
+  const rule = (path: string, headers: readonly (readonly [string, string])[], detach: readonly string[] = []): string =>
+    [path, ...headers.map(([name, value]) => `  ${name}: ${value}`), ...detach.map((line) => `  ${line}`)].join('\n');
   return `${[
-    rule('/*', [['Content-Security-Policy', `${csp}; frame-ancestors 'none'`], ...SECURITY_HEADERS]),
+    rule(
+      '/*',
+      [
+        ['Content-Security-Policy', `${csp}; frame-ancestors 'none'`],
+        ...SECURITY_HEADERS,
+        // Keeps this window apart from others, except the Google sign-in popup it opens and watches.
+        ['Cross-Origin-Opener-Policy', 'same-origin-allow-popups'],
+      ],
+      DETACHED_HEADERS,
+    ),
     rule('/assets/*', [['Cache-Control', 'public, max-age=31536000, immutable']]),
-    ...['/', '/index.html', '/sw.js', '/oauth-callback.html'].map((path) => rule(path, [['Cache-Control', 'no-cache']])),
+    // Pages serves `/oauth-callback.html` at `/oauth-callback`.
+    ...['/', '/index.html', '/sw.js', '/oauth-callback.html', '/oauth-callback'].map((path) => rule(path, [['Cache-Control', 'no-cache']])),
   ].join('\n\n')}\n`;
 }
