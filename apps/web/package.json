@@ -10,6 +10,9 @@
     },
     "./logo": {
       "@ankylock/source": "./src/logo/index.ts"
+    },
+    "./headers": {
+      "@ankylock/source": "./headers.ts"
     }
   },
   "scripts": {

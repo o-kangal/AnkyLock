@@ -17,6 +17,8 @@ export interface PageContent {
   readonly title: string;
   readonly description: string;
   readonly main: Html;
+  /** Kept out of search results, with no canonical address (the 404 page). */
+  readonly noIndex?: boolean;
 }
 
 const LANGUAGE_NAMES: Record<Locale, string> = { en: 'English', tr: 'Türkçe' };
@@ -43,7 +45,7 @@ export function layout(ctx: PageContext, content: PageContent): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${content.title}</title>
 <meta name="description" content="${content.description}">
-<link rel="canonical" href="${SITE_URL}${pagePath(id, locale)}">
+${content.noIndex ? html`<meta name="robots" content="noindex">` : html`<link rel="canonical" href="${SITE_URL}${pagePath(id, locale)}">`}
 ${alternates}
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
@@ -51,8 +53,8 @@ ${alternates}
 <meta property="og:type" content="website">
 <meta property="og:title" content="${content.title}">
 <meta property="og:description" content="${content.description}">
-<meta property="og:url" content="${SITE_URL}${pagePath(id, locale)}">
-<meta property="og:locale" content="${locale === 'tr' ? 'tr_TR' : 'en_US'}">
+${content.noIndex ? '' : html`<meta property="og:url" content="${SITE_URL}${pagePath(id, locale)}">
+`}<meta property="og:locale" content="${locale === 'tr' ? 'tr_TR' : 'en_US'}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${ctx.asset('icon')}">
 <link rel="stylesheet" href="${ctx.asset('styles')}">

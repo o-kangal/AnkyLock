@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { FakeGoogle } from './fakeGoogle.js';
+import { APP_HEADERS, APP_ORIGIN } from './origins.js';
+import { cspViolations, servePagesHeaders, watchCsp } from './pagesHeaders.js';
 import { createVault, PASSPHRASE, writeNote } from './steps.js';
 
 test('backs a vault up to Google Drive, encrypted, and opens it on a second device', async ({ browser, browserName }) => {
@@ -9,7 +11,9 @@ test('backs a vault up to Google Drive, encrypted, and opens it on a second devi
   const google = new FakeGoogle();
   const laptop = await browser.newContext();
   await google.install(laptop);
+  await servePagesHeaders(laptop, APP_ORIGIN, APP_HEADERS);
   const first = await laptop.newPage();
+  await watchCsp(first);
 
   await createVault(first, 'Work');
   await first.getByRole('button', { name: 'Sign in with Google' }).click();
@@ -26,7 +30,9 @@ test('backs a vault up to Google Drive, encrypted, and opens it on a second devi
 
   const phone = await browser.newContext();
   await google.install(phone);
+  await servePagesHeaders(phone, APP_ORIGIN, APP_HEADERS);
   const second = await phone.newPage();
+  await watchCsp(second);
   await second.goto('/');
   await second.getByRole('button', { name: 'Use my existing vault' }).click();
   await expect(second.getByRole('combobox', { name: 'Vault in Google Drive' })).toBeVisible();
@@ -35,6 +41,8 @@ test('backs a vault up to Google Drive, encrypted, and opens it on a second devi
   await second.locator('aside').getByText('Release checklist').click();
   await expect(second.locator('.cm-content')).toContainText('- tag v1.0');
 
+  expect(await cspViolations(first)).toEqual([]);
+  expect(await cspViolations(second)).toEqual([]);
   await laptop.close();
   await phone.close();
 });

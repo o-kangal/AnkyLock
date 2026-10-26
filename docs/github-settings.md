@@ -15,6 +15,16 @@ A workflow that needs a new third-party action fails until the action is added t
 
 Leave **SHA pinning required** off: it also applies to the workflows GitHub runs for Dependabot, which call actions by tag, so with it on Dependabot silently stops (no runs, no rebases). Our own workflows pin every action to a commit SHA anyway, and Dependabot keeps those pins current.
 
+## Secrets and variables
+
+| Name | Kind | Used by |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | secret | Deploy: a token with only **Account → Cloudflare Pages → Edit** |
+| `CLOUDFLARE_ACCOUNT_ID` | secret | Deploy |
+| `GOOGLE_WEB_CLIENT_ID` | variable | Deploy: the production web OAuth client id (public; it ships in the app) |
+
+Set them with `gh secret set CLOUDFLARE_API_TOKEN` (it prompts, so the value stays out of the shell history) and `gh variable set GOOGLE_WEB_CLIENT_ID --body <client id>`.
+
 ## Once the repository is public
 
 | Setting | Command |

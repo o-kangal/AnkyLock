@@ -1,10 +1,19 @@
 import { expect, test } from '@playwright/test';
 import { FakeGoogle } from './fakeGoogle.js';
+import { APP_HEADERS, APP_ORIGIN } from './origins.js';
+import { cspViolations, servePagesHeaders, watchCsp } from './pagesHeaders.js';
 import { createVault, PASSPHRASE, writeNote } from './steps.js';
 
 // Google is faked for every page: these tests never sign in, and nothing may reach the network.
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, page }) => {
   await new FakeGoogle().install(context);
+  await servePagesHeaders(context, APP_ORIGIN, APP_HEADERS);
+  await watchCsp(page);
+});
+
+// Every flow runs under the production CSP header; none may trip it.
+test.afterEach(async ({ page }) => {
+  expect(await cspViolations(page)).toEqual([]);
 });
 
 test('creates a vault, keeps a note through lock and unlock', async ({ page }) => {

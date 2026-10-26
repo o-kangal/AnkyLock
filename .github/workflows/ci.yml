@@ -93,6 +93,9 @@ jobs:
       - run: pnpm --filter @ankylock/e2e exec playwright install --with-deps chromium webkit
         timeout-minutes: 10
       - run: pnpm --filter @ankylock/e2e run test:browser
+        env:
+          # The landing site build reads the latest release (rate limit).
+          GITHUB_TOKEN: ${{ github.token }}
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -122,3 +125,15 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check
+
+  deploy:
+    name: Deploy
+    needs: [web, rust, browser, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/deploy.yml
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

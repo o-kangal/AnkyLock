@@ -7,7 +7,8 @@
   "include": [
     "src",
     "tests",
-    "vite.config.ts"
+    "vite.config.ts",
+    "headers.ts"
   ],
   "exclude": [
     "src/serviceWorker.ts"

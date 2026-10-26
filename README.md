@@ -149,6 +149,10 @@ pnpm exec tauri icon src-tauri/icons/app-icon-maskable.svg -o /tmp/maskable -p 5
 
 On Linux (GNOME/Wayland) the dock takes an app's icon from a `.desktop` entry matching the window's `StartupWMClass`, so `tauri dev` shows a generic icon until one exists. Installed packages ship that entry (`StartupWMClass=ankylock-desktop`). For development, copy `icons/128x128.png`, `icons/128x128@2x.png` and `icons/icon.png` to `~/.local/share/icons/hicolor/{128x128,256x256,512x512}/apps/ankylock-desktop.png` and create `~/.local/share/applications/ankylock-desktop.desktop` (named after the window's app id) with `Icon=ankylock-desktop`, `StartupWMClass=ankylock-desktop` and `NoDisplay=true`. GNOME caches icons by path, so after regenerating the icons copy them again and run `gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor`; a new icon may only show after logging out and in.
 
+### Deployment
+
+The landing site (`ankylock.com`) and the web app (`app.ankylock.com`) are static files on Cloudflare Pages. After every push to `main` whose CI checks all pass, CI builds both with `pnpm build:check` and uploads them (`.github/workflows/deploy.yml`); each build writes the `_headers` file with the security headers Pages serves. The secrets and variables the deploy needs are listed in [`docs/github-settings.md`](docs/github-settings.md).
+
 ### Releases
 
 Releases are built in CI from a version tag and published to GitHub Releases; the steps and the required secrets are documented with the release workflow (Task 13g).

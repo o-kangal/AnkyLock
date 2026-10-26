@@ -91,6 +91,10 @@ export const en = {
   'download.other.title': 'Windows and macOS',
   'download.other.text': 'Coming later. Until then, you can build them from source; the README explains how.',
 
+  'notFound.title': 'Page not found',
+  'notFound.text': 'There is nothing at this address. It may have moved, or the link may be mistyped.',
+  'notFound.home': 'Go to the home page',
+
   'footer.privacy': 'Privacy',
   'footer.terms': 'Terms',
   'footer.license': 'AGPL-3.0',

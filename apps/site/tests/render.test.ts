@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SITE_CSP } from '../src/headers.js';
 import { renderSite } from '../src/render.js';
 import { APP_URL, CONTACT_EMAIL, REPO_URL, SITE_URL } from '../src/site.js';
 import { RELEASE, renderedPages, SOURCES } from './helpers.js';
@@ -26,6 +27,7 @@ const LINK_HOSTS = new Set([
 describe('site pages', () => {
   it('renders home and download in both languages, privacy and terms in English', () => {
     expect([...pages.keys()].sort()).toEqual([
+      '404.html',
       'download/index.html',
       'index.html',
       'privacy/index.html',
@@ -110,6 +112,30 @@ describe('site pages', () => {
 
   it('keeps the theme switch hidden until the script can work it', () => {
     expect(page('index.html').querySelector('[data-theme-switch]')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('answers unknown addresses with a 404 page in both languages, kept out of search results', () => {
+    const doc = page('404.html');
+    expect(doc.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex');
+    expect(doc.querySelector('link[rel="canonical"], meta[property="og:url"]')).toBeNull();
+    expect(Array.from(doc.querySelectorAll('main h1')).map((h) => h.textContent)).toEqual(['Page not found', 'Sayfa bulunamadı']);
+    expect(doc.querySelector('main [lang="tr"] a')?.getAttribute('href')).toBe('/tr/');
+    // A Turkish browser is not sent away from the 404 page.
+    expect(doc.documentElement.dataset['tr']).toBeUndefined();
+  });
+
+  it('serves every page with a strict CSP and the security headers', () => {
+    const headers = renderSite(null, SOURCES).find((f) => f.file === '_headers')?.content ?? '';
+    const all = headers.split('\n\n')[0] ?? '';
+    expect(all.split('\n')[0]).toBe('/*');
+    expect(all).toContain(`Content-Security-Policy: ${SITE_CSP}`);
+    for (const name of ['Strict-Transport-Security', 'X-Content-Type-Options: nosniff', 'Referrer-Policy: no-referrer', 'Permissions-Policy']) {
+      expect(all).toContain(name);
+    }
+    expect(SITE_CSP).toContain("default-src 'none'");
+    expect(SITE_CSP).toContain("frame-ancestors 'none'");
+    expect(SITE_CSP).not.toContain('unsafe');
+    expect(headers).toContain('/assets/*\n  Cache-Control: public, max-age=31536000, immutable');
   });
 
   it('writes a favicon that parses as SVG', () => {

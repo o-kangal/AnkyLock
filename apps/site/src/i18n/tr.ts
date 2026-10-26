@@ -97,6 +97,10 @@ export const tr: Messages = {
   'download.other.title': 'Windows ve macOS',
   'download.other.text': 'Daha sonra gelecek. O zamana kadar kaynak kodundan derleyebilirsiniz; README nasıl yapılacağını anlatıyor.',
 
+  'notFound.title': 'Sayfa bulunamadı',
+  'notFound.text': 'Bu adreste bir şey yok. Taşınmış olabilir ya da link yanlış yazılmış olabilir.',
+  'notFound.home': 'Ana sayfaya git',
+
   'footer.privacy': 'Gizlilik',
   'footer.terms': 'Kullanım şartları',
   'footer.license': 'AGPL-3.0',

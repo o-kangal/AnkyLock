@@ -1,28 +1,8 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import solid from 'vite-plugin-solid';
 import { build, defaultClientConditions, defineConfig, loadEnv, type Plugin } from 'vite';
-
-/**
- * Production CSP. Not applied in dev, where Vite's HMR client needs its own connections.
- * Network access is limited to Drive's API, token revocation and the configured relay; Google
- * sign-in runs in a popup, so no Google script or frame is ever allowed into the page.
- */
-function contentSecurityPolicy(relayUrl: string | undefined): string {
-  const relay = relayUrl ? new URL(relayUrl).origin : '';
-  return [
-    "default-src 'self'",
-    "script-src 'self'",
-    // CodeMirror injects its theme styles at runtime.
-    "style-src 'self' 'unsafe-inline'",
-    "worker-src 'self'",
-    "img-src 'self' data:",
-    `connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com ${relay}`.trim(),
-    "manifest-src 'self'",
-    "frame-src 'none'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
-  ].join('; ');
-}
+import { cloudflareHeaders, contentSecurityPolicy } from './headers.js';
 
 const productionCsp = (csp: string): Plugin => ({
   name: 'ankylock-csp',
@@ -79,14 +59,29 @@ const serviceWorker = (): Plugin => {
   };
 };
 
-export default defineConfig(({ mode }) => ({
-  plugins: [solid(), productionCsp(contentSecurityPolicy(loadEnv(mode, new URL('.', import.meta.url).pathname)['VITE_RELAY_URL'])), serviceWorker()],
-  // Workspace packages are consumed from their TypeScript sources via the @ankylock/source condition.
-  resolve: { conditions: ['@ankylock/source', ...defaultClientConditions] },
-  worker: { format: 'es' },
-  build: {
-    target: 'es2022',
-    outDir: 'dist',
-    emptyOutDir: true,
+/**
+ * Writes Cloudflare's `_headers` next to the build, after the bundle so the ServiceWorker does
+ * not try to precache it (Pages never serves it).
+ */
+const pagesHeaders = (csp: string): Plugin => ({
+  name: 'ankylock-pages-headers',
+  apply: 'build',
+  writeBundle(options) {
+    writeFileSync(join(options.dir ?? 'dist', '_headers'), cloudflareHeaders(csp));
   },
-}));
+});
+
+export default defineConfig(({ mode }) => {
+  const csp = contentSecurityPolicy(loadEnv(mode, new URL('.', import.meta.url).pathname)['VITE_RELAY_URL']);
+  return {
+    plugins: [solid(), productionCsp(csp), pagesHeaders(csp), serviceWorker()],
+    // Workspace packages are consumed from their TypeScript sources via the @ankylock/source condition.
+    resolve: { conditions: ['@ankylock/source', ...defaultClientConditions] },
+    worker: { format: 'es' },
+    build: {
+      target: 'es2022',
+      outDir: 'dist',
+      emptyOutDir: true,
+    },
+  };
+});
