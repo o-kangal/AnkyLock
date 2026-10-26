@@ -79,6 +79,12 @@ jobs:
     name: Browser tests (Chromium, WebKit)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Playwright's image ships the browsers and their system libraries, so this job needs no apt
+    # mirror (one has stalled runs for half an hour). Its tag must match @playwright/test: with a
+    # newer one, Playwright stops with "Executable doesn't exist" and the image version to use.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+      options: --ipc=host
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,8 +96,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ankylock/web... run build
-      - run: pnpm --filter @ankylock/e2e exec playwright install --with-deps chromium webkit
-        timeout-minutes: 10
       - run: pnpm --filter @ankylock/e2e run test:browser
         env:
           # The landing site build reads the latest release (rate limit).
