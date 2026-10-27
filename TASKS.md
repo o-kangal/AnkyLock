@@ -1004,6 +1004,7 @@ pnpm -r run build && curl -sI https://ankylock.com https://app.ankylock.com
 ---
 
 ### Task 13g: GitHub Releases for Linux
+- **Status:** ✅ Completed (2026-10-27)
 - **Type:** DevOps/Release
 - **Read-Only Context Files:** `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/tauri.linux.conf.json`, `README.md`
 - **Target Files (Create/Modify):**
