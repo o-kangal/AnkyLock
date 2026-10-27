@@ -53,8 +53,9 @@ jobs:
         with:
           persist-credentials: false
       # The packages Tauri builds against (.github/tauri-packages.txt) come from GitHub's cache: an
-      # Ubuntu mirror has stalled this step past ten minutes several times. Only a new runner image
-      # or package list downloads them again; apt still checks each one against the signed index.
+      # Ubuntu mirror has stalled this step past ten minutes several times. A new runner image or
+      # package list starts from the newest earlier cache, so only packages whose version changed
+      # are downloaded again; apt still checks each one against the signed index.
       - name: Runner image
         id: image
         run: echo "id=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
@@ -66,6 +67,7 @@ jobs:
             ~/apt/archives
             ~/apt/lists
           key: tauri-apt-${{ steps.image.outputs.id }}-${{ hashFiles('.github/tauri-packages.txt') }}
+          restore-keys: tauri-apt-
       - name: Install Tauri system libraries
         # A stuck mirror fails here instead of eating the job's timeout.
         timeout-minutes: 10
