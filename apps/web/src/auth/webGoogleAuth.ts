@@ -22,10 +22,18 @@ export interface ChannelLike {
   close(): void;
 }
 
+/**
+ * Path of `public/oauth-callback.html`, registered as an authorized redirect URI of the client.
+ * Cloudflare Pages serves it at `/oauth-callback` and 308-redirects the `.html` address there.
+ * Production uses the final address so the tokens arrive without an extra redirect, which looks
+ * like token forwarding to phishing filters. Vite's dev server only serves the file name.
+ */
+export const OAUTH_CALLBACK_PATH = import.meta.env.DEV ? '/oauth-callback.html' : '/oauth-callback';
+
 export interface WebAuthOptions {
   /** OAuth client of type "Web application" (desktop clients only allow loopback redirects). */
   readonly clientId: string;
-  /** `<origin>/oauth-callback.html`, registered as an authorized redirect URI of the client. */
+  /** `<origin>` + {@link OAUTH_CALLBACK_PATH}. */
   readonly redirectUri: string;
   readonly openPopup?: (url: string) => PopupLike | null;
   readonly openChannel?: () => ChannelLike;

@@ -71,7 +71,7 @@ pnpm -r run build && pnpm --filter @ankylock/desktop tauri build   # release bui
 Without Google credentials the apps run local-only. To enable sign-in and Drive backup, create OAuth clients in the Google Cloud Console with the scopes `openid`, `email` and `https://www.googleapis.com/auth/drive.appdata`, then copy the `.env.example` files to `.env.local`:
 
 - `apps/desktop/.env.local`: a client of type **Desktop app** (`ANKYLOCK_GOOGLE_CLIENT_ID`, `ANKYLOCK_GOOGLE_CLIENT_SECRET`). Google does not treat a desktop client's secret as confidential; it is compiled into the app, and sign-in uses PKCE.
-- `apps/web/.env.local`: a client of type **Web application** (`VITE_GOOGLE_CLIENT_ID`) with the authorized JavaScript origin `http://localhost:5173` and the redirect URI `http://localhost:5173/oauth-callback.html`.
+- `apps/web/.env.local`: a client of type **Web application** (`VITE_GOOGLE_CLIENT_ID`) with the authorized JavaScript origin `http://localhost:5173` and the redirect URI `http://localhost:5173/oauth-callback.html` (a production build uses `<origin>/oauth-callback` instead).
 
 ## Run your own relay
 

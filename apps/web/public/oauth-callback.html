@@ -2,12 +2,39 @@
 <html lang="en-US">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="referrer" content="no-referrer" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'" />
+    <!-- The style hash is checked by tests/oauthCallback.test.ts: update it with the style. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; img-src 'self'; style-src 'sha256-yi3ezVjEzeYJ5Ft26pSjLRp+3Wye0bZ8/80FYcUshp8='"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <title>AnkyLock · Google sign-in</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f3f3f3; --text: #1f1f1f; --muted: #6b6b6b; --accent: #0067c0; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #1e1e1e; --text: #d4d4d4; --muted: #9d9d9d; --accent: #4fa3ff; } }
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      main { max-width: 380px; text-align: center; }
+      img { width: 64px; height: 64px; border-radius: 14px; }
+      h1 { font-size: 20px; margin: 16px 0 8px; }
+      p { margin: 0 0 12px; color: var(--muted); }
+      a { color: var(--accent); }
+    </style>
     <script src="/oauth-callback.js"></script>
   </head>
   <body>
-    Signing in to AnkyLock… You can close this window.
+    <main>
+      <img src="/icons/icon-192.png" alt="" />
+      <h1>Signing in to AnkyLock</h1>
+      <p>
+        Google sent you back to AnkyLock. This window passes the sign-in result to the AnkyLock tab
+        in this browser and closes itself. No password is entered or collected here, and the result
+        never reaches an AnkyLock server.
+      </p>
+      <p>If this window stays open, close it and return to <a href="/">AnkyLock</a>.</p>
+      <p><a href="https://github.com/o-kangal/AnkyLock" rel="noopener">Source code on GitHub</a></p>
+    </main>
   </body>
 </html>

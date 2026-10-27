@@ -3,7 +3,7 @@ import { createWorkerSealer } from '@ankylock/crypto';
 import CryptoWorker from '@ankylock/crypto/worker?worker';
 import { WebVaultDirectory } from '@ankylock/storage';
 import { createAuthSession } from '@ankylock/sync';
-import { createWebAuthTransport } from './auth/webGoogleAuth.js';
+import { createWebAuthTransport, OAUTH_CALLBACK_PATH } from './auth/webGoogleAuth.js';
 import { AnkyLockApp } from './components/AnkyLockApp.jsx';
 import { t } from './i18n/index.js';
 import { UpdateBanner } from './pwa/UpdateBanner.jsx';
@@ -23,7 +23,7 @@ export function App(): JSX.Element {
   // Without a configured Google client the app is local-only (no sync, no Drive backup).
   const auth = clientId
     ? createAuthSession(
-        createWebAuthTransport({ clientId, redirectUri: `${window.location.origin}/oauth-callback.html` }),
+        createWebAuthTransport({ clientId, redirectUri: `${window.location.origin}${OAUTH_CALLBACK_PATH}` }),
         { onError: (error) => console.error(error) },
       )
     : undefined;
