@@ -17,6 +17,15 @@ describe('link detection', () => {
     expect(first).toEqual({ from: 104, to: 104 + 'https://ankylock.com/docs?a=1#top'.length, url: 'https://ankylock.com/docs?a=1#top' });
   });
 
+  it('trims a long run of punctuation in linear time', () => {
+    // An anchored regex took quadratic time here (CodeQL js/polynomial-redos).
+    const text = `https://example.com/a${'!'.repeat(50_000)}x`;
+    const started = performance.now();
+    expect(findLinks(text)).toHaveLength(1);
+    expect(findLinks(`see https://example.com/a${'!'.repeat(50_000)}`)[0]?.url).toBe('https://example.com/a');
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it('treats www. addresses as https links, but not bare names', () => {
     const text = 'Go to www.ankylock.com/pricing. Not ankylock.com, index.ts, console.log or awww.x';
     expect(findLinks(text)).toEqual([{ from: 6, to: 6 + 'www.ankylock.com/pricing'.length, url: 'https://www.ankylock.com/pricing' }]);

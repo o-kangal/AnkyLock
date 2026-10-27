@@ -56,7 +56,7 @@ describe('theme and language preferences', () => {
 describe('init.js', () => {
   const code = readFileSync(join(process.cwd(), 'src/init.js'), 'utf8');
   /** Runs the script with the page's globals stood in for. */
-  function run(options: { languages: string[]; saved?: Record<string, string>; turkishPage?: string }) {
+  function run(options: { languages: string[]; saved?: Record<string, string>; turkishPage?: string; hash?: string }) {
     const root = document.createElement('html');
     if (options.turkishPage) root.setAttribute('data-tr', options.turkishPage);
     const saved = new Map(Object.entries(options.saved ?? {}));
@@ -68,7 +68,7 @@ describe('init.js', () => {
       { documentElement: root },
       { getItem: (k: string) => saved.get(k) ?? null },
       { languages: options.languages, language: options.languages[0] },
-      { hash: '', replace: (url: string) => replaced.push(url) },
+      { href: 'https://ankylock.com/', origin: 'https://ankylock.com', hash: options.hash ?? '', replace: (url: string) => replaced.push(url) },
     );
     return { theme: root.getAttribute('data-theme'), replaced };
   }
@@ -79,11 +79,15 @@ describe('init.js', () => {
   });
 
   it('sends a first-time visitor whose browser prefers Turkish to the Turkish page, once', () => {
-    expect(run({ languages: ['tr-TR', 'en'], turkishPage: '/tr/' }).replaced).toEqual(['/tr/']);
+    expect(run({ languages: ['tr-TR', 'en'], turkishPage: '/tr/' }).replaced).toEqual(['https://ankylock.com/tr/']);
+    expect(run({ languages: ['tr'], turkishPage: '/tr/download/', hash: '#verify' }).replaced).toEqual(['https://ankylock.com/tr/download/#verify']);
     expect(run({ languages: ['en-US', 'tr'], turkishPage: '/tr/' }).replaced).toEqual([]);
     expect(run({ languages: ['tr'], turkishPage: '/tr/', saved: { [LANGUAGE_KEY]: 'en' } }).replaced).toEqual([]);
     // A page without a Turkish version stays.
     expect(run({ languages: ['tr'] }).replaced).toEqual([]);
+    // Never to another site, whatever the attribute says.
+    expect(run({ languages: ['tr'], turkishPage: 'https://evil.example/' }).replaced).toEqual([]);
+    expect(run({ languages: ['tr'], turkishPage: '//evil.example/tr/' }).replaced).toEqual([]);
   });
 });
 

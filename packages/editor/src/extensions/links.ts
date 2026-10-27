@@ -36,7 +36,14 @@ const ENGLISH_LABELS: LinkLabels = { open: 'Open link', hint: '{key}+Click to op
 // whitespace and characters that rarely belong to a URL in prose or code.
 const URL_PATTERN = /\b(?:https?:\/\/|www\.)[^\s<>"'`]+/gi;
 // Sentence punctuation and closing brackets after a URL usually end the sentence, not the URL.
-const TRAILING = /[.,;:!?)\]}]+$/;
+const TRAILING = new Set('.,;:!?)]}');
+
+/** `text` without trailing punctuation; a loop, since an anchored regex is quadratic on `!!!!x`. */
+function trimTrailing(text: string): string {
+  let end = text.length;
+  while (end > 0 && TRAILING.has(text.charAt(end - 1))) end--;
+  return text.slice(0, end);
+}
 
 /** Only web links open: never `javascript:`, `file:` or any other scheme. */
 export function isOpenableUrl(text: string): boolean {
@@ -64,7 +71,7 @@ function toUrl(text: string): string | null {
 export function findLinks(text: string, offset = 0): LinkMatch[] {
   const links: LinkMatch[] = [];
   for (const match of text.matchAll(URL_PATTERN)) {
-    const text = match[0].replace(TRAILING, '');
+    const text = trimTrailing(match[0]);
     const url = toUrl(text);
     if (url === null) continue;
     const from = offset + match.index;
@@ -88,7 +95,7 @@ const linkDecorations = ViewPlugin.fromClass(
     readonly decorator = new MatchDecorator({
       regexp: URL_PATTERN,
       decorate: (add, from, _to, match) => {
-        const text = match[0].replace(TRAILING, '');
+        const text = trimTrailing(match[0]);
         if (toUrl(text) !== null) add(from, from + text.length, linkMark);
       },
     });

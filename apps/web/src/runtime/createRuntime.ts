@@ -228,6 +228,13 @@ export const MAX_VAULT_NAME_LENGTH = 64;
 const message = (error: unknown): string =>
   error instanceof CryptoError || error instanceof StorageError ? errorText(error) : error instanceof Error ? error.message : String(error);
 
+/** `url` without trailing slashes; a loop, since `/\/+$/` is quadratic on a run of slashes. */
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charAt(end - 1) === '/') end--;
+  return url.slice(0, end);
+}
+
 /**
  * Composition root shared by desktop and web: storage, the crypto worker, the vault key, the
  * workspace store, headless Y.Docs with encrypted persistence and the retention worker.
@@ -424,7 +431,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       docs,
       deviceId,
       // Relay channels are per account and vault, so other vaults never see these packets.
-      relayUrl: `${relay.replace(/\/+$/, '')}/${id}`,
+      relayUrl: `${withoutTrailingSlashes(relay)}/${id}`,
       getIdToken: () => auth.idToken(),
       onRemoteChange: reloadSoon,
       onStatusChange: (connection) => {

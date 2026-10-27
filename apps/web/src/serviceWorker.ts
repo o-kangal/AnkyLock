@@ -22,7 +22,8 @@ self.addEventListener('install', (event) => {
 // A new version waits until the user chooses to reload (UpdateBanner), so an open tab never
 // runs old code against a new cache.
 self.addEventListener('message', (event) => {
-  if (event.data === SKIP_WAITING) void self.skipWaiting();
+  // Only the app's own pages may ask; browsers deliver nothing else here, this makes it explicit.
+  if (event.origin === self.location.origin && event.data === SKIP_WAITING) void self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

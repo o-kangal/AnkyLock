@@ -12,7 +12,8 @@ const NODE_MODULES = builtinModules
   .flatMap((name) => (name.startsWith('node:') ? [name] : [name, `node:${name}`]));
 const NO_NODE = 'Code that runs in the browser or a worker cannot use Node modules (AGENTS.md); use Web APIs or Tauri IPC.';
 const nodeImports = NODE_MODULES.map((name) => ({ name, message: NO_NODE }));
-const escaped = NODE_MODULES.map((name) => name.replace(/[/:]/g, '\\$&')).join('|');
+// Every regex metacharacter, the backslash included, plus `/` which ends the selector's regex.
+const escaped = NODE_MODULES.map((name) => name.replace(/[\\^$.*+?()[\]{}|/]/g, '\\$&')).join('|');
 const nodeDynamicImport = { selector: `ImportExpression > Literal[value=/^(${escaped})$/]`, message: NO_NODE };
 
 export default tseslint.config(

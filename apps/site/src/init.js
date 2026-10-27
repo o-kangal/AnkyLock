@@ -9,7 +9,12 @@
     var turkish = root.getAttribute('data-tr');
     var preferred = (navigator.languages && navigator.languages[0]) || navigator.language || '';
     if (turkish && localStorage.getItem('ankylock.site.language') === null && /^tr\b/i.test(preferred)) {
-      location.replace(turkish + location.hash);
+      // Only ever to a page of this site, keeping the fragment.
+      var target = new URL(turkish, location.href);
+      if (target.origin === location.origin) {
+        target.hash = location.hash;
+        location.replace(target.href);
+      }
     }
   } catch {
     // Storage may be blocked; the page then follows the system theme and stays in English.
