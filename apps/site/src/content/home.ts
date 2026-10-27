@@ -4,6 +4,7 @@ import { t } from '../i18n/index.js';
 import { layout, type PageContext } from '../layout.js';
 import { logoSvg } from '../logo.js';
 import { linkTo } from '../pages.js';
+import { structuredData } from '../seo.js';
 import { APP_URL, docUrl, REPO_URL } from '../site.js';
 
 const FEATURES = ['scratchpad', 'organize', 'sync', 'offline', 'vaults', 'export', 'editor'] as const;
@@ -17,6 +18,7 @@ export function homePage(ctx: PageContext): string {
   return layout(ctx, {
     title: `AnkyLock · ${say('hero.title')}`,
     description: say('meta.description'),
+    structuredData: structuredData(locale),
     main: html`
 <section class="hero">
   <button type="button" class="hero-logo" aria-label="${say('logo.toggle')}" data-logo>${logoSvg('logo')}</button>

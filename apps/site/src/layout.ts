@@ -19,6 +19,8 @@ export interface PageContent {
   readonly main: Html;
   /** Kept out of search results, with no canonical address (the 404 page). */
   readonly noIndex?: boolean;
+  /** A schema.org JSON-LD block for the head (the home page). */
+  readonly structuredData?: Html;
 }
 
 const LANGUAGE_NAMES: Record<Locale, string> = { en: 'English', tr: 'Türkçe' };
@@ -60,6 +62,7 @@ ${content.noIndex ? '' : html`<meta property="og:url" content="${SITE_URL}${page
 <link rel="stylesheet" href="${ctx.asset('styles')}">
 <script src="/init.js"></script>
 <script type="module" src="${ctx.asset('script')}"></script>
+${content.structuredData ?? ''}
 </head>
 <body>
 <a class="skip" href="#main">${t(locale, 'nav.skip')}</a>

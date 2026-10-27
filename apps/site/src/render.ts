@@ -8,6 +8,7 @@ import { faviconSvg } from './logo.js';
 import { notFoundPage } from './content/notFound.js';
 import { PAGE_IDS, PAGE_LOCALES, pageFile, type PageId } from './pages.js';
 import type { Release } from './release.js';
+import { robotsTxt, sitemapXml } from './seo.js';
 
 export interface SiteFile {
   /** Path inside the site, without a leading slash, e.g. `tr/download/index.html`. */
@@ -23,7 +24,7 @@ export interface AssetSources {
   readonly screenshot: string;
 }
 
-/** Every page in every language it exists in, plus the favicon and Cloudflare's `_headers`. */
+/** Every page in every language it exists in, plus the favicon, crawler files and Cloudflare's `_headers`. */
 export function renderSite(release: Release | null, sources: AssetSources): SiteFile[] {
   const pages = PAGE_IDS.flatMap((id) =>
     PAGE_LOCALES[id].map((locale) => {
@@ -32,7 +33,13 @@ export function renderSite(release: Release | null, sources: AssetSources): Site
       return { file: pageFile(id, locale), content: renderPage(id, ctx, release) };
     }),
   );
-  return [...pages, { file: 'favicon.svg', content: faviconSvg() }, { file: '_headers', content: siteHeaders() }];
+  return [
+    ...pages,
+    { file: 'favicon.svg', content: faviconSvg() },
+    { file: 'sitemap.xml', content: sitemapXml() },
+    { file: 'robots.txt', content: robotsTxt() },
+    { file: '_headers', content: siteHeaders() },
+  ];
 }
 
 function renderPage(id: PageId, ctx: PageContext, release: Release | null): string {

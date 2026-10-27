@@ -42,7 +42,8 @@ describe('site pages', () => {
 
   it('has no inline script, inline style or event handler, so the CSP can forbid them all', () => {
     for (const [file, doc] of pages) {
-      for (const script of Array.from(doc.querySelectorAll('script'))) {
+      // JSON-LD is a data block: browsers never run it, so the CSP does not apply.
+      for (const script of Array.from(doc.querySelectorAll('script:not([type="application/ld+json"])'))) {
         expect(script.getAttribute('src'), file).toBeTruthy();
         expect(script.textContent, file).toBe('');
       }
@@ -144,6 +145,39 @@ describe('site pages', () => {
     expect(SITE_CSP).toContain("frame-ancestors 'none'");
     expect(SITE_CSP).not.toContain('unsafe');
     expect(headers).toContain('/assets/*\n  Cache-Control: public, max-age=31536000, immutable');
+  });
+
+  it('describes the app to search engines on the home pages only, as JSON that cannot close its element', () => {
+    for (const [file, doc] of pages) {
+      const blocks = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
+      expect(blocks, file).toHaveLength(file === 'index.html' || file === 'tr/index.html' ? 1 : 0);
+      for (const block of blocks) {
+        expect(block.parentElement?.tagName, file).toBe('HEAD');
+        expect(block.textContent, file).not.toMatch(/[<>&]/);
+      }
+    }
+    const data: unknown = JSON.parse(page('tr/index.html').querySelector('script[type="application/ld+json"]')?.textContent ?? '');
+    expect(data).toMatchObject({
+      '@context': 'https://schema.org',
+      '@graph': [
+        { '@type': 'WebSite', url: `${SITE_URL}/`, name: 'AnkyLock' },
+        { '@type': 'SoftwareApplication', name: 'AnkyLock', url: `${SITE_URL}/tr/`, downloadUrl: `${SITE_URL}/tr/download/`, offers: { price: '0' } },
+      ],
+    });
+  });
+
+  it('lists every indexable page in the sitemap, with its language versions, and points robots.txt at it', () => {
+    const files = renderSite(null, SOURCES);
+    const xml = new DOMParser().parseFromString(files.find((f) => f.file === 'sitemap.xml')?.content ?? '', 'application/xml');
+    expect(xml.querySelector('parsererror')).toBeNull();
+    const urls = Array.from(xml.getElementsByTagName('url'));
+    expect(urls.map((u) => u.getElementsByTagName('loc')[0]?.textContent)).toEqual(
+      ['/', '/tr/', '/download/', '/tr/download/', '/privacy/', '/terms/'].map((path) => SITE_URL + path),
+    );
+    const alternates = (i: number): string[] => Array.from(urls[i]?.getElementsByTagName('xhtml:link') ?? []).map((l) => `${l.getAttribute('hreflang') ?? ''} ${l.getAttribute('href') ?? ''}`);
+    expect(alternates(3)).toEqual([`en ${SITE_URL}/download/`, `tr ${SITE_URL}/tr/download/`]);
+    expect(alternates(4)).toEqual([]);
+    expect(files.find((f) => f.file === 'robots.txt')?.content).toBe(`User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`);
   });
 
   it('writes a favicon that parses as SVG', () => {
