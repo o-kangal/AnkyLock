@@ -4,7 +4,7 @@
 
 ![AnkyLock in the dark theme](docs/screenshots/workspace-dark.png)
 
-> **Status:** pre-release. The first Linux release and the web app at `app.ankylock.com` are on their way; until then, build from source (below). The plan lives in [`TASKS.md`](TASKS.md), the functional specification in [`SPEC.md`](SPEC.md).
+> **Status:** early release (0.1). Use the web app at [app.ankylock.com](https://app.ankylock.com) or [download the Linux app](https://ankylock.com/download/); Windows and macOS builds come later. The plan lives in [`TASKS.md`](TASKS.md), the functional specification in [`SPEC.md`](SPEC.md).
 
 ## What AnkyLock promises
 
@@ -55,7 +55,7 @@ What it does not promise: protection against malware on an unlocked device, or a
 
 Linux packages (AppImage, `.deb`, `.rpm`) are published on [GitHub Releases](https://github.com/o-kangal/AnkyLock/releases) and at [ankylock.com/download](https://ankylock.com/download/), with SHA-256 checksums and build provenance (`gh attestation verify <file> --repo o-kangal/AnkyLock`). The AppImage updates itself, after asking. Windows and macOS builds come later; until then, build them from source.
 
-The web app will be served at `app.ankylock.com`.
+The web app runs at [app.ankylock.com](https://app.ankylock.com) and installs as an app from the browser.
 
 ## Build from source
 

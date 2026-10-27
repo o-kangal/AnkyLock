@@ -2,7 +2,7 @@
 
 All notable changes to AnkyLock. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). A release's notes on GitHub are its section here; a version is released once its heading carries a date instead of `Unreleased`.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-27
 
 The first public release: the desktop app for Linux (AppImage, .deb, .rpm) and the web app at app.ankylock.com.
 
