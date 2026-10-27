@@ -1,6 +1,6 @@
 # GitHub Repository Settings
 
-The settings of `o-kangal/AnkyLock` that the code relies on, and how to apply them with the GitHub CLI (`R=repos/o-kangal/AnkyLock`). Settings marked *public* are only available once the repository is public (or on GitHub Pro).
+The settings of `o-kangal/AnkyLock` that the code relies on, and how to apply them with the GitHub CLI (`R=repos/o-kangal/AnkyLock`).
 
 ## Applied
 
@@ -25,7 +25,7 @@ Leave **SHA pinning required** off: it also applies to the workflows GitHub runs
 
 Set them with `gh secret set CLOUDFLARE_API_TOKEN` (it prompts, so the value stays out of the shell history) and `gh variable set GOOGLE_WEB_CLIENT_ID --body <client id>`.
 
-## Once the repository is public
+## Applied when the repository went public (2026-10-27)
 
 | Setting | Command |
 |---|---|
@@ -34,8 +34,9 @@ Set them with `gh secret set CLOUDFLARE_API_TOKEN` (it prompts, so the value sta
 | Private vulnerability reporting (`SECURITY.md` points to it) | `gh api -X PUT $R/private-vulnerability-reporting` |
 | Secret scanning and push protection | `gh api -X PATCH $R --input -` with `{"security_and_analysis":{"secret_scanning":{"status":"enabled"},"secret_scanning_push_protection":{"status":"enabled"}}}` |
 | Workflow runs from first-time and external contributors need approval | `gh api -X PUT $R/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors` |
+| Pull requests merge by squash only (linear, GitHub-signed), merged branches deleted | `gh api -X PATCH $R -F allow_merge_commit=false -F allow_rebase_merge=false -F allow_squash_merge=true -F delete_branch_on_merge=true` |
 
-CodeQL (`.github/workflows/codeql.yml`) skips its analysis while the repository is private and starts by itself once it is public; leave CodeQL's "default setup" off, since it conflicts with the workflow.
+CodeQL (`.github/workflows/codeql.yml`) skips its analysis while the repository is private and runs on every push now that it is public; leave CodeQL's "default setup" off, since it conflicts with the workflow.
 
 ## Commit signing
 

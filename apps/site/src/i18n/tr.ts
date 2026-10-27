@@ -82,6 +82,7 @@ export const tr: Messages = {
   'download.version': 'Sürüm {version}, {date} tarihinde yayımlandı.',
   'download.none': 'İlk sürüm yolda. O zamana kadar web uygulamasını kullanabilir ya da AnkyLock’u kaynak kodundan derleyebilirsiniz.',
   'download.buildFromSource': 'Kaynak kodundan derleyin',
+  'download.button': 'İndir',
   'download.file': '{file} dosyasını indir',
   'download.checksum': 'SHA-256',
   'download.appimage.text': 'Çoğu dağıtımda kurulum gerektirmeden çalışır ve kendini günceller.',

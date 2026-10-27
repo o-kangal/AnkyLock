@@ -168,6 +168,10 @@ describe('download page', () => {
     expect(cards.map((c) => c.querySelector('h3')?.textContent)).toEqual(['AppImage', '.deb']);
     const [appImage, deb] = RELEASE.packages;
     expect(cards[0]?.querySelector('a[download]')?.getAttribute('href')).toBe(appImage?.url);
+    // A short button, named for screen readers, and the file name beside it.
+    expect(cards[0]?.querySelector('a[download]')?.textContent).toBe('Download');
+    expect(cards[0]?.querySelector('a[download]')?.getAttribute('aria-label')).toBe(`Download ${appImage?.name ?? ''}`);
+    expect(cards[0]?.querySelector('.file code')?.textContent).toBe(appImage?.name);
     expect(cards[0]?.querySelector('.checksum code')?.textContent).toBe('a'.repeat(64));
     expect(cards[0]?.querySelector('pre')?.textContent).toBe(`chmod +x ${appImage?.name ?? ''}\n./${appImage?.name ?? ''}`);
     // Not in SHA256SUMS: no checksum shown rather than a wrong one.

@@ -76,6 +76,7 @@ export const en = {
   'download.version': 'Version {version}, released on {date}.',
   'download.none': 'The first release is on its way. Until then, use the web app or build AnkyLock from source.',
   'download.buildFromSource': 'Build from source',
+  'download.button': 'Download',
   'download.file': 'Download {file}',
   'download.checksum': 'SHA-256',
   'download.appimage.text': 'Runs on most distributions without installing, and updates itself.',

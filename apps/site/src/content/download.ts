@@ -26,7 +26,10 @@ function packageCard(ctx: PageContext, pkg: ReleasePackage): Html {
   return html`<li class="card package">
   <h3>${KIND_NAMES[pkg.kind]}</h3>
   <p>${say(`download.${pkg.kind}.text`)}</p>
-  <p><a class="button primary" href="${pkg.url}" download>${say('download.file', { file: pkg.name })}</a> <span class="muted">${megabytes(pkg.size)}</span></p>
+  <p class="file">
+    <a class="button primary" href="${pkg.url}" download aria-label="${say('download.file', { file: pkg.name })}">${say('download.button')}</a>
+    <span><code>${pkg.name}</code> <span class="muted">· ${megabytes(pkg.size)}</span></span>
+  </p>
   ${pkg.sha256 ? html`<p class="checksum"><span class="muted">${say('download.checksum')}</span> <code>${pkg.sha256}</code></p>` : ''}
   <h4>${say('download.install')}</h4>
   <p>${say(`download.install.${pkg.kind}`)}</p>
@@ -40,7 +43,7 @@ export function downloadPage(ctx: PageContext, release: Release | null): string 
   const body = release
     ? html`
   <p>${say('download.version', { version: release.version, date: formatDate(ctx.locale, release.publishedAt) })} <a href="${release.url}">GitHub</a></p>
-  <ul class="cards">${release.packages.map((pkg) => packageCard(ctx, pkg))}</ul>
+  <ul class="packages">${release.packages.map((pkg) => packageCard(ctx, pkg))}</ul>
   <h2>${say('download.verify.title')}</h2>
   <p>${say('download.verify.text')}</p>
   <pre><code>sha256sum ${example}\ngh attestation verify ${example} --repo ${REPO}</code></pre>`

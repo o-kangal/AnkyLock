@@ -399,8 +399,28 @@ main,
   border-radius: var(--radius-control);
   padding: 14px 16px;
 }
+.packages {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+/* A grid item is as wide as its widest line by default; long commands scroll inside instead. */
+.packages > li {
+  min-width: 0;
+}
 .package h3 {
   font-family: var(--mono);
+}
+/* The download button, then the file name and size beside it (below it on phones). */
+.file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.file code {
+  overflow-wrap: anywhere;
 }
 .checksum code {
   word-break: break-all;
