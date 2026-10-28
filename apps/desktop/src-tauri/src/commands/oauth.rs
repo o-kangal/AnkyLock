@@ -11,7 +11,6 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, State};
-use tauri_plugin_opener::OpenerExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -308,9 +307,7 @@ impl GoogleAuth {
 #[tauri::command]
 pub async fn oauth_sign_in(app: AppHandle, auth: State<'_, GoogleAuth>) -> AppResult<Session> {
     auth.sign_in_with(|url| {
-        app.opener()
-            .open_url(url, None::<&str>)
-            .map_err(|e| AppError::Auth(format!("Could not open the browser: {e}")))
+        super::links::open_in_browser(&app, url).map_err(|e| AppError::Auth(format!("Could not open the browser: {e}")))
     })
     .await
 }
