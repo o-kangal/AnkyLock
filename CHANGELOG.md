@@ -2,6 +2,13 @@
 
 All notable changes to AnkyLock. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). A release's notes on GitHub are its section here; a version is released once its heading carries a date instead of `Unreleased`.
 
+## [0.1.1] - 2026-10-28
+
+### Fixed
+
+- The Linux AppImage opens the browser again for Google sign-in and for links in notes. Before, the browser could fail to start, so "Use my existing vault" waited until sign-in timed out.
+- Google sign-in on the web app ends on an AnkyLock page instead of a bare redirect, which Chrome had flagged as deceptive.
+
 ## [0.1.0] - 2026-10-27
 
 The first public release: the desktop app for Linux (AppImage, .deb, .rpm) and the web app at app.ankylock.com.
