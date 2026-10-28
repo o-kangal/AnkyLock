@@ -77,6 +77,17 @@ Without Google credentials the apps run local-only. To enable sign-in and Drive 
 
 The relay is a small, stateless Rust server that forwards sealed packets between the devices of one Google account and vault. It authenticates each connection with the user's Google ID token, never reads or logs a packet's contents, and keeps nothing on disk.
 
+The easiest way is the container image (amd64 and arm64) with Docker Compose, using [`apps/relay/compose.yaml`](apps/relay/compose.yaml):
+
+```bash
+curl -O https://raw.githubusercontent.com/o-kangal/AnkyLock/main/apps/relay/compose.yaml
+docker compose up -d
+```
+
+The relay only accepts ID tokens issued for the OAuth clients in `GOOGLE_CLIENT_ID`. The compose file already sets the one of the desktop app published on GitHub Releases, `575204945098-23718u4821l6fludlvsedetf0ttm0hot.apps.googleusercontent.com`; this id is public, it ships inside the app. If you build the apps yourself, use your own client ids instead.
+
+You can also build the image (`docker build -f apps/relay/Dockerfile -t ankylock-relay .` from the repository root) or run the relay without a container:
+
 ```bash
 GOOGLE_CLIENT_ID=<desktop client id>,<web client id> cargo run --release --manifest-path apps/relay/Cargo.toml
 ```
@@ -90,7 +101,15 @@ GOOGLE_CLIENT_ID=<desktop client id>,<web client id> cargo run --release --manif
 | `RELAY_MAX_CONNECTIONS_PER_ACCOUNT` | `8` | Open connections per Google account |
 | `RELAY_IDLE_TIMEOUT_SECS` | `60` | Silent connections are closed (apps ping every 25 s) |
 
-Put it behind TLS (a reverse proxy) so devices connect with `wss://`, then enter the address, for example `wss://relay.example.com/ws`, in the desktop app under the vault menu → **Instant sync (own relay)**. The relay sees which notes change and when, but not what is in them; it also receives your short-lived Google ID token, so use only a relay you trust. The web app connects only to the relay it was built with (`VITE_RELAY_URL`), which keeps its content security policy strict.
+Put it behind TLS (a reverse proxy) so devices connect with `wss://`. With [Caddy](https://caddyserver.com/), which gets the certificate and passes WebSockets on by itself, two lines in the Caddyfile are enough:
+
+```
+relay.example.com {
+	reverse_proxy 127.0.0.1:8787
+}
+```
+
+Then enter the address, for example `wss://relay.example.com/ws`, in the desktop app under the vault menu → **Instant sync (own relay)**. The relay sees which notes change and when, but not what is in them; it also receives your short-lived Google ID token, so use only a relay you trust. The web app connects only to the relay it was built with (`VITE_RELAY_URL`), which keeps its content security policy strict.
 
 ## Repository layout
 
@@ -163,6 +182,8 @@ A version tag builds the Linux packages in CI (`.github/workflows/release.yml`) 
 4. Review the draft on GitHub and publish it.
 
 Running the workflow by hand from the Actions tab builds the same packages as a dry run, without publishing anything.
+
+The same tag also publishes the relay's container image (`.github/workflows/relay-image.yml`) as `ghcr.io/o-kangal/ankylock-relay:<version>` and `:latest`, with build provenance; running that workflow by hand on `main` publishes `:sha-<commit>` and `:latest`.
 
 ## License
 

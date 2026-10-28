@@ -1,0 +1,15 @@
+# The AnkyLock relay with Docker Compose: `docker compose up -d` in this folder. It listens on
+# localhost only; put a TLS reverse proxy in front so the desktop app connects with wss://
+# (README "Run your own relay").
+services:
+  relay:
+    image: ghcr.io/o-kangal/ankylock-relay:latest
+    restart: unless-stopped
+    environment:
+      # The desktop app from GitHub Releases. A build of your own needs its own client id here.
+      GOOGLE_CLIENT_ID: 575204945098-23718u4821l6fludlvsedetf0ttm0hot.apps.googleusercontent.com
+    ports:
+      - "127.0.0.1:8787:8787"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

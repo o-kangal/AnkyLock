@@ -33,3 +33,11 @@ updates:
     groups:
       actions:
         patterns: ['*']
+
+  # Base images of the relay's container (apps/relay/Dockerfile).
+  - package-ecosystem: docker
+    directory: /apps/relay
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

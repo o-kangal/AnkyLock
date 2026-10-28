@@ -1,0 +1,9 @@
+# Only the Cargo workspace goes into the relay image's build context (apps/relay/Dockerfile).
+*
+!Cargo.toml
+!Cargo.lock
+!apps/relay/Cargo.toml
+!apps/relay/src
+!apps/desktop/src-tauri/Cargo.toml
+!apps/desktop/src-tauri/src
+!apps/desktop/src-tauri/build.rs
