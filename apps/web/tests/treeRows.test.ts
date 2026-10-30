@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CategoryId, EpochMs, FolderId, NoteId } from '@ankylock/core';
-import { buildTreeRows, type TreeRow } from '../src/components/sidebar/treeRows.js';
+import { buildTreeRows, type SortKey, type TreeRow } from '../src/components/sidebar/treeRows.js';
 import type { FolderView, NoteView, Selection, WorkspaceState } from '../src/index.js';
 
 const folder = (
@@ -15,6 +15,7 @@ const folder = (
   name: id,
   isArchived: false,
   deletedAt: null,
+  createdAt: 1 as EpochMs,
   ...extra,
 });
 
@@ -25,6 +26,7 @@ const note = (id: string, folderId: string | null, extra: Partial<NoteView> = {}
   isEphemeral: false,
   isArchived: false,
   deletedAt: null,
+  createdAt: 1 as EpochMs,
   updatedAt: 1 as EpochMs,
   title: id,
   ...extra,
@@ -92,6 +94,43 @@ describe('buildTreeRows', () => {
 
     s.selection = { kind: 'system', id: 'system_trash' };
     expect(ids(buildTreeRows(s, new Set()))).toEqual(['F:bin']);
+  });
+
+  describe('sort order', () => {
+    function sorted(): WorkspaceState {
+      const s = state(all);
+      s.folders = [
+        folder('beta', null, null, { createdAt: 1 as EpochMs }),
+        folder('Alpha', null, null, { createdAt: 3 as EpochMs }),
+        folder('gamma', null, null, { createdAt: 2 as EpochMs }),
+      ];
+      const notes = [
+        note('old-edited', null, { title: 'zebra', createdAt: 1 as EpochMs, updatedAt: 30 as EpochMs }),
+        note('newest', null, { title: 'Apple', createdAt: 3 as EpochMs, updatedAt: 10 as EpochMs }),
+        note('untitled', null, { title: null, createdAt: 2 as EpochMs, updatedAt: 20 as EpochMs }),
+        note('middle', null, { title: 'mango', createdAt: 2 as EpochMs, updatedAt: 5 as EpochMs }),
+      ];
+      s.notes = Object.fromEntries(notes.map((n) => [n.id, n]));
+      return s;
+    }
+    const order = (key: SortKey, reversed = false): string[] => ids(buildTreeRows(sorted(), new Set(), { key, reversed }));
+
+    it('orders notes by last change by default, folders by name', () => {
+      expect(ids(buildTreeRows(sorted(), new Set()))).toEqual(order('modified'));
+      expect(order('modified')).toEqual(['F:Alpha', 'F:beta', 'F:gamma', 'N:old-edited', 'N:untitled', 'N:newest', 'N:middle']);
+    });
+
+    it('orders notes and folders by creation, newest first', () => {
+      expect(order('created')).toEqual(['F:Alpha', 'F:gamma', 'F:beta', 'N:newest', 'N:untitled', 'N:middle', 'N:old-edited']);
+    });
+
+    it('orders notes by title, ignoring case, with untitled notes last', () => {
+      expect(order('name')).toEqual(['F:Alpha', 'F:beta', 'F:gamma', 'N:newest', 'N:middle', 'N:old-edited', 'N:untitled']);
+    });
+
+    it('reverses folders and notes', () => {
+      expect(order('modified', true)).toEqual(['F:gamma', 'F:beta', 'F:Alpha', 'N:middle', 'N:newest', 'N:untitled', 'N:old-edited']);
+    });
   });
 
   it('never loops on cyclic folder data', () => {

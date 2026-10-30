@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Bytes, CategoryId, Ciphertext, EpochMs, FolderId, NoteId, SealedBytes, VaultId } from '@ankylock/core';
-import { createKeySealer, type Sealer } from '@ankylock/crypto';
+import { createKeySealer, createTextCodec, type Sealer } from '@ankylock/crypto';
 import { WebIndexedDbAdapter, type IStorageEngine } from '@ankylock/storage';
 import {
   BACKUP_INTERVAL_MS,
@@ -16,6 +16,7 @@ import {
   mergeSnapshots,
   openSnapshot,
   saveNoteState,
+  setNoteName,
   deleteVaultFromDrive,
   removeLegacyDriveFiles,
   syncHeaderFile,
@@ -487,6 +488,35 @@ describe('vault catalog', () => {
     const doc = new Y.Doc();
     Y.applyUpdate(doc, (await loadNoteState({ storage: restored, sealer: s }, NOTE))!);
     expect(doc.getText(TEXT_FIELD).toString()).toBe('from A and B');
+  });
+
+  it('titles a merged note from the merged doc, not from the newest snapshot', async () => {
+    const s = await sealer();
+    const drive = new MemoryDrive();
+    const NOTE = 'renamed-note' as NoteId;
+    const base = new Y.Doc();
+    base.getText(TEXT_FIELD).insert(0, 'line one');
+    const shared = Y.encodeStateAsUpdate(base);
+    await deviceBackup(s, drive, DEVICE_A, async (storage) => {
+      await storage.createNote(NOTE);
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, shared);
+      setNoteName(doc, 'deploy.sh');
+      await saveNoteState({ storage, sealer: s, now: () => 1000 as EpochMs }, NOTE, doc, 'deploy.sh');
+    });
+    // B edits later without having seen the rename, so its version of the note is the newest.
+    await deviceBackup(s, drive, DEVICE_B, async (storage) => {
+      await storage.createNote(NOTE);
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, shared);
+      doc.getText(TEXT_FIELD).insert(8, ' and more');
+      await saveNoteState({ storage, sealer: s, now: () => 2000 as EpochMs }, NOTE, doc, 'line one and more');
+    });
+
+    const [vault] = await listRemoteVaults(drive);
+    const merged = await mergeSnapshots(s, (await downloadSnapshots(drive, s, vault!)).snapshots);
+    const content = merged.contents.find((c) => c.noteId === NOTE);
+    expect(await createTextCodec(s).decrypt(content!.titleCiphertext)).toBe('deploy.sh');
   });
 
   it('skips snapshots another key sealed', async () => {

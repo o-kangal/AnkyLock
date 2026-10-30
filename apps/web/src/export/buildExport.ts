@@ -1,20 +1,20 @@
 // Runs inside the export worker (and tests); the main bundle never loads zip.js.
 import { TextReader, Uint8ArrayWriter, ZipWriter, configure } from '@zip.js/zip.js';
 import * as Y from 'yjs';
-import { TEXT_FIELD } from '@ankylock/sync';
+import { TEXT_FIELD, docTitle } from '@ankylock/sync';
 import type { ExportFile, ExportJob } from './exportNotes.js';
 import { noteFileName, uniqueName } from './exportPlan.js';
 
 // The worker already runs off the main thread; zip.js must not start workers of its own.
 configure({ useWebWorkers: false });
 
-const textOf = (state: Uint8Array | null): string => {
-  if (state === null) return '';
+const contentOf = (state: Uint8Array | null): { readonly text: string; readonly title: string | null } => {
+  if (state === null) return { text: '', title: null };
   const doc = new Y.Doc();
   Y.applyUpdate(doc, state);
-  const text = doc.getText(TEXT_FIELD).toString();
+  const content = { text: doc.getText(TEXT_FIELD).toString(), title: docTitle(doc) };
   doc.destroy();
-  return text;
+  return content;
 };
 
 /**
@@ -25,11 +25,11 @@ const textOf = (state: Uint8Array | null): string => {
 export async function buildExport(job: ExportJob): Promise<ExportFile> {
   const taken = new Map<string, Set<string>>();
   const files = job.items.map((item) => {
-    const text = textOf(item.state);
+    const { text, title } = contentOf(item.state);
     const key = item.dir.join('/');
     const names = taken.get(key) ?? new Set<string>();
     taken.set(key, names);
-    return { path: [...item.dir, uniqueName(names, noteFileName(text, job.untitled))].join('/'), text };
+    return { path: [...item.dir, uniqueName(names, noteFileName(title, job.untitled))].join('/'), text };
   });
 
   const [first] = files;

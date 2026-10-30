@@ -6,8 +6,35 @@ export type TreeRow =
   | { readonly kind: 'folder'; readonly folder: FolderView; readonly depth: number; readonly expanded: boolean }
   | { readonly kind: 'note'; readonly note: NoteView; readonly depth: number };
 
-const byName = (a: FolderView, b: FolderView): number => compareNames(a.name, b.name);
-const byRecent = (a: NoteView, b: NoteView): number => b.updatedAt - a.updatedAt;
+/**
+ * How the tree orders notes: by last change or creation (newest first) or by title (A to Z);
+ * `reversed` flips it. Folders follow creation order when notes do, and their names otherwise:
+ * a folder's own timestamp does not move when the notes inside it change.
+ */
+export type SortKey = 'modified' | 'created' | 'name';
+export interface SortOrder {
+  readonly key: SortKey;
+  readonly reversed: boolean;
+}
+export const DEFAULT_SORT: SortOrder = { key: 'modified', reversed: false };
+
+type Compare<T> = (a: T, b: T) => number;
+
+const noteOrder: Record<SortKey, Compare<NoteView>> = {
+  modified: (a, b) => b.updatedAt - a.updatedAt,
+  created: (a, b) => b.createdAt - a.createdAt,
+  // Untitled notes (and titles still decrypting) go after named ones, newest first.
+  name: (a, b) => {
+    if (a.title && b.title) return compareNames(a.title, b.title) || b.updatedAt - a.updatedAt;
+    if (a.title || b.title) return a.title ? -1 : 1;
+    return b.updatedAt - a.updatedAt;
+  },
+};
+
+const folderOrder = (key: SortKey): Compare<FolderView> =>
+  key === 'created' ? (a, b) => b.createdAt - a.createdAt : (a, b) => compareNames(a.name, b.name);
+
+const directed = <T>(compare: Compare<T>, reversed: boolean): Compare<T> => (reversed ? (a, b) => compare(b, a) : compare);
 
 type Item = Pick<FolderView, 'isArchived' | 'deletedAt'>;
 
@@ -27,7 +54,9 @@ function visibilityFor(state: WorkspaceState): (item: Item) => boolean {
  * - A custom category: its roots and loose notes only.
  * - A folder: that folder's subtree.
  */
-export function buildTreeRows(state: WorkspaceState, expanded: ReadonlySet<FolderId>): TreeRow[] {
+export function buildTreeRows(state: WorkspaceState, expanded: ReadonlySet<FolderId>, order: SortOrder = DEFAULT_SORT): TreeRow[] {
+  const folderSort = directed(folderOrder(order.key), order.reversed);
+  const noteSort = directed(noteOrder[order.key], order.reversed);
   const visible = visibilityFor(state);
   const folders = state.folders.filter(visible);
   const notes = Object.values(state.notes).filter(visible);
@@ -50,8 +79,8 @@ export function buildTreeRows(state: WorkspaceState, expanded: ReadonlySet<Folde
     const isExpanded = expanded.has(folder.id);
     rows.push({ kind: 'folder', folder, depth, expanded: isExpanded });
     if (!isExpanded) return;
-    for (const child of (children.get(folder.id) ?? []).sort(byName)) addFolder(child, depth + 1);
-    for (const note of notes.filter((n) => n.folderId === folder.id).sort(byRecent)) {
+    for (const child of (children.get(folder.id) ?? []).sort(folderSort)) addFolder(child, depth + 1);
+    for (const note of notes.filter((n) => n.folderId === folder.id).sort(noteSort)) {
       rows.push({ kind: 'note', note, depth: depth + 1 });
     }
   };
@@ -67,8 +96,8 @@ export function buildTreeRows(state: WorkspaceState, expanded: ReadonlySet<Folde
   const inCategory = (item: { categoryId: FolderView['categoryId'] }): boolean =>
     categoryId === null || item.categoryId === categoryId;
   const roots = folders.filter((f) => (f.parentId === null || !visibleIds.has(f.parentId)) && inCategory(f));
-  for (const folder of roots.sort(byName)) addFolder(folder, 0);
+  for (const folder of roots.sort(folderSort)) addFolder(folder, 0);
   const loose = notes.filter((n) => (n.folderId === null || !visibleIds.has(n.folderId)) && inCategory(n));
-  for (const note of loose.sort(byRecent)) rows.push({ kind: 'note', note, depth: 0 });
+  for (const note of loose.sort(noteSort)) rows.push({ kind: 'note', note, depth: 0 });
   return rows;
 }

@@ -1,4 +1,4 @@
-import { deriveTitle, type FolderId, type NoteId } from '@ankylock/core';
+import type { FolderId, NoteId } from '@ankylock/core';
 import type { WorkspaceState } from '../stores/workspaceStore.js';
 
 export type ExportScope =
@@ -72,11 +72,13 @@ export interface ExportNames {
 
 export const ENGLISH_EXPORT_NAMES: ExportNames = { untitled: 'Untitled', untitledFolder: 'Untitled folder', folder: 'Folder', vault: 'vault' };
 
-/** The file name of a note: its title (line 1, BR-NOTE-03), with `.txt` unless it has an extension. */
-export function noteFileName(text: string, untitled = ENGLISH_EXPORT_NAMES.untitled): string {
-  const firstLine = text.slice(0, 400).split('\n', 1)[0] ?? '';
-  const title = safeName(deriveTitle(firstLine) ?? untitled, untitled);
-  return HAS_EXTENSION.test(title) ? title : `${title}.txt`;
+/**
+ * The file name of a note: its title (its name, or else line 1), with `.txt` unless the title
+ * already ends in an extension.
+ */
+export function noteFileName(title: string | null, untitled = ENGLISH_EXPORT_NAMES.untitled): string {
+  const name = safeName(title ?? untitled, untitled);
+  return HAS_EXTENSION.test(name) ? name : `${name}.txt`;
 }
 
 /**

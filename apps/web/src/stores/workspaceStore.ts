@@ -40,6 +40,7 @@ export interface FolderView {
   name: string;
   isArchived: boolean;
   deletedAt: EpochMs | null;
+  createdAt: EpochMs;
 }
 
 export interface NoteView {
@@ -49,6 +50,7 @@ export interface NoteView {
   isEphemeral: boolean;
   isArchived: boolean;
   deletedAt: EpochMs | null;
+  createdAt: EpochMs;
   updatedAt: EpochMs;
   /** Decrypted BR-NOTE-03 title; null when line 1 is empty, undefined until loaded. */
   title: string | null | undefined;
@@ -113,6 +115,7 @@ const noteView = (note: Note, title: string | null | undefined): NoteView => ({
   isEphemeral: note.isEphemeral,
   isArchived: note.isArchived,
   deletedAt: note.deletedAt,
+  createdAt: note.createdAt,
   updatedAt: note.updatedAt,
   title,
 });
@@ -160,6 +163,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     name: await names.decrypt(folder.nameCiphertext),
     isArchived: folder.isArchived,
     deletedAt: folder.deletedAt,
+    createdAt: folder.createdAt,
   });
 
   const putNote = (note: Note): void => {

@@ -1,5 +1,5 @@
 import { createSignal, For, Show, type JSX } from 'solid-js';
-import { ok, type CategoryId, type FolderId, type Result } from '@ankylock/core';
+import { ok, type CategoryId, type FolderId, type NoteId, type Result } from '@ankylock/core';
 import { canDrop, type DragItem, type DropTarget } from '../../dnd/dragDropManager.js';
 import type { ExportScope } from '../../export/exportPlan.js';
 import { useExport } from '../../export/saveFile.js';
@@ -31,6 +31,9 @@ export interface MoveChoice {
 
 /** Moves an item the way dropping it there would (see `DragDropManager.drop`). */
 export type MoveItem = (item: DragItem, target: DropTarget) => Promise<Result<void>>;
+
+/** Names a note; an empty name lets its title follow line 1 again. */
+export type RenameNote = (noteId: NoteId, name: string) => Promise<Result<void>>;
 
 /**
  * Destinations for "Move to…", the touch and keyboard alternative to drag-and-drop: the top level,
@@ -89,7 +92,13 @@ const newFolder = (run: (name: string) => Promise<Result<void>>): MenuAction => 
 });
 
 /** The actions valid for a target in its current state (live, archived or trashed). */
-export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: MenuTarget, move?: MoveItem): MenuAction[] {
+export function menuActions(
+  state: WorkspaceState,
+  store: WorkspaceStore,
+  item: MenuTarget,
+  move?: MoveItem,
+  rename?: RenameNote,
+): MenuAction[] {
   if (item.kind === 'root') {
     // New folders go where the user is looking: into the selected folder or category, else the root.
     const { selection } = state;
@@ -146,12 +155,17 @@ export function menuActions(state: WorkspaceState, store: WorkspaceStore, item: 
   }
   const trash: MenuAction = { label: t('menu.moveToTrash'), run: () => store.trashNote(note.id) };
   const exportNote = exportAction({ kind: 'note', id: note.id }, `“${note.title ?? t('note.untitled')}”`);
-  if (note.isArchived) return [{ label: t('menu.unarchive'), run: () => store.setNoteArchived(note.id, false) }, exportNote, trash];
+  const renames: MenuAction[] = rename
+    ? [{ label: t('menu.rename'), input: { placeholder: t('menu.noteName'), initial: note.title ?? '' }, run: (name) => rename(note.id, name) }]
+    : [];
+  if (note.isArchived) {
+    return [...renames, { label: t('menu.unarchive'), run: () => store.setNoteArchived(note.id, false) }, exportNote, trash];
+  }
   const moves = move ? [moveTo(moveChoices(state, store, { kind: 'note', id: note.id }, move))] : [];
   // Scratchpads must be filed into a folder or category before they can be archived (SPEC §3).
   return note.isEphemeral
-    ? [...moves, exportNote, trash]
-    : [...moves, { label: t('menu.archive'), run: () => store.setNoteArchived(note.id, true) }, exportNote, trash];
+    ? [...renames, ...moves, exportNote, trash]
+    : [...renames, ...moves, { label: t('menu.archive'), run: () => store.setNoteArchived(note.id, true) }, exportNote, trash];
 }
 
 export interface ContextMenuProps {
@@ -162,6 +176,8 @@ export interface ContextMenuProps {
   readonly onClose: () => void;
   /** Enables "Move to…" for notes and folders. */
   readonly move?: MoveItem;
+  /** Enables "Rename" for notes. */
+  readonly rename?: RenameNote;
 }
 
 const baseItemStyle: JSX.CSSProperties = {
@@ -215,7 +231,7 @@ export function ContextMenu(props: ContextMenuProps): JSX.Element {
       width={200}
       style={{ padding: '6px' }}
     >
-      <For each={menuActions(props.store.state, props.store, props.item, props.move).filter((a) => !a.export || openExport)}>
+      <For each={menuActions(props.store.state, props.store, props.item, props.move, props.rename).filter((a) => !a.export || openExport)}>
         {(action) => (
           <>
             <button

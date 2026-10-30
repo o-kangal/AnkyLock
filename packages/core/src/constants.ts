@@ -23,6 +23,9 @@ export const SYNC_DEBOUNCE_MS = 150;
 /** BR-NOTE-03: display titles fall back to this many leading characters of line 1. */
 export const TITLE_FALLBACK_LENGTH = 40;
 
+/** A name the user gives a note is cut to this many characters (also the export file name limit). */
+export const MAX_NOTE_NAME_LENGTH = 100;
+
 /** BR-HIER-02: custom category names are 1..=50 characters after trimming. */
 export const MAX_CATEGORY_NAME_LENGTH = 50;
 

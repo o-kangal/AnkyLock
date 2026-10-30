@@ -12,8 +12,9 @@ import {
   type SealedBytes,
   type VaultId,
 } from '@ankylock/core';
-import type { Sealer } from '@ankylock/crypto';
+import { createTextCodec, type Sealer } from '@ankylock/crypto';
 import type { VaultImport } from '@ankylock/storage';
+import { docTitle } from '../crdt/noteName.js';
 import { encodeNoteContent } from '../persistence/notePersistence.js';
 import { DriveError, type DriveFile, type GoogleDriveClient } from './googleDriveClient.js';
 import { openSnapshot, type Snapshot } from './snapshot.js';
@@ -267,7 +268,9 @@ export async function mergeSnapshots(sealer: Sealer, snapshots: readonly Snapsho
       const doc = new Y.Doc();
       try {
         for (const version of versions) Y.applyUpdate(doc, await sealer.open(version.yjsUpdates));
-        return await encodeNoteContent(sealer, noteId, doc, latest.titleCiphertext, latest.updatedAt);
+        // Titled from the merged doc: a name or line 1 may come from a device that saved earlier.
+        const titleCiphertext = await createTextCodec(sealer).encrypt(docTitle(doc) ?? '');
+        return await encodeNoteContent(sealer, noteId, doc, titleCiphertext, latest.updatedAt);
       } finally {
         doc.destroy();
       }

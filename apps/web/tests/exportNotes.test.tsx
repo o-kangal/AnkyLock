@@ -36,10 +36,10 @@ describe('export file names', () => {
   });
 
   it('names a note after its title, keeping an extension the title already has', () => {
-    expect(noteFileName('Shopping list\nmilk')).toBe('Shopping list.txt');
-    expect(noteFileName('README.md\n# Hi')).toBe('README.md');
-    expect(noteFileName('docker-compose.yaml\nservices:')).toBe('docker-compose.yaml');
-    expect(noteFileName('\nsecond line')).toBe('Untitled.txt');
+    expect(noteFileName('Shopping list')).toBe('Shopping list.txt');
+    expect(noteFileName('README.md')).toBe('README.md');
+    expect(noteFileName('docker-compose.yaml')).toBe('docker-compose.yaml');
+    expect(noteFileName(null)).toBe('Untitled.txt');
     expect(noteFileName('http://x.test/a?b')).toBe('http___x.test_a_b.txt');
   });
 });

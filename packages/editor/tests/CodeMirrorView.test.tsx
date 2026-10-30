@@ -4,7 +4,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { TRASHED_READ_ONLY_MESSAGE } from '@ankylock/core';
-import { REMOTE_ORIGIN, TEXT_FIELD } from '@ankylock/sync';
+import { REMOTE_ORIGIN, TEXT_FIELD, setNoteName } from '@ankylock/sync';
 import { CodeMirrorView, undoManagerFor, type ColorScheme } from '../src/index.js';
 
 beforeAll(() => {
@@ -188,5 +188,14 @@ describe('CodeMirrorView', () => {
 
     view().dispatch({ changes: { from: 0, to: view().state.doc.line(1).to, insert: '' } });
     expect(titles).toEqual(['const secret = 42;', null]);
+  });
+
+  it('keeps reporting the note name while line 1 changes', () => {
+    const titles: (string | null)[] = [];
+    const doc = docWith('first line\nbody');
+    setNoteName(doc, 'deploy.sh');
+    mount({ doc, titles });
+    view().dispatch({ changes: { from: 0, insert: 'new ' } });
+    expect(titles).toEqual(['deploy.sh']);
   });
 });

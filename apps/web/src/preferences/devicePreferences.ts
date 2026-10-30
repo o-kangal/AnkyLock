@@ -1,4 +1,5 @@
 import { createSignal, type Accessor } from 'solid-js';
+import { DEFAULT_SORT, type SortKey, type SortOrder } from '../components/sidebar/treeRows.js';
 
 /** Screens narrower than this (the mobile PWA) start with word wrap on. */
 export const NARROW_SCREEN_PX = 600;
@@ -57,6 +58,28 @@ export function createWordWrapPreference(
       const next = !wordWrap();
       setWordWrap(next);
       writePreference(storage, WORD_WRAP_KEY, next ? 'on' : 'off');
+    },
+  };
+}
+
+const SORT_KEY = 'ankylock.sortOrder';
+const SORT_KEYS: readonly SortKey[] = ['modified', 'created', 'name'];
+
+export interface SortPreference {
+  readonly order: Accessor<SortOrder>;
+  set(order: SortOrder): void;
+}
+
+/** How the sidebar orders notes and folders: a preference of this device, like word wrap. */
+export function createSortPreference(storage: PreferenceStorage | null = defaultStorage()): SortPreference {
+  const [key = '', direction] = (readPreference(storage, SORT_KEY) ?? '').split(':');
+  const saved = SORT_KEYS.find((k) => k === key);
+  const [order, setOrder] = createSignal<SortOrder>(saved ? { key: saved, reversed: direction === 'reversed' } : DEFAULT_SORT);
+  return {
+    order,
+    set(next) {
+      setOrder(next);
+      writePreference(storage, SORT_KEY, next.reversed ? `${next.key}:reversed` : next.key);
     },
   };
 }

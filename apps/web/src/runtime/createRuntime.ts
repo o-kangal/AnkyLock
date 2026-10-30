@@ -1,6 +1,6 @@
 import { batch, createSignal, type Accessor } from 'solid-js';
 import type * as Y from 'yjs';
-import type { Ciphertext, EpochMs, NoteId, VaultId } from '@ankylock/core';
+import { TRASHED_READ_ONLY_MESSAGE, err, normalizeNoteName, ok, type Ciphertext, type EpochMs, type NoteId, type Result, type VaultId } from '@ankylock/core';
 import {
   CryptoError,
   createTextCodec,
@@ -19,6 +19,7 @@ import {
 import {
   DocManager,
   GoogleDriveClient,
+  META_FIELD,
   REMOTE_ORIGIN,
   TEXT_FIELD,
   AuthError,
@@ -27,12 +28,14 @@ import {
   createSyncEngine,
   deleteAllFromDrive,
   deleteVaultFromDrive,
+  docTitle,
   downloadSnapshots,
   exportSnapshot,
   listRemoteVaults,
   mergeSnapshots,
   publishingStorage,
   removeLegacyDriveFiles,
+  setNoteName,
   syncHeaderFile,
   vaultSnapshotFileName,
   loadNoteState,
@@ -158,6 +161,11 @@ export interface Runtime {
   openDoc(noteId: NoteId): Promise<Y.Doc>;
   /** Closes docs of notes without an open tab, saving pending edits first. */
   retainDocs(noteIds: readonly NoteId[]): Promise<void>;
+  /**
+   * Names a note, or with an empty name lets its title follow line 1 again. The name is part of
+   * the note's doc, so it is encrypted and synced with the text. Trashed notes are read-only.
+   */
+  renameNote(noteId: NoteId, name: string): Promise<Result<void>>;
   /** Saves pending edits of every open note, e.g. before reloading into a new app version. */
   flush(): Promise<void>;
   /** True for a scratchpad whose text is empty and was never edited this session (SPEC §3 CLOSE_TAB). */
@@ -770,12 +778,14 @@ export function createRuntime(options: RuntimeOptions): Runtime {
           // Counted before the debounced save, so closing right after typing still warns.
           scheduler?.markChanged();
         });
+        // A rename, here or on another device, retitles the note's tab and sidebar row.
+        doc.getMap(META_FIELD).observe(() => store?.setTitle(noteId, docTitle(doc)));
         persisters.set(
           noteId,
           persistDoc(noteId, doc, {
             storage: vaultStorage,
             sealer,
-            title: () => store?.state.notes[noteId]?.title ?? null,
+            title: () => docTitle(doc),
             onError: report,
           }),
         );
@@ -793,6 +803,23 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     async retainDocs(noteIds) {
       const keep = new Set(noteIds);
       await Promise.all(docs.openNoteIds().filter((id) => !keep.has(id)).map(closeDoc));
+    },
+
+    async renameNote(noteId, name) {
+      const note = store?.state.notes[noteId];
+      if (!note) return err('ERR_NOT_FOUND', 'The note no longer exists.');
+      if (note.deletedAt !== null) return err('ERR_READ_ONLY_TRASHED_ENTITY', TRASHED_READ_ONLY_MESSAGE);
+      // Submitting the title unchanged must not pin line 1 as the note's name.
+      if (normalizeNoteName(name) === note.title) return ok(undefined);
+      try {
+        const doc = await this.openDoc(noteId);
+        setNoteName(doc, name);
+        // A note renamed from the sidebar without a tab only needed its doc for this edit.
+        if (!store?.state.tabs.some((tab) => tab.noteId === noteId)) await closeDoc(noteId);
+        return ok(undefined);
+      } catch (error) {
+        return err('ERR_STORAGE', error instanceof Error ? error.message : String(error));
+      }
     },
 
     syncStatus,

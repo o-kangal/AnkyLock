@@ -61,6 +61,30 @@ describe('Sidebar', () => {
     (Array.from(root.querySelectorAll('[role="button"]')).find((el) => el.textContent === 'Trash') as HTMLElement).click();
     expect(root.querySelector('[data-note-id="id-1"]')).not.toBeNull();
   });
+
+  it('sorts from the header menu and remembers the choice on this device', async () => {
+    localStorage.removeItem('ankylock.sortOrder');
+    const { store } = setup();
+    await store.createFolder('Alpha', null, null);
+    await store.createFolder('Zeta', null, null);
+    const folderNames = (): string[] => Array.from(root.querySelectorAll('[data-folder-id]'), (el) => el.textContent?.replace('▸', '').trim() ?? '');
+    mount(() => <Sidebar store={store} />);
+    expect(folderNames()).toEqual(['Alpha', 'Zeta']);
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Sort"]')?.click();
+    const reverse = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')).find((el) =>
+      el.textContent?.includes('Reverse order'),
+    );
+    reverse?.click();
+    expect(folderNames()).toEqual(['Zeta', 'Alpha']);
+    expect(localStorage.getItem('ankylock.sortOrder')).toBe('modified:reversed');
+
+    dispose?.();
+    root.remove();
+    mount(() => <Sidebar store={store} />);
+    expect(folderNames()).toEqual(['Zeta', 'Alpha']);
+    localStorage.removeItem('ankylock.sortOrder');
+  });
 });
 
 describe('TabBar', () => {

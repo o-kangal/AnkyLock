@@ -6,6 +6,8 @@ import { createAuthSession } from '@ankylock/sync';
 import { createWebAuthTransport, OAUTH_CALLBACK_PATH } from './auth/webGoogleAuth.js';
 import { AnkyLockApp } from './components/AnkyLockApp.jsx';
 import { t } from './i18n/index.js';
+import { InstallBanner } from './pwa/InstallBanner.jsx';
+import { createInstallSuggestion } from './pwa/install.js';
 import { UpdateBanner } from './pwa/UpdateBanner.jsx';
 import { watchForUpdates } from './pwa/updates.js';
 import { guardPageClose } from './runtime/closeGuard.js';
@@ -35,8 +37,10 @@ export function App(): JSX.Element {
     onError: (message) => console.error(message),
   });
   const closeGuard = guardPageClose(runtime);
+  const install = createInstallSuggestion();
   onCleanup(() => {
     closeGuard.dispose();
+    install.dispose();
     auth?.dispose();
     sealer.dispose();
     worker.terminate();
@@ -60,6 +64,12 @@ export function App(): JSX.Element {
   return (
     <>
       <AnkyLockApp runtime={runtime} />
+      {/* Asked once a vault is open, and never over a pending update. */}
+      <InstallBanner
+        suggestion={runtime.status() === 'unlocked' && activateUpdate() === null ? install.suggestion() : null}
+        onLater={() => install.later()}
+        onNever={() => install.never()}
+      />
       <UpdateBanner
         update={(() => {
           const activate = activateUpdate();
