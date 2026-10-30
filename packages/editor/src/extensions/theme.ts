@@ -23,6 +23,10 @@ interface Palette {
   readonly foreground: string;
   readonly gutterBackground: string;
   readonly gutterForeground: string;
+  /**
+   * Translucent: the active line's band sits above the selection layer, so an opaque color would
+   * hide a selection within that line.
+   */
   readonly activeLine: string;
   readonly selection: string;
   readonly cursor: string;
@@ -121,7 +125,7 @@ const PALETTES: Record<ColorScheme, Palette> = {
     foreground: '#1f1f1f',
     gutterBackground: '#f3f3f3',
     gutterForeground: '#8a8a8a',
-    activeLine: '#e8f2fe',
+    activeLine: 'rgba(0, 110, 220, 0.09)',
     selection: '#c0d8f5',
     cursor: '#1f1f1f',
     link: '#0067c0',
@@ -135,7 +139,7 @@ const PALETTES: Record<ColorScheme, Palette> = {
     foreground: '#d4d4d4',
     gutterBackground: '#252526',
     gutterForeground: '#6e7681',
-    activeLine: '#2a2d2e',
+    activeLine: 'rgba(255, 255, 255, 0.055)',
     selection: '#264f78',
     cursor: '#aeafad',
     link: '#4fa3ff',
