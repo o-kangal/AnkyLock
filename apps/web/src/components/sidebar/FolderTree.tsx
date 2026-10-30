@@ -1,11 +1,13 @@
-import { createMemo, createSignal, Match, Show, Switch, type JSX } from 'solid-js';
+import { createEffect, createMemo, createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import type { FolderId } from '@ankylock/core';
 import type { DragDropManager } from '../../dnd/dragDropManager.js';
+import { createSortPreference } from '../../preferences/devicePreferences.js';
 import type { WorkspaceStore } from '../../stores/workspaceStore.js';
 import { VirtualList } from '../VirtualList.jsx';
 import type { MenuTarget } from './ContextMenu.jsx';
 import { TrashToolbar } from './TrashToolbar.jsx';
 import { NoteItem } from './NoteItem.jsx';
+import { SortMenu } from './SortMenu.jsx';
 import { TOUCH_TARGET_PX, useNarrowScreen } from '../../layout/screen.js';
 import { longPress, RowMenuButton } from './rowMenu.jsx';
 import { createHover, itemRowHeight, itemStyle, rowStyle, tokens } from './styles.js';
@@ -24,7 +26,16 @@ export interface FolderTreeProps {
  */
 export function FolderTree(props: FolderTreeProps): JSX.Element {
   const [expanded, setExpanded] = createSignal<ReadonlySet<FolderId>>(new Set());
-  const rows = createMemo(() => buildTreeRows(props.store.state, expanded()));
+  const sort = createSortPreference();
+  const rows = createMemo(() => buildTreeRows(props.store.state, expanded(), sort.order()));
+
+  // Rows decrypt their titles when they first render; sorting by name needs every title first.
+  createEffect(() => {
+    if (sort.order().key !== 'name') return;
+    for (const note of Object.values(props.store.state.notes)) {
+      if (note.title === undefined) void props.store.loadTitle(note.id);
+    }
+  });
   const narrow = useNarrowScreen();
   const headerHeight = (): number => (narrow() ? TOUCH_TARGET_PX : tokens.rowHeight);
   const rowHeight = (): number => itemRowHeight(narrow());
@@ -57,16 +68,19 @@ export function FolderTree(props: FolderTreeProps): JSX.Element {
         fallback={
           <div style={{ ...rowStyle(0, headerHeight()), cursor: 'default', color: tokens.muted, 'justify-content': 'space-between' }}>
             <span>{t('sidebar.folders')}</span>
-            <Show when={canCreate()}>
-              <button
-                type="button"
-                aria-label={t('menu.newFolder')}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', font: tokens.font, color: 'inherit' }}
-                onClick={(event) => props.onItemMenu?.(event, { kind: 'root' })}
-              >
-                +
-              </button>
-            </Show>
+            <span style={{ display: 'flex', gap: '4px' }}>
+              <SortMenu sort={sort} />
+              <Show when={canCreate()}>
+                <button
+                  type="button"
+                  aria-label={t('menu.newFolder')}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', font: tokens.font, color: 'inherit' }}
+                  onClick={(event) => props.onItemMenu?.(event, { kind: 'root' })}
+                >
+                  +
+                </button>
+              </Show>
+            </span>
           </div>
         }
       >
