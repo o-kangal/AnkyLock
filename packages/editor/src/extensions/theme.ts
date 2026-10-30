@@ -1,6 +1,7 @@
 import { defaultKeymap } from '@codemirror/commands';
-import type { Extension } from '@codemirror/state';
+import { EditorState, type Extension } from '@codemirror/state';
 import {
+  crosshairCursor,
   drawSelection,
   EditorView,
   highlightActiveLine,
@@ -8,6 +9,7 @@ import {
   highlightSpecialChars,
   keymap,
   lineNumbers,
+  rectangularSelection,
   scrollPastEnd,
 } from '@codemirror/view';
 import { indentation } from './indentation.js';
@@ -112,13 +114,17 @@ export function editorTheme(scheme: ColorScheme, fontSizePx = 14): Extension {
 /**
  * Plain-text editing basics. CodeMirror already renders only the lines in the viewport,
  * so multi-megabyte scratchpads stay cheap. Syntax highlighting is out of MVP scope.
- * Tab indents (before the default keymap, so it wins).
+ * Tab indents (before the default keymap, so it wins). Alt+drag (⌥+drag on macOS) selects a
+ * column, one cursor per line, so the same position on every line is edited at once.
  */
 export const editorBasics: Extension = [
   lineNumbers(),
   highlightActiveLineGutter(),
   highlightSpecialChars(),
+  EditorState.allowMultipleSelections.of(true),
   drawSelection(),
+  rectangularSelection(),
+  crosshairCursor(),
   highlightActiveLine(),
   scrollPastEnd(),
   indentation,
