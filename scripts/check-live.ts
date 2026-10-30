@@ -3,23 +3,41 @@
 // scripts, which the privacy policy promises never happens. Pages are requested like a browser,
 // since some injections only target browsers. One injection is known and tolerated: the bot
 // detection snippet of the Free plan, which cannot be switched off there and which the CSP
-// (`script-src 'self'`) stops before it runs. Run from the repository root after the build:
+// (`script-src 'self'`) stops before it runs. When Cloudflare changes its text, this check fails
+// until the new version is reviewed and added below. Run from the repository root after the build:
 // `node scripts/check-live.ts` (Node runs this TypeScript file directly).
 import { readFileSync } from 'node:fs';
 
-/** Cloudflare's JavaScript detections snippet, appended before `</body>`; only `r` and `t` vary. */
-const BOT_DETECTION_SNIPPET =
-  `<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'R',t:'T'};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>`;
+/**
+ * Cloudflare's JavaScript detections snippet, appended before `</body>`, in the versions seen so
+ * far; edges may serve either while Cloudflare rolls one out. Only `r` and `t` vary (`R`, `T`
+ * here); the newer one repeats `r` as `ray` in the script's address.
+ */
+const BOT_DETECTION_SNIPPETS: readonly string[] = [
+  // Served until late October 2026.
+  `<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'R',t:'T'};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>`,
+  // Served from 2026-10-30: builds the address from the page's origin and adds `?ray=`.
+  `<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'R',t:'T'};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=R',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>`,
+];
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The snippet exactly, with its two per-request values, directly before `</body>`. */
-const TOLERATED = new RegExp(
-  escapeRegExp(BOT_DETECTION_SNIPPET).replace("r:'R'", "r:'[0-9a-f]{1,32}'").replace("t:'T'", "t:'[A-Za-z0-9+/=]{1,64}'") + '(?=</body>)',
+/** A snippet exactly, with its per-request values (`ray` equal to `r`), directly before `</body>`. */
+const TOLERATED = BOT_DETECTION_SNIPPETS.map(
+  (snippet) =>
+    new RegExp(
+      escapeRegExp(snippet)
+        .replace("r:'R'", "r:'([0-9a-f]{1,32})'")
+        .replace('ray=R', 'ray=\\1')
+        .replace("t:'T'", "t:'[A-Za-z0-9+/=]{1,64}'") + '(?=</body>)',
+    ),
 );
 
-/** The live page without the tolerated snippet (at most once); anything else stays. */
-export const withoutToleratedInjection = (html: string): string => html.replace(TOLERATED, '');
+/** The live page without one tolerated snippet; anything else stays. */
+export function withoutToleratedInjection(html: string): string {
+  const known = TOLERATED.find((pattern) => pattern.test(html));
+  return known ? html.replace(known, '') : html;
+}
 
 const PAGES: readonly (readonly [string, string])[] = [
   ['https://ankylock.com/', 'apps/site/dist/index.html'],
