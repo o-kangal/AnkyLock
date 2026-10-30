@@ -27,7 +27,8 @@
   },
   "pnpm": {
     "overrides": {
-      "miniflare>undici": "7.30.1"
+      "miniflare>undici": "7.30.1",
+      "seroval": "1.6.12"
     }
   }
 }
