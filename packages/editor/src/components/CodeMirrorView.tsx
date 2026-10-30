@@ -4,6 +4,7 @@ import { createEffect, onCleanup, Show, untrack, type JSX } from 'solid-js';
 import type * as Y from 'yjs';
 import { TRASHED_READ_ONLY_MESSAGE } from '@ankylock/core';
 import { editorBasics, editorTheme, type ColorScheme } from '../extensions/theme.js';
+import { noteLanguage } from '../extensions/language.js';
 import { links, type LinkOptions } from '../extensions/links.js';
 import { noteSearch, type SearchLabels } from '../extensions/search.js';
 import { titleListener } from '../extensions/title.js';
@@ -82,6 +83,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
               wrap.of(wordWrap(props.wordWrap ?? false)),
               find.of(noteSearch(props.searchLabels)),
               yjsBinding(doc),
+              noteLanguage(doc),
               titleListener(doc, (title) => props.onTitleChange?.(title)),
               props.links ? links(props.links) : [],
             ],
