@@ -50,6 +50,14 @@ describe('detectLanguage', () => {
     expect(detected('Meeting notes', '')).toBeNull();
     expect(detected(null, '#!')).toBeNull();
   });
+
+  it('stays fast on hostile line 1 text', () => {
+    const started = performance.now();
+    expect(detected(null, `#${'!'.repeat(50_000)}`)).toBeNull();
+    expect(detected(null, `#!/usr/bin/env x${'.'.repeat(50_000)}`)).toBeNull();
+    expect(detected(null, `${'.'.repeat(50_000)}x`)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(200);
+  });
 });
 
 describe('noteLanguage', () => {

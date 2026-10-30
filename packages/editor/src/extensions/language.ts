@@ -35,14 +35,21 @@ function byFileName(fileName: string): LanguageDescription | null {
   return LanguageDescription.matchFilename(languages, fileName) ?? LanguageDescription.matchFilename(languages, lowered);
 }
 
-/** `#!/bin/bash`, `#!/usr/bin/env python3`, `#!/usr/bin/env -S node --flags`. */
+const isVersionChar = (char: string): boolean => char === '.' || (char >= '0' && char <= '9');
+
+/**
+ * `#!/bin/bash`, `#!/usr/bin/env python3`, `#!/usr/bin/env -S node --flags`. Plain string work,
+ * no backtracking regex: line 1 is note text, possibly from another device.
+ */
 function byShebang(firstLine: string): LanguageDescription | null {
-  const words = /^#!\s*(\S+)(.*)$/.exec(firstLine);
-  if (!words?.[1]) return null;
-  let program = words[1].slice(words[1].lastIndexOf('/') + 1);
-  if (program === 'env') program = words[2]?.trim().split(/\s+/).find((word) => !word.startsWith('-')) ?? '';
+  if (!firstLine.startsWith('#!')) return null;
+  const [path = '', ...args] = firstLine.slice(2).trim().split(/\s+/);
+  let program = path.slice(path.lastIndexOf('/') + 1);
+  if (program === 'env') program = args.find((word) => !word.startsWith('-')) ?? '';
   // `python3.12` → `python`.
-  const name = program.replace(/[\d.]+$/, '').toLowerCase();
+  let end = program.length;
+  while (end > 0 && isVersionChar(program.charAt(end - 1))) end--;
+  const name = program.slice(0, end).toLowerCase();
   if (name === '') return null;
   return LanguageDescription.matchLanguageName(languages, INTERPRETERS[name] ?? name, false);
 }
