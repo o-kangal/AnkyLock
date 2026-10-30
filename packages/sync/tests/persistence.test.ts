@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
 import { createKeySealer, createTextCodec } from '@ankylock/crypto';
 import { WebIndexedDbAdapter } from '@ankylock/storage';
-import { DocManager, TEXT_FIELD, loadNoteState, persistDoc, saveNoteState } from '../src/index.js';
+import { DocManager, TEXT_FIELD, loadNoteState, mergeNoteUpdate, persistDoc, saveNoteState, setNoteName } from '../src/index.js';
 
 const NOTE = 'n1' as NoteId;
 
@@ -30,6 +30,16 @@ describe('saveNoteState / loadNoteState', () => {
 
     const reopened = new DocManager().open(NOTE, await loadNoteState(d, NOTE));
     expect(reopened.getText(TEXT_FIELD).toString()).toBe('const secret = 42;');
+  });
+
+  it('titles a note merged from another device after its name', async () => {
+    const d = await deps();
+    const peer = new Y.Doc();
+    peer.getText(TEXT_FIELD).insert(0, 'line one');
+    setNoteName(peer, 'config.yaml');
+    expect(await mergeNoteUpdate(d, NOTE, Y.encodeStateAsUpdate(peer))).toBe(true);
+    const stored = await d.storage.getNoteContent(NOTE);
+    expect(await createTextCodec(d.sealer).decrypt(stored?.titleCiphertext ?? ('' as never))).toBe('config.yaml');
   });
 
   it('returns undefined for notes never saved', async () => {

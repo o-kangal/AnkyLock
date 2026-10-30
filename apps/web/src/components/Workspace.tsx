@@ -144,7 +144,7 @@ export function Workspace(props: {
           }}
         >
           <div role={narrow() ? 'dialog' : undefined} aria-label={narrow() ? t('tabs.navigation') : undefined} style={sidebarStyle()}>
-            <Sidebar store={store} logoFace={props.runtime.logoFace} />
+            <Sidebar store={store} logoFace={props.runtime.logoFace} renameNote={(id, name) => props.runtime.renameNote(id, name)} />
           </div>
           <Show when={narrow() && drawer()}>
             <div

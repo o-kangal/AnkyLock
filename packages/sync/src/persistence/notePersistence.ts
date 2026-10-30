@@ -1,7 +1,6 @@
 import * as Y from 'yjs';
 import {
   MAX_NOTE_PLAINTEXT_BYTES,
-  deriveTitle,
   type Bytes,
   type Ciphertext,
   type EpochMs,
@@ -11,6 +10,7 @@ import {
 import { createTextCodec, type Sealer } from '@ankylock/crypto';
 import { StorageError, type IStorageEngine } from '@ankylock/storage';
 import { TEXT_FIELD } from '../crdt/docManager.js';
+import { docTitle } from '../crdt/noteName.js';
 
 export interface NotePersistenceDeps {
   readonly storage: IStorageEngine;
@@ -19,8 +19,6 @@ export interface NotePersistenceDeps {
 }
 
 const encoder = new TextEncoder();
-/** Titles come from the first line; a longer line is cut before searching for its end. */
-const LINE_ONE_LIMIT = 1024;
 
 /** Decrypts a note's stored Yjs state, or undefined when nothing was saved yet. */
 export async function loadNoteState(deps: NotePersistenceDeps, noteId: NoteId): Promise<Bytes | undefined> {
@@ -88,8 +86,7 @@ export async function mergeNoteUpdate(
     Y.applyUpdate(doc, update);
     const after = Y.encodeStateVector(doc);
     if (stored && before.length === after.length && before.every((b, i) => b === after[i])) return false;
-    const firstLine = doc.getText(TEXT_FIELD).toString().slice(0, LINE_ONE_LIMIT).split('\n', 1)[0] ?? '';
-    await saveNoteState(deps, noteId, doc, deriveTitle(firstLine));
+    await saveNoteState(deps, noteId, doc, docTitle(doc));
     return true;
   } finally {
     doc.destroy();

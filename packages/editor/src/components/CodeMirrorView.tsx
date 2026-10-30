@@ -20,7 +20,7 @@ export interface CodeMirrorViewProps {
   /** Shown above a read-only note, in the app's language (default: the English message). */
   readonly readOnlyNotice?: string;
   readonly colorScheme: ColorScheme;
-  /** BR-NOTE-03 title from line 1, or null when line 1 is empty. */
+  /** The note's name, or else its BR-NOTE-03 title from line 1; null when both are empty. */
   readonly onTitleChange?: (title: string | null) => void;
   /** Focus the editor when it mounts, so a new or opened note accepts typing immediately. */
   readonly autoFocus?: boolean;
@@ -82,7 +82,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
               wrap.of(wordWrap(props.wordWrap ?? false)),
               find.of(noteSearch(props.searchLabels)),
               yjsBinding(doc),
-              titleListener((title) => props.onTitleChange?.(title)),
+              titleListener(doc, (title) => props.onTitleChange?.(title)),
               props.links ? links(props.links) : [],
             ],
           }),

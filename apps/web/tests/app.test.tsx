@@ -1,7 +1,7 @@
 import { EditorView } from '@codemirror/view';
 import { render } from 'solid-js/web';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { EpochMs, FolderId, NoteId } from '@ankylock/core';
+import { ok, type EpochMs, type FolderId, type NoteId } from '@ankylock/core';
 import { CryptoError, createKeySealer, type WorkerSealer } from '@ankylock/crypto';
 import { AnkyLockApp, createRuntime, menuActions, tokens, type Platform, type Runtime } from '../src/index.js';
 import { setup, TestVaults } from './helpers.js';
@@ -485,5 +485,21 @@ describe('menuActions', () => {
       'Export…',
       'Move to Trash',
     ]);
+  });
+
+  it('offers Rename first for notes, starting from the current title', async () => {
+    const { store } = setup();
+    await store.createTab();
+    store.setTitle('id-1' as NoteId, 'draft');
+    const renamed: [NoteId, string][] = [];
+    const rename = (id: NoteId, name: string) => {
+      renamed.push([id, name]);
+      return Promise.resolve(ok(undefined));
+    };
+    const [first] = menuActions(store.state, store, { kind: 'note', id: 'id-1' as NoteId }, undefined, rename);
+    expect(first?.label).toBe('Rename');
+    expect(first?.input?.initial).toBe('draft');
+    await first?.run('notes.md');
+    expect(renamed).toEqual([['id-1', 'notes.md']]);
   });
 });

@@ -111,6 +111,7 @@ export const tr: Messages = {
   'menu.moveToTrash': 'Çöp Kutusuna taşı',
   'menu.newFolder': 'Yeni klasör',
   'menu.newSubfolder': 'Yeni alt klasör',
+  'menu.noteName': 'Ad (boşsa: ilk satır)',
   'menu.rename': 'Yeniden adlandır',
   'menu.restore': 'Geri yükle',
   'menu.topLevel': 'En üst düzey (klasörsüz)',

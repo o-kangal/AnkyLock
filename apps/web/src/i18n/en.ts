@@ -110,6 +110,7 @@ export const en = {
   'menu.moveToTrash': 'Move to Trash',
   'menu.newFolder': 'New folder',
   'menu.newSubfolder': 'New subfolder',
+  'menu.noteName': 'Name (empty: line 1)',
   'menu.rename': 'Rename',
   'menu.restore': 'Restore',
   'menu.topLevel': 'Top level (no folder)',

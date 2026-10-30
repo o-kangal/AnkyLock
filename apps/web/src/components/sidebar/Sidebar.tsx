@@ -4,7 +4,7 @@ import { AnkyLogo } from '../AnkyLogo.jsx';
 import { createDragDropManager } from '../../dnd/dragDropManager.js';
 import type { WorkspaceStore } from '../../stores/workspaceStore.js';
 import { CategoryList } from './CategoryList.jsx';
-import { ContextMenu, type MenuTarget } from './ContextMenu.jsx';
+import { ContextMenu, type MenuTarget, type RenameNote } from './ContextMenu.jsx';
 import { FolderTree } from './FolderTree.jsx';
 import { tokens } from './styles.js';
 
@@ -12,6 +12,8 @@ export interface SidebarProps {
   readonly store: WorkspaceStore;
   /** Shows the logo and name on top. */
   readonly logoFace?: Accessor<LogoFace>;
+  /** Enables "Rename" in a note's menu. */
+  readonly renameNote?: RenameNote;
 }
 
 /** Left navigation: the logo, then categories, then the virtualized folder/note tree. */
@@ -74,6 +76,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
             x={open().x}
             y={open().y}
             move={(item, target) => dnd.drop(item, target)}
+            {...(props.renameNote ? { rename: props.renameNote } : {})}
             onClose={() => setMenu(null)}
           />
         )}
