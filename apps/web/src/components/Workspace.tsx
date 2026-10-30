@@ -1,7 +1,7 @@
 import { createEffect, createSignal, on, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js';
 import type * as Y from 'yjs';
 import type { NoteId } from '@ankylock/core';
-import { CodeMirrorView } from '@ankylock/editor';
+import { CodeMirrorView, type SearchLabels } from '@ankylock/editor';
 import { linkModifier, shortcutLabel, workspaceCommand, type Platform } from '../keyboard/shortcuts.js';
 import { useNarrowScreen } from '../layout/screen.js';
 import { createWordWrapPreference } from '../preferences/devicePreferences.js';
@@ -15,6 +15,27 @@ import { SyncStatusBar } from './SyncStatusBar.jsx';
 import { tokens } from './sidebar/styles.js';
 import { TabBar } from './tabs/TabBar.jsx';
 import { t } from '../i18n/index.js';
+
+/** The editor's find/replace panel in the app's language (reads the locale signal). */
+const searchLabels = (): SearchLabels => ({
+  Find: t('editor.search.find'),
+  Replace: t('editor.search.replace'),
+  next: t('editor.search.next'),
+  previous: t('editor.search.previous'),
+  all: t('editor.search.all'),
+  'match case': t('editor.search.matchCase'),
+  regexp: t('editor.search.regexp'),
+  'by word': t('editor.search.byWord'),
+  replace: t('editor.search.replaceOne'),
+  'replace all': t('editor.search.replaceAll'),
+  close: t('editor.search.close'),
+  'current match': t('editor.search.currentMatch'),
+  'on line': t('editor.search.onLine'),
+  'replaced $ matches': t('editor.search.replacedMatches'),
+  'replaced match on line $': t('editor.search.replacedMatchOnLine'),
+  'Go to line': t('editor.search.goToLine'),
+  go: t('editor.search.go'),
+});
 
 /**
  * Main layout: sidebar, tab bar and a single editor for the active tab. Background tabs keep
@@ -166,6 +187,7 @@ export function Workspace(props: {
                       open: (url) => (props.openLink ?? openInNewTab)(url),
                       labels: { open: t('editor.openLink'), hint: t('editor.linkHint') },
                     }}
+                    searchLabels={searchLabels()}
                     onTitleChange={(title) => store.setTitle(open().id, title)}
                   />
                 )}

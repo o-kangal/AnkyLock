@@ -5,6 +5,7 @@ import type * as Y from 'yjs';
 import { TRASHED_READ_ONLY_MESSAGE } from '@ankylock/core';
 import { editorBasics, editorTheme, type ColorScheme } from '../extensions/theme.js';
 import { links, type LinkOptions } from '../extensions/links.js';
+import { noteSearch, type SearchLabels } from '../extensions/search.js';
 import { titleListener } from '../extensions/title.js';
 import { wordWrap } from '../extensions/wordWrap.js';
 import { noteText, yjsBinding } from '../extensions/yjsBinding.js';
@@ -29,6 +30,8 @@ export interface CodeMirrorViewProps {
   readonly fontSize?: number;
   /** Makes http(s) links clickable with the modifier key; without it, links are plain text. */
   readonly links?: LinkOptions;
+  /** Find/replace panel text in the app's language (default: English). */
+  readonly searchLabels?: SearchLabels;
 }
 
 const readOnlyExtension = (readOnly: boolean): Extension => [
@@ -61,6 +64,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
   const theme = new Compartment();
   const readOnly = new Compartment();
   const wrap = new Compartment();
+  const find = new Compartment();
 
   createEffect(() => {
     if (!props.active) return;
@@ -76,6 +80,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
               theme.of(editorTheme(props.colorScheme, props.fontSize)),
               readOnly.of(readOnlyExtension(props.readOnly ?? false)),
               wrap.of(wordWrap(props.wordWrap ?? false)),
+              find.of(noteSearch(props.searchLabels)),
               yjsBinding(doc),
               titleListener((title) => props.onTitleChange?.(title)),
               props.links ? links(props.links) : [],
@@ -90,6 +95,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
     createEffect(() => view.dispatch({ effects: theme.reconfigure(editorTheme(props.colorScheme, props.fontSize)) }));
     createEffect(() => view.dispatch({ effects: readOnly.reconfigure(readOnlyExtension(props.readOnly ?? false)) }));
     createEffect(() => view.dispatch({ effects: wrap.reconfigure(wordWrap(props.wordWrap ?? false)) }));
+    createEffect(() => view.dispatch({ effects: find.reconfigure(noteSearch(props.searchLabels)) }));
   });
 
   return (
