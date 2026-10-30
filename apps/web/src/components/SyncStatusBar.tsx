@@ -140,6 +140,8 @@ export function SyncStatusBar(props: {
   readonly runtime: Runtime;
   readonly wordWrap?: WordWrapToggle;
   readonly theme?: ThemePreference;
+  /** Opens the keyboard shortcut guide; not shown on narrow (touch) screens. */
+  readonly shortcuts?: { readonly open: () => void; readonly shortcut: string };
   /** Narrow screens: short labels and icon buttons; Lock and Sign out live in the vault menu. */
   readonly compact?: boolean;
 }): JSX.Element {
@@ -298,6 +300,17 @@ export function SyncStatusBar(props: {
         </Show>
       </span>
       <span style={{ display: 'flex', gap: '6px', 'align-items': 'center', 'flex-shrink': '0' }}>
+        <Show when={!props.compact && props.shortcuts}>
+          {(shortcuts) => (
+            <BarButton
+              aria-label={t('guide.button', { shortcut: shortcuts().shortcut })}
+              title={t('guide.button', { shortcut: shortcuts().shortcut })}
+              onClick={() => shortcuts().open()}
+            >
+              <span aria-hidden="true">⌨</span>
+            </BarButton>
+          )}
+        </Show>
         <Show when={props.wordWrap}>
           {(wrap) => (
             <BarButton

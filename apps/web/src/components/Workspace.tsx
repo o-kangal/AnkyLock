@@ -10,6 +10,7 @@ import { useTheme } from '../theme/colorScheme.js';
 import type { ExportScope } from '../export/exportPlan.js';
 import { ExportContext } from '../export/saveFile.js';
 import { ExportDialog } from './ExportDialog.jsx';
+import { ShortcutGuide } from './ShortcutGuide.jsx';
 import { Sidebar } from './sidebar/Sidebar.jsx';
 import { SyncStatusBar } from './SyncStatusBar.jsx';
 import { tokens } from './sidebar/styles.js';
@@ -60,6 +61,7 @@ export function Workspace(props: {
   /** On narrow screens the sidebar is a drawer over the editor. */
   const [drawer, setDrawer] = createSignal(false);
   const [exporting, setExporting] = createSignal<{ scope: ExportScope; label: string } | null>(null);
+  const [guide, setGuide] = createSignal(false);
   const activeId = (): NoteId | undefined => store.state.tabs[store.state.activeTabIndex]?.noteId;
   const [doc, setDoc] = createSignal<{ readonly id: NoteId; readonly doc: Y.Doc } | null>(null);
 
@@ -96,6 +98,7 @@ export function Workspace(props: {
       const command = workspaceCommand(event, props.platform);
       const { tabs, activeTabIndex } = store.state;
       if (command === 'toggle-wrap') wrap.toggle();
+      else if (command === 'shortcut-guide') setGuide(true);
       else if (command === 'new-tab') void store.createTab();
       else if (command === 'close-tab' && activeTabIndex >= 0) closeTab(activeTabIndex);
       else if ((command === 'next-tab' || command === 'previous-tab') && tabs.length > 0) {
@@ -199,9 +202,13 @@ export function Workspace(props: {
           runtime={props.runtime}
           wordWrap={{ on: wrap.wordWrap, toggle: () => wrap.toggle(), shortcut: shortcutLabel('toggle-wrap', props.platform) }}
           theme={theme}
+          shortcuts={{ open: () => setGuide(true), shortcut: shortcutLabel('shortcut-guide', props.platform) }}
           compact={narrow()}
         />
       </div>
+      <Show when={guide()}>
+        <ShortcutGuide platform={props.platform} onClose={() => setGuide(false)} />
+      </Show>
       <Show when={exporting()}>
         {(open) => <ExportDialog runtime={props.runtime} scope={open().scope} label={open().label} onClose={() => setExporting(null)} />}
       </Show>
