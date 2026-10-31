@@ -6,8 +6,34 @@ AnkyLock is licensed under the GNU Affero General Public License v3.0 or later (
 
 | Package | Version | License | Copyright |
 |---|---|---|---|
+| @codemirror/autocomplete | 6.20.4 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | @codemirror/commands | 6.11.1 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-angular | 0.1.4 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-cpp | 6.0.3 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-css | 6.3.1 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-go | 6.0.1 | MIT | Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-html | 6.4.12 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-java | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-javascript | 6.2.5 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-jinja | 6.0.1 | MIT | Copyright (C) 2025 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-json | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-less | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-liquid | 6.3.3 | MIT | Copyright (C) 2018-2023 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-markdown | 6.5.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-php | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-python | 6.2.1 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-rust | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-sass | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-sql | 6.10.0 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-vue | 0.1.3 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-wast | 6.0.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-xml | 6.1.0 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lang-yaml | 6.1.3 | MIT | Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | @codemirror/language | 6.13.1 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/language-data | 6.5.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/legacy-modes | 6.5.5 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/lint | 6.9.7 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @codemirror/search | 6.7.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | @codemirror/state | 6.7.6 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | @codemirror/streamparser | 6.0.0 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | @codemirror/view | 6.43.14 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
@@ -15,8 +41,22 @@ AnkyLock is licensed under the GNU Affero General Public License v3.0 or later (
 | @fontsource-variable/jetbrains-mono | 5.3.0 | OFL-1.1 | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) JetBrainsMono-Italic[wght].ttf: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) |
 | @fontsource-variable/plus-jakarta-sans | 5.3.0 | OFL-1.1 | Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans) PlusJakartaSans-Italic[wght].ttf: Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans) |
 | @lezer/common | 1.5.3 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/cpp | 1.1.6 | MIT | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/css | 1.3.9 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/go | 1.0.1 | MIT | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | @lezer/highlight | 1.2.5 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/html | 1.3.13 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/java | 1.1.5 | MIT | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/javascript | 1.5.6 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/json | 1.0.3 | MIT | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>, Arun Srinivasan <rulfzid@gmail.com>, and others |
 | @lezer/lr | 1.4.11 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/markdown | 1.8.1 | MIT | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/php | 1.0.6 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/python | 1.1.19 | MIT | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/rust | 1.0.3 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/sass | 1.1.0 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/xml | 1.0.6 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| @lezer/yaml | 1.0.4 | MIT | Copyright (C) 2024 by Marijn Haverbeke <marijnh@gmail.com> and others |
 | @marijn/find-cluster-break | 1.0.4 | MIT | Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin> |
 | @tauri-apps/api | 2.12.3 | Apache-2.0 OR MIT |  |
 | @tauri-apps/plugin-process | 2.4.0 | MIT OR Apache-2.0 |  |
@@ -26,7 +66,7 @@ AnkyLock is licensed under the GNU Affero General Public License v3.0 or later (
 | csstype | 3.2.3 | MIT | Copyright (c) 2017-2018 Fredrik Nicol |
 | isomorphic.js | 0.2.5 | MIT | Copyright (c) 2020 Kevin Jahns <kevin.jahns@protonmail.com>. |
 | lib0 | 0.2.119 | MIT | Copyright (c) 2019 Kevin Jahns <kevin.jahns@protonmail.com>. |
-| seroval | 1.6.9 | MIT |  |
+| seroval | 1.6.12 | MIT |  |
 | seroval-plugins | 1.6.9 | MIT |  |
 | solid-js | 1.9.17 | MIT | Copyright (c) 2016-2025 Ryan Carniato |
 | style-mod | 4.1.4 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
@@ -166,7 +206,7 @@ ryu 1.0.23
 
 ### Apache-2.0 OR MIT
 
-async-channel 2.5.0, async-executor 1.14.0, async-io 2.6.0, async-lock 3.4.2, async-process 2.5.0, async-signal 0.2.14, async-task 4.7.1, atomic-waker 1.1.2, autocfg 1.5.1, bit-set 0.8.0, bit-vec 0.8.0, blocking 1.7.0, cargo_toml 1.0.1, concurrent-queue 2.5.0, const-oid 0.10.2, ctor 1.0.13, equivalent 1.0.2, event-listener 5.4.2, event-listener-strategy 0.5.4, fastrand 2.5.0, futures-lite 2.6.1, idna_adapter 1.2.2, indexmap 1.9.3, indexmap 2.14.2, libappindicator 0.9.0, libappindicator-sys 0.9.0, muda 0.20.0, parking 2.2.1, pin-project-lite 0.2.17, polling 3.11.0, portable-atomic 1.15.0, portable-atomic-util 0.2.8, rustc-hash 2.1.3, signature 2.2.0, tauri 2.12.4, tauri-build 2.7.4, tauri-codegen 2.7.4, tauri-macros 2.7.4, tauri-plugin 2.7.1, tauri-plugin-dialog 2.8.3, tauri-plugin-fs 2.7.1, tauri-plugin-opener 2.7.2, tauri-plugin-process 2.4.0, tauri-plugin-updater 2.14.0, tauri-runtime 2.12.2, tauri-runtime-wry 2.12.3, tauri-utils 2.10.2, utf8_iter 1.0.4, uuid 1.28.0, window-vibrancy 0.8.1, wry 0.57.0, zeroize 1.9.1, zeroize_derive 1.5.0
+async-channel 2.5.0, async-executor 1.14.0, async-io 2.6.0, async-lock 3.4.2, async-process 2.5.0, async-signal 0.2.14, async-task 4.7.1, atomic-waker 1.1.2, autocfg 1.5.1, bit-set 0.8.0, bit-vec 0.8.0, blocking 1.7.0, cargo_toml 1.0.1, concurrent-queue 2.5.0, const-oid 0.10.2, ctor 1.0.13, equivalent 1.0.2, event-listener 5.4.2, event-listener-strategy 0.5.4, fastrand 2.5.0, futures-lite 2.6.1, idna_adapter 1.2.2, indexmap 1.9.3, indexmap 2.14.2, libappindicator 0.9.0, libappindicator-sys 0.9.0, muda 0.20.0, parking 2.2.1, pin-project-lite 0.2.17, polling 3.11.0, portable-atomic 1.15.0, portable-atomic-util 0.2.8, rustc-hash 2.1.3, signature 2.2.0, tauri 2.12.5, tauri-build 2.7.4, tauri-codegen 2.7.4, tauri-macros 2.7.4, tauri-plugin 2.7.1, tauri-plugin-dialog 2.8.3, tauri-plugin-fs 2.7.1, tauri-plugin-opener 2.7.2, tauri-plugin-process 2.4.0, tauri-plugin-updater 2.14.0, tauri-runtime 2.12.2, tauri-runtime-wry 2.12.3, tauri-utils 2.10.2, utf8_iter 1.0.4, uuid 1.28.0, window-vibrancy 0.8.1, wry 0.57.0, zeroize 1.9.1, zeroize_derive 1.5.0
 
 ### Apache-2.0 WITH LLVM-exception
 
@@ -218,7 +258,7 @@ aws-lc-sys 0.46.0
 
 ### MIT
 
-atk 0.18.2, atk-sys 0.18.2, axum 0.8.9, axum-core 0.5.6, block2 0.6.2, bytes 1.12.1, cairo-rs 0.18.5, cairo-sys-rs 0.18.2, cargo_metadata 0.19.2, cfb 0.14.0, cfg_aliases 0.2.2, combine 4.6.8, darling 0.24.1, darling_core 0.24.1, darling_macro 0.24.1, data-encoding 2.11.1, derive_more 2.1.1, derive_more-impl 2.1.1, dlopen2 0.8.2, dlopen2_derive 0.4.3, dom_query 0.28.0, embed-resource 3.0.12, endi 1.1.1, fs_extra 1.3.0, gdk 0.18.2, gdk-pixbuf 0.18.5, gdk-pixbuf-sys 0.18.0, gdk-sys 0.18.2, gdkwayland-sys 0.18.2, gdkx11 0.18.2, gdkx11-sys 0.18.2, generic-array 0.14.7, gio 0.18.4, gio-sys 0.18.1, glib 0.18.5, glib-macros 0.18.5, glib-sys 0.18.1, gobject-sys 0.18.0, gtk 0.18.2, gtk-sys 0.18.2, gtk3-macros 0.18.2, http-body 1.1.0, http-body-util 0.1.5, hyper 1.12.0, hyper-util 0.1.21, ico 0.6.0, infer 0.22.0, is-docker 0.2.0, is-wsl 0.4.0, javascriptcore-rs 1.1.2, javascriptcore-rs-sys 1.1.1, jsonwebtoken 11.1.0, libredox 0.1.25, libsqlite3-sys 0.38.2, matchers 0.2.0, memoffset 0.9.1, minisign-verify 0.3.0, mio 1.2.4, new_debug_unreachable 1.0.6, nix 0.29.0, nu-ansi-term 0.50.3, objc2 0.6.5, objc2-encode 4.1.0, objc2-foundation 0.3.2, open 5.4.4, openssl-sys 0.9.117, pango 0.18.3, pango-sys 0.18.0, pem 3.0.6, phf 0.13.1, phf_codegen 0.13.1, phf_generator 0.13.1, phf_macros 0.13.1, phf_shared 0.13.1, plist 1.10.1, precomputed-hash 0.1.1, quick-xml 0.42.0, redox_syscall 0.5.18, redox_users 0.5.3, rfd 0.16.0, rsqlite-vfs 0.1.1, rusqlite 0.40.2, schannel 0.1.29, schemars 0.8.22, schemars 0.9.0, schemars 1.2.3, schemars_derive 0.8.22, sharded-slab 0.1.7, simd-adler32 0.3.10, slab 0.4.12, soup3 0.5.0, soup3-sys 0.5.0, sqlite-wasm-rs 0.5.5, strsim 0.11.1, synstructure 0.14.0, tauri-winres 0.3.6, tokio 1.53.3, tokio-macros 2.7.2, tokio-native-tls 0.3.1, tokio-tungstenite 0.29.0, tokio-tungstenite 0.30.0, tokio-util 0.7.20, tower 0.5.3, tower-http 0.6.11, tower-layer 0.3.3, tower-service 0.3.3, tracing 0.1.44, tracing-attributes 0.1.31, tracing-core 0.1.36, tracing-log 0.2.0, tracing-subscriber 0.3.23, try-lock 0.2.5, uds_windows 1.2.1, urlpattern 0.6.0, valuable 0.1.1, version-compare 0.2.1, vswhom 0.1.0, vswhom-sys 0.1.3, want 0.3.2, webkit2gtk 2.0.2, webkit2gtk-sys 2.0.2, webview2-com 0.39.1, webview2-com-macros 0.8.1, webview2-com-sys 0.39.1, winnow 0.5.40, winnow 1.0.4, winreg 0.56.0, x11 2.21.0, x11-dl 2.21.0, xdg-home 1.3.0, zbus 4.4.0, zbus 5.19.0, zbus_macros 4.4.0, zbus_macros 5.19.0, zbus_names 3.0.0, zbus_names 4.3.4, zcheapstr 1.1.0, zmij 1.0.23, zvariant 4.2.0, zvariant 5.15.0, zvariant_derive 4.2.0, zvariant_derive 5.15.0, zvariant_utils 2.1.0, zvariant_utils 4.2.0
+atk 0.18.2, atk-sys 0.18.2, axum 0.8.9, axum-core 0.5.6, block2 0.6.2, bytes 1.12.1, cairo-rs 0.18.5, cairo-sys-rs 0.18.2, cargo_metadata 0.19.2, cfb 0.14.0, cfg_aliases 0.2.2, combine 4.6.8, darling 0.24.1, darling_core 0.24.1, darling_macro 0.24.1, data-encoding 2.11.1, derive_more 2.1.1, derive_more-impl 2.1.1, dlopen2 0.8.2, dlopen2_derive 0.4.3, dom_query 0.28.0, embed-resource 3.0.12, endi 1.1.1, fs_extra 1.3.0, gdk 0.18.2, gdk-pixbuf 0.18.5, gdk-pixbuf-sys 0.18.0, gdk-sys 0.18.2, gdkwayland-sys 0.18.2, gdkx11 0.18.2, gdkx11-sys 0.18.2, generic-array 0.14.7, gio 0.18.4, gio-sys 0.18.1, glib 0.18.5, glib-macros 0.18.5, glib-sys 0.18.1, gobject-sys 0.18.0, gtk 0.18.2, gtk-sys 0.18.2, gtk3-macros 0.18.2, http-body 1.1.0, http-body-util 0.1.5, hyper 1.12.0, hyper-util 0.1.21, ico 0.6.0, infer 0.22.0, is-docker 0.2.0, is-wsl 0.4.0, javascriptcore-rs 1.1.2, javascriptcore-rs-sys 1.1.1, jsonwebtoken 11.1.0, libredox 0.1.25, libsqlite3-sys 0.38.2, matchers 0.2.0, memoffset 0.9.1, minisign-verify 0.3.0, mio 1.2.4, new_debug_unreachable 1.0.6, nix 0.29.0, nu-ansi-term 0.50.3, objc2 0.6.5, objc2-encode 4.1.0, objc2-foundation 0.3.2, open 5.4.4, openssl-sys 0.9.117, pango 0.18.3, pango-sys 0.18.0, pem 3.0.6, phf 0.13.1, phf_codegen 0.13.1, phf_generator 0.13.1, phf_macros 0.13.1, phf_shared 0.13.1, plist 1.10.1, precomputed-hash 0.1.1, quick-xml 0.42.0, redox_syscall 0.5.18, redox_users 0.5.3, rfd 0.16.0, rsqlite-vfs 0.1.1, rusqlite 0.40.2, schannel 0.1.29, schemars 0.8.22, schemars 0.9.0, schemars 1.2.3, schemars_derive 0.8.22, sharded-slab 0.1.7, simd-adler32 0.3.10, slab 0.4.12, soup3 0.5.0, soup3-sys 0.5.0, sqlite-wasm-rs 0.5.5, strsim 0.11.1, synstructure 0.14.0, tauri-winres 0.3.6, tokio 1.54.1, tokio-macros 2.7.2, tokio-native-tls 0.3.1, tokio-tungstenite 0.29.0, tokio-tungstenite 0.30.0, tokio-util 0.7.20, tower 0.5.3, tower-http 0.6.11, tower-layer 0.3.3, tower-service 0.3.3, tracing 0.1.44, tracing-attributes 0.1.31, tracing-core 0.1.36, tracing-log 0.2.0, tracing-subscriber 0.3.23, try-lock 0.2.5, uds_windows 1.2.1, urlpattern 0.6.0, valuable 0.1.1, version-compare 0.2.1, vswhom 0.1.0, vswhom-sys 0.1.3, want 0.3.2, webkit2gtk 2.0.2, webkit2gtk-sys 2.0.2, webview2-com 0.39.1, webview2-com-macros 0.8.1, webview2-com-sys 0.39.1, winnow 0.5.40, winnow 1.0.4, winreg 0.56.0, x11 2.21.0, x11-dl 2.21.0, xdg-home 1.3.0, zbus 4.4.0, zbus 5.19.0, zbus_macros 4.4.0, zbus_macros 5.19.0, zbus_names 3.0.0, zbus_names 4.3.4, zcheapstr 1.1.0, zmij 1.0.23, zvariant 4.2.0, zvariant 5.15.0, zvariant_derive 4.2.0, zvariant_derive 5.15.0, zvariant_utils 2.1.0, zvariant_utils 4.2.0
 
 ### MIT AND BSD-3-Clause
 
