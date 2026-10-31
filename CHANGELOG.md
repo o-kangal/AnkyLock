@@ -2,6 +2,27 @@
 
 All notable changes to AnkyLock. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). A release's notes on GitHub are its section here; a version is released once its heading carries a date instead of `Unreleased`.
 
+## [0.2.0] - 2026-10-31
+
+### Added
+
+- Syntax highlighting for more than 140 languages, chosen from the note's name (`deploy.sh`, `Dockerfile`) or a shebang on line 1, and available offline. Ctrl+/ comments lines in the note's language.
+- Find and replace in the open note (Ctrl+F), with case, regular expression and whole-word matching; Ctrl+D selects the next match and Ctrl+Alt+G goes to a line. On phones and tablets, a search button in the tab bar opens it.
+- Multiple cursors: Alt+drag selects a column and edits every line at once, and Ctrl+click adds a cursor.
+- Notes can be renamed. The name replaces line 1 as the title and names the exported file; clearing it brings line 1 back. Names are encrypted and synced like the text.
+- The sidebar sorts by last change, creation date or name, in either direction, remembered per device.
+- A guide to every keyboard shortcut (F1, or the keyboard button in the status bar).
+- The web app offers to install itself on phones and tablets.
+
+### Fixed
+
+- A selection within the cursor's line was invisible in the dark theme.
+- After opening a vault from Google Drive on a new device, a note renamed or retitled on another device could show its old title until it was opened.
+
+### Security
+
+- Updated seroval, a dependency of Solid, for GHSA-f86p-h4j2-7qgj and GHSA-9wx9-5pv9-3349.
+
 ## [0.1.1] - 2026-10-28
 
 ### Fixed
