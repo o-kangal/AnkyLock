@@ -255,6 +255,7 @@ export const tr: Messages = {
   'tabs.navigation': 'Gezinme',
   'tabs.new': 'Yeni sekme',
   'tabs.openNavigation': 'Gezinmeyi aç',
+  'tabs.search': 'Notta bul',
   'theme.dark': 'Koyu',
   'theme.light': 'Açık',
   'theme.system': 'Sistem',

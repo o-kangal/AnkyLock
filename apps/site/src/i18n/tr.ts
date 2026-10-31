@@ -26,7 +26,7 @@ export const tr: Messages = {
 
   'features.title': 'Neler yapar',
   'features.scratchpad.title': 'Kendini kaydeden bir karalama defteri',
-  'features.scratchpad.text': 'Bir sekme açın ve yazın. Her sekme siz yazarken kaydedilir, ilk satırı da başlığı olur.',
+  'features.scratchpad.text': 'Bir sekme açın ve yazın. Her sekme siz yazarken kaydedilir; ilk satırı başlığı olur, dilerseniz kendi adını da verebilirsiniz.',
   'features.organize.title': 'Klasörler, kategoriler, Arşiv ve Çöp Kutusu',
   'features.organize.text': 'Üç seviyeye kadar klasörler, kendi kategorileriniz ve 28 gün sonra kendini boşaltan bir Çöp Kutusu.',
   'features.sync.title': 'Kendi Google Drive’ınız üzerinden eşitleme',
@@ -41,7 +41,7 @@ export const tr: Messages = {
     'Bir notu, bir klasörü ya da bütün bir kasayı istediğiniz an düz metin olarak dışa aktarın; isterseniz AES-256 korumalı bir zip içinde.',
   'features.editor.title': 'Kod ve hızlı notlar için',
   'features.editor.text':
-    'JetBrains Mono ile bir kod editörü: Tab ile girinti, satır kaydırma ve tıklanabilir linkler. Açık ve koyu tema, Türkçe ve İngilizce.',
+    'JetBrains Mono ile bir kod editörü: 140’tan fazla dilde sözdizimi renklendirme, bul ve değiştir, çoklu imleç, Tab ile girinti, satır kaydırma ve tıklanabilir linkler. Açık ve koyu tema, Türkçe ve İngilizce.',
   'features.screenshot': 'Koyu temada AnkyLock çalışma alanı: solda klasörler, editörde açık bir not.',
 
   'how.title': 'Nasıl çalışır',

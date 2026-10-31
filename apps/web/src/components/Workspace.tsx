@@ -62,6 +62,7 @@ export function Workspace(props: {
   const [drawer, setDrawer] = createSignal(false);
   const [exporting, setExporting] = createSignal<{ scope: ExportScope; label: string } | null>(null);
   const [guide, setGuide] = createSignal(false);
+  const [searchRequests, setSearchRequests] = createSignal(0);
   const activeId = (): NoteId | undefined => store.state.tabs[store.state.activeTabIndex]?.noteId;
   const [doc, setDoc] = createSignal<{ readonly id: NoteId; readonly doc: Y.Doc } | null>(null);
 
@@ -163,6 +164,7 @@ export function Workspace(props: {
               isEmptyAndUnmodified={(id) => props.runtime.isEmptyAndUnmodified(id)}
               compact={narrow()}
               {...(narrow() ? { onOpenNavigation: () => setDrawer(true) } : {})}
+              {...(narrow() && doc() ? { onSearch: () => setSearchRequests((n) => n + 1) } : {})}
             />
             <div style={{ flex: '1', 'min-height': '0' }}>
               <Show
@@ -191,6 +193,7 @@ export function Workspace(props: {
                       labels: { open: t('editor.openLink'), hint: t('editor.linkHint') },
                     }}
                     searchLabels={searchLabels()}
+                    searchRequests={searchRequests()}
                     onTitleChange={(title) => store.setTitle(open().id, title)}
                   />
                 )}

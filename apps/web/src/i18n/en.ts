@@ -254,6 +254,7 @@ export const en = {
   'tabs.navigation': 'Navigation',
   'tabs.new': 'New tab',
   'tabs.openNavigation': 'Open navigation',
+  'tabs.search': 'Find in note',
   'theme.dark': 'Dark',
   'theme.light': 'Light',
   'theme.system': 'System',
