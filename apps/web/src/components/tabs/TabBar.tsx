@@ -12,6 +12,8 @@ export interface TabBarProps {
   readonly compact?: boolean;
   /** Shows the ☰ button that opens the sidebar drawer. */
   readonly onOpenNavigation?: () => void;
+  /** Shows a search button that opens the open note's find panel (touch screens have no Ctrl+F). */
+  readonly onSearch?: () => void;
 }
 
 const tabStyle = (active: boolean, compact: boolean): JSX.CSSProperties => ({
@@ -119,6 +121,31 @@ export function TabBar(props: TabBarProps): JSX.Element {
       >
         +
       </button>
+      <Show when={props.onSearch}>
+        {(search) => (
+          <button
+            type="button"
+            aria-label={t('tabs.search')}
+            // Stays in view at the right edge while the tabs scroll sideways under it.
+            style={{
+              ...buttonStyle,
+              position: 'sticky',
+              right: '0',
+              'margin-left': 'auto',
+              'min-width': '40px',
+              'flex-shrink': '0',
+              background: tokens.surface,
+              color: 'inherit',
+            }}
+            onClick={() => search()()}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" style={{ display: 'block', margin: 'auto' }}>
+              <circle cx="6.5" cy="6.5" r="4.75" fill="none" stroke="currentColor" stroke-width="1.5" />
+              <path d="M10 10l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
+        )}
+      </Show>
     </div>
   );
 }

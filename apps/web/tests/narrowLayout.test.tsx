@@ -114,4 +114,23 @@ describe('Move to…', () => {
     await until(() => store.state.folders.find((f) => f.id === projects)?.parentId === box, 'folder moved');
     await runtime.lock();
   });
+
+  it('opens the find panel from a search button, since touch screens have no Ctrl+F', async () => {
+    const { runtime, root } = await open(true);
+    expect(root.querySelector('[aria-label="Find in note"]')).toBeNull();
+    await runtime.store.createTab();
+    await until(() => root.querySelector('[aria-label="Find in note"]') !== null && root.querySelector('.cm-editor') !== null, 'editor');
+    expect(root.querySelector('.cm-search')).toBeNull();
+    button('Find in note').click();
+    expect(root.querySelector('.cm-search input[name="search"]')).not.toBeNull();
+    await runtime.lock();
+  });
+
+  it('shows no search button on wide screens, where Ctrl+F works', async () => {
+    const { runtime, root } = await open(false);
+    await runtime.store.createTab();
+    await until(() => root.querySelector('.cm-editor') !== null, 'editor');
+    expect(root.querySelector('[aria-label="Find in note"]')).toBeNull();
+    await runtime.lock();
+  });
 });

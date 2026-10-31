@@ -19,12 +19,12 @@ What it does not promise: protection against malware on an unlocked device, or a
 ## Features
 
 - **Vaults:** keep notes apart in separate vaults, each with its own passphrase and key; one passphrase may open several. Vaults can be renamed, removed from a device or deleted everywhere, and removed even when their passphrase is forgotten.
-- **Notes and tabs:** a new tab is an instant scratchpad (`Untitled-1`, …) that saves as you type; line 1 becomes the title. Notes are organized in folders (up to three levels) and categories, with All Notes, Archive and Trash. Trash empties itself after 28 days (configurable).
-- **Editor:** CodeMirror 6 in JetBrains Mono, with word wrap (Alt+Z), Tab and Shift+Tab indenting, and clickable links (Ctrl+click, ⌘+click on macOS).
+- **Notes and tabs:** a new tab is an instant scratchpad (`Untitled-1`, …) that saves as you type; line 1 becomes the title, or give a note a name of its own (`deploy.sh`), which also names its exported file. Notes are organized in folders (up to three levels) and categories, with All Notes, Archive and Trash, sorted by last change, creation or name. Trash empties itself after 28 days (configurable).
+- **Editor:** CodeMirror 6 in JetBrains Mono, with syntax highlighting for 140+ languages (picked from the note's name or a shebang, and available offline), find and replace (Ctrl+F), multiple cursors and column selection (Alt+drag), word wrap (Alt+Z), Tab and Shift+Tab indenting, and clickable links (Ctrl+click, ⌘+click on macOS). F1 lists every shortcut.
 - **Sync across devices:** sign in with Google and each vault is backed up, encrypted, to AnkyLock's private folder in your Google Drive (the `drive.appdata` scope: AnkyLock cannot see the rest of your Drive). Your other devices merge those backups within minutes. Edits made at the same time on two devices merge through the Yjs CRDT, so neither is lost.
 - **Instant sync (optional):** run your own relay and enter it in the desktop app; changes then reach your other devices immediately. See [Run your own relay](#run-your-own-relay).
 - **Your data, your control:** export anything, delete a vault from Google Drive, or delete all of AnkyLock's Drive data and revoke its access in one step.
-- **Comfort:** light, dark and system themes; English and Turkish; layouts for narrow screens and touch; an offline-capable web app (PWA).
+- **Comfort:** light, dark and system themes; English and Turkish; layouts for narrow screens and touch; an offline-capable web app (PWA) that offers to install itself on phones and tablets.
 
 <img src="docs/screenshots/unlock-light.png" alt="The vault picker in the light theme" width="480">
 

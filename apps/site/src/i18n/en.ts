@@ -24,7 +24,7 @@ export const en = {
 
   'features.title': 'What it does',
   'features.scratchpad.title': 'A scratchpad that saves itself',
-  'features.scratchpad.text': 'Open a tab and type. Every tab saves as you write, and its first line becomes the title.',
+  'features.scratchpad.text': 'Open a tab and type. Every tab saves as you write; its first line becomes the title, or give it a name of your own.',
   'features.organize.title': 'Folders, categories, Archive and Trash',
   'features.organize.text': 'Folders up to three levels deep, your own categories, and a Trash that empties itself after 28 days.',
   'features.sync.title': 'Sync through your own Google Drive',
@@ -37,7 +37,8 @@ export const en = {
   'features.export.title': 'Your notes, your files',
   'features.export.text': 'Export a note, a folder or a whole vault as plain text at any time, optionally in an AES-256 protected zip.',
   'features.editor.title': 'Made for code and quick notes',
-  'features.editor.text': 'A code editor in JetBrains Mono with Tab indenting, word wrap and clickable links. Light and dark themes, in English and Turkish.',
+  'features.editor.text':
+    'A code editor in JetBrains Mono with syntax highlighting for 140+ languages, find and replace, multiple cursors, Tab indenting, word wrap and clickable links. Light and dark themes, in English and Turkish.',
   'features.screenshot': 'The AnkyLock workspace in the dark theme: folders on the left, a note open in the editor.',
 
   'how.title': 'How it works',

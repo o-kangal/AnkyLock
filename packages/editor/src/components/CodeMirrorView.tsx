@@ -1,6 +1,7 @@
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { createEffect, onCleanup, Show, untrack, type JSX } from 'solid-js';
+import { openSearchPanel } from '@codemirror/search';
+import { createEffect, on, onCleanup, Show, untrack, type JSX } from 'solid-js';
 import type * as Y from 'yjs';
 import { TRASHED_READ_ONLY_MESSAGE } from '@ankylock/core';
 import { editorBasics, editorTheme, type ColorScheme } from '../extensions/theme.js';
@@ -33,6 +34,8 @@ export interface CodeMirrorViewProps {
   readonly links?: LinkOptions;
   /** Find/replace panel text in the app's language (default: English). */
   readonly searchLabels?: SearchLabels;
+  /** Each increase opens the find panel: a button for touch screens, which have no Ctrl+F. */
+  readonly searchRequests?: number;
 }
 
 const readOnlyExtension = (readOnly: boolean): Extension => [
@@ -98,6 +101,7 @@ export function CodeMirrorView(props: CodeMirrorViewProps): JSX.Element {
     createEffect(() => view.dispatch({ effects: readOnly.reconfigure(readOnlyExtension(props.readOnly ?? false)) }));
     createEffect(() => view.dispatch({ effects: wrap.reconfigure(wordWrap(props.wordWrap ?? false)) }));
     createEffect(() => view.dispatch({ effects: find.reconfigure(noteSearch(props.searchLabels)) }));
+    createEffect(on(() => props.searchRequests, () => openSearchPanel(view), { defer: true }));
   });
 
   return (
