@@ -28,7 +28,8 @@
   "pnpm": {
     "overrides": {
       "miniflare>undici": "7.30.1",
-      "seroval": "1.6.12"
+      "seroval": "1.6.12",
+      "minimatch": "11.0.3"
     }
   }
 }
