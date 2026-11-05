@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FolderId, NoteId } from '@ankylock/core';
-import { createWorkspaceStore, nextUntitledNumber, tabLabel } from '../src/index.js';
+import { createWorkspaceStore, nextUntitledNumber, tabLabel, type NameCodec } from '../src/index.js';
 import { contentWithTitle, expectOk, fakeCodec, setup } from './helpers.js';
 
 const labels = (store: ReturnType<typeof setup>['store']): string[] =>
@@ -164,5 +164,84 @@ describe('loading', () => {
     expect(fresh.state.notes['id-3' as NoteId]?.title).toBeUndefined();
     expectOk(await fresh.loadTitle('id-3' as NoteId));
     expect(fresh.state.notes['id-3' as NoteId]?.title).toBe('Shopping list');
+  });
+});
+
+describe('reloads that overlap other changes', () => {
+  /** A store whose reloads stop at decrypting, after they have read storage, until released. */
+  function pausable() {
+    const { storage } = setup();
+    let n = 0;
+    let gate: Promise<void> = Promise.resolve();
+    let reached = (): void => undefined;
+    const names: NameCodec = {
+      encrypt: fakeCodec.encrypt,
+      decrypt: async (ciphertext) => {
+        const current = gate;
+        reached();
+        await current;
+        return fakeCodec.decrypt(ciphertext);
+      },
+    };
+    const store = createWorkspaceStore({ storage, names, newId: () => `id-${++n}` });
+    return {
+      store,
+      storage,
+      /** Starts a reload and resolves once it has read storage; `release` lets it finish. */
+      async startReload() {
+        let release = (): void => undefined;
+        gate = new Promise((resolve) => (release = resolve));
+        const hasRead = new Promise<void>((resolve) => (reached = resolve));
+        const finished = store.load();
+        await hasRead;
+        gate = Promise.resolve();
+        return { finished, release };
+      },
+    };
+  }
+  const one = 'id-1' as FolderId;
+  const two = 'id-2' as FolderId;
+  const parentOf = (store: ReturnType<typeof pausable>['store'], id: FolderId) => store.state.folders.find((f) => f.id === id)?.parentId;
+
+  it('keeps a folder moved while a reload was reading', async () => {
+    const { store, startReload } = pausable();
+    await store.createFolder('One', null, null);
+    await store.createFolder('Two', one, null);
+
+    const { finished, release } = await startReload();
+    expectOk(await store.moveFolder(two, null));
+    release();
+    expectOk(await finished);
+
+    expect(parentOf(store, two)).toBeNull();
+    // The move that the outdated parent would wrongly reject as circular.
+    expectOk(await store.moveFolder(one, two));
+  });
+
+  it('keeps a tab opened while a reload was reading', async () => {
+    const { store, startReload } = pausable();
+    await store.createFolder('One', null, null);
+
+    const { finished, release } = await startReload();
+    expectOk(await store.createTab());
+    release();
+    expectOk(await finished);
+
+    expect(store.state.tabs).toHaveLength(1);
+  });
+
+  it('does not let an older reload overwrite a newer one', async () => {
+    const { store, storage, startReload } = pausable();
+    await store.createFolder('One', null, null);
+    await store.createFolder('Two', one, null);
+
+    const older = await startReload();
+    // A change from another device reaches storage directly, then its own reload runs.
+    await storage.moveFolder(two, null);
+    expectOk(await store.load());
+    older.release();
+    expectOk(await older.finished);
+
+    expect(parentOf(store, two)).toBeNull();
   });
 });

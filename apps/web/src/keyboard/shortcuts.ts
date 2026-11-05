@@ -67,7 +67,6 @@ export const shortcutKeys = (command: WorkspaceCommand, platform: Platform): str
 
 // `navigator.platform` is deprecated but still the reliable source: user agents may claim to be a
 // Mac for compatibility, and `userAgentData` exists in Chromium only.
-// eslint-disable-next-line @typescript-eslint/no-deprecated
 export const isApplePlatform = (platform: string = navigator.platform): boolean => /^(Mac|iPhone|iPad|iPod)/.test(platform);
 
 const APPLE_MODIFIERS: Readonly<Record<string, string>> = { Mod: '⌘', Ctrl: '⌃', Alt: '⌥', Shift: '⇧' };
