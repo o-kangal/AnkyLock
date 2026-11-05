@@ -2,6 +2,13 @@
 
 All notable changes to AnkyLock. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). A release's notes on GitHub are its section here; a version is released once its heading carries a date instead of `Unreleased`.
 
+## [0.2.1] - 2026-11-05
+
+### Fixed
+
+- Changes made just as the sidebar reloaded after an update from another device could be undone on screen until the next reload: a moved folder or note could appear back in its old place, and a new tab could close. A valid folder move could then be refused as circular. Saved data was not affected.
+- Updated async-executor in the desktop app, because its previous version could use freed memory when an executor shut down.
+
 ## [0.2.0] - 2026-10-31
 
 ### Added
