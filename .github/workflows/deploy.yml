@@ -45,7 +45,8 @@ jobs:
               exit 0
             fi
           else
-            passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&event=push&status=success" --jq .total_count)
+            # Checks each run's conclusion: the API's status filter can miss a run that succeeded.
+            passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&event=push" --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
             if [ "$passed" = 0 ]; then
               echo "::error::CI has not passed for $sha yet."
               exit 1
