@@ -181,8 +181,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     );
   }
 
-  /** Loads categories, live and trashed folders and every note. Titles load lazily per row. */
-  async function loadAll(): Promise<void> {
+  async function readAll() {
     const [categories, liveFolders, trashedFolders, trashed, retentionDays] = await Promise.all([
       storage.listCategories(),
       storage.listFolders(),
@@ -195,9 +194,34 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
       categories.map(async (c) => ({ id: c.id, name: await names.decrypt(c.nameCiphertext), sortOrder: c.sortOrder })),
     );
     const folderViews = await Promise.all([...liveFolders, ...trashedFolders].map(folderView));
+    return { categoryViews, folderViews, records: [...perFolder.flat(), ...trashed], retentionDays };
+  }
+
+  /**
+   * Counts local changes and applied reloads. Reading takes many async steps, so a reload that
+   * sees a different count afterwards may hold older data and must not overwrite state with it.
+   */
+  let revision = 0;
+
+  /** A local change; reloads that overlap it read storage again. */
+  const change = (work: () => Promise<void>): Promise<Result<void>> =>
+    attempt(async () => {
+      await work();
+      revision++;
+    });
+
+  /** Loads categories, live and trashed folders and every note. Titles load lazily per row. */
+  async function loadAll(): Promise<void> {
+    let seen: number;
+    let read: Awaited<ReturnType<typeof readAll>>;
+    do {
+      seen = revision;
+      read = await readAll();
+    } while (seen !== revision);
+    revision++;
     const notes: Record<NoteId, NoteView> = {};
-    for (const note of [...perFolder.flat(), ...trashed]) notes[note.id] = noteView(note, state.notes[note.id]?.title);
-    setState({ categories: categoryViews, folders: folderViews, notes, retentionDays });
+    for (const note of read.records) notes[note.id] = noteView(note, state.notes[note.id]?.title);
+    setState({ categories: read.categoryViews, folders: read.folderViews, notes, retentionDays: read.retentionDays });
     dropTabsOfMissingNotes();
   }
 
@@ -283,18 +307,18 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     renameFolder(id: FolderId, name: string): Promise<Result<void>> {
       const trimmed = name.trim();
       if (trimmed === '') return Promise.resolve(err('ERR_INVALID_TRANSITION', 'Folder names cannot be empty.'));
-      return attempt(async () => {
+      return change(async () => {
         await storage.renameFolder(id, await names.encrypt(trimmed));
         setState('folders', (f) => f.id === id, 'name', trimmed);
       });
     },
 
     setNoteArchived(noteId: NoteId, archived: boolean): Promise<Result<void>> {
-      return attempt(async () => putNote(await storage.setNoteArchived(noteId, archived)));
+      return change(async () => putNote(await storage.setNoteArchived(noteId, archived)));
     },
 
     purgeNote(noteId: NoteId): Promise<Result<void>> {
-      return attempt(async () => {
+      return change(async () => {
         await storage.purgeNote(noteId);
         reportPurged([], [noteId]);
         setState(
@@ -347,7 +371,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
 
     /** BR-NOTE-01: a new tab is an ephemeral scratchpad, persisted immediately without a dialog. */
     createTab(): Promise<Result<void>> {
-      return attempt(async () => {
+      return change(async () => {
         const note = await storage.createNote(newId() as NoteId);
         putNote(note);
         addTab(note.id, true);
@@ -366,7 +390,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
 
     /** Closing an empty, unmodified scratchpad deletes it without trashing (SPEC §3). */
     closeTab(index: number, isEmptyAndUnmodified = false): Promise<Result<void>> {
-      return attempt(async () => {
+      return change(async () => {
         const tab = state.tabs[index];
         if (!tab) return;
         if (isEmptyAndUnmodified && state.notes[tab.noteId]?.isEphemeral && state.notes[tab.noteId]?.deletedAt === null) {
@@ -408,7 +432,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
         state.categories.map((c) => c.name),
       );
       if (!valid.ok) return Promise.resolve(valid);
-      return attempt(async () => {
+      return change(async () => {
         const category = await storage.createCategory(newId() as CategoryId, await names.encrypt(valid.value));
         setState('categories', (list) => [...list, { id: category.id, name: valid.value, sortOrder: category.sortOrder }]);
       });
@@ -420,7 +444,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
         state.categories.filter((c) => c.id !== id).map((c) => c.name),
       );
       if (!valid.ok) return Promise.resolve(valid);
-      return attempt(async () => {
+      return change(async () => {
         await storage.renameCategory(id, await names.encrypt(valid.value));
         setState('categories', (c) => c.id === id, 'name', valid.value);
       });
@@ -439,7 +463,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     createFolder(name: string, parentId: FolderId | null, categoryId: CategoryId | null): Promise<Result<void>> {
       const trimmed = name.trim();
       if (trimmed === '') return Promise.resolve(err('ERR_INVALID_TRANSITION', 'Folder names cannot be empty.'));
-      return attempt(async () => {
+      return change(async () => {
         const folder = await storage.createFolder({
           id: newId() as FolderId,
           parentId,
@@ -464,22 +488,22 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
       const links = new Map(state.folders.map((f) => [f.id, { id: f.id, parentId: f.parentId }]));
       const valid = validateFolderMove(links, id, newParentId);
       if (!valid.ok) return Promise.resolve(valid);
-      return attempt(async () => {
+      return change(async () => {
         const moved = await storage.moveFolder(id, newParentId);
         setState('folders', (f) => f.id === id, 'parentId', moved.parentId);
       });
     },
 
     moveNote(noteId: NoteId, folderId: FolderId | null, categoryId: CategoryId | null): Promise<Result<void>> {
-      return attempt(async () => putNote(await storage.moveNote(noteId, folderId, categoryId)));
+      return change(async () => putNote(await storage.moveNote(noteId, folderId, categoryId)));
     },
 
     trashNote(noteId: NoteId): Promise<Result<void>> {
-      return attempt(async () => putNote(await storage.trashNote(noteId)));
+      return change(async () => putNote(await storage.trashNote(noteId)));
     },
 
     restoreNote(noteId: NoteId): Promise<Result<void>> {
-      return attempt(async () => putNote(await storage.restoreNote(noteId)));
+      return change(async () => putNote(await storage.restoreNote(noteId)));
     },
   };
 }
